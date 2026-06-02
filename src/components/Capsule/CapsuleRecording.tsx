@@ -18,6 +18,10 @@ export function CapsuleRecording() {
     }
   }
 
+  const stopPointerPropagation = (e: React.PointerEvent) => {
+    e.stopPropagation()
+  }
+
   return (
     <motion.div className="relative z-10 flex items-center gap-2 h-9 px-3">
       {/* White pulse dot — gentle opacity loop */}
@@ -30,6 +34,8 @@ export function CapsuleRecording() {
       <div className="flex-1" />
       <DurationTimer />
       <button
+        onPointerDown={stopPointerPropagation}
+        onPointerUp={stopPointerPropagation}
         onClick={handleCancel}
         aria-label={t('capsule.cancelRecording')}
         className="flex-shrink-0 p-1 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors bg-transparent border-none cursor-pointer"

@@ -62,7 +62,10 @@ impl SttProvider for CloudSttProvider {
     }
 
     async fn recv_transcript(&mut self) -> Result<Option<TranscriptEvent>, AppError> {
-        Ok(None)
+        // Cloud STT is file-upload based and returns the final transcript from
+        // disconnect(); keep this future pending so the pipeline select loop
+        // waits for audio chunks instead of busy-spinning while recording.
+        std::future::pending().await
     }
 
     async fn disconnect(&mut self) -> Result<Option<String>, AppError> {
@@ -175,5 +178,23 @@ impl SttProvider for CloudSttProvider {
 
     fn name(&self) -> &str {
         "Cloud"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn recv_transcript_waits_for_buffered_cloud_provider() {
+        let mut provider = CloudSttProvider::new("https://example.test".to_string());
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(20),
+            provider.recv_transcript(),
+        )
+        .await;
+
+        assert!(result.is_err());
     }
 }
