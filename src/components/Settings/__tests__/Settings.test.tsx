@@ -66,7 +66,13 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => key,
+      t: (key: string) =>
+        ({
+          'settings.unsavedChanges': 'Unsaved changes',
+          'common.save': 'Save',
+          'common.saving': 'Saving...',
+          'common.connectionFail': 'Connection failed',
+        })[key] ?? key,
       i18n: { language: 'en', changeLanguage: vi.fn() },
     }),
   }

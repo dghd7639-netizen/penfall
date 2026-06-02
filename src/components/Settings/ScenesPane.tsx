@@ -102,11 +102,17 @@ export function ScenesPane() {
       setDictionary(updated)
       setMergeOk(true)
       setMergeMsg(t('scenes.addedTerms', { count: scene.dictionaryTerms.length }))
-      setTimeout(() => { setMergeMsg(null); setMergeOk(false) }, 3000)
+      setTimeout(() => {
+        setMergeMsg(null)
+        setMergeOk(false)
+      }, 3000)
     } catch {
       setMergeOk(false)
       setMergeMsg(t('scenes.failedToMerge'))
-      setTimeout(() => { setMergeMsg(null); setMergeOk(false) }, 3000)
+      setTimeout(() => {
+        setMergeMsg(null)
+        setMergeOk(false)
+      }, 3000)
     }
   }
 
@@ -237,11 +243,7 @@ export function ScenesPane() {
 
       {/* Merge feedback */}
       {mergeMsg && (
-        <p
-          className={`text-[12px] ${!mergeOk ? 'text-red-500' : 'text-green-500'}`}
-        >
-          {mergeMsg}
-        </p>
+        <p className={`text-[12px] ${!mergeOk ? 'text-red-500' : 'text-green-500'}`}>{mergeMsg}</p>
       )}
     </div>
   )

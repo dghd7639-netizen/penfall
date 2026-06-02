@@ -196,7 +196,9 @@ export function LlmPane() {
             <input
               value={config.llm_base_url}
               onChange={(e) => updateConfig({ llm_base_url: e.target.value })}
-              placeholder={LLM_DEFAULT_CONFIG[config.llm_provider]?.baseUrl ?? 'https://api.openai.com/v1'}
+              placeholder={
+                LLM_DEFAULT_CONFIG[config.llm_provider]?.baseUrl ?? 'https://api.openai.com/v1'
+              }
               className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
             />
           </FormField>

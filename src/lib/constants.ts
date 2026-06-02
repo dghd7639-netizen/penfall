@@ -40,6 +40,27 @@ export const PRO_PLAN = {
   ],
 }
 
+export const CUSTOM_WHISPER_PROVIDER = 'custom-whisper' as const
+
+export const CUSTOM_STT_DEFAULTS = {
+  preset: 'speaches',
+  baseUrl: 'http://localhost:8000/v1',
+  model: 'Systran/faster-whisper-large-v3',
+} as const
+
+export const CUSTOM_STT_PRESETS = [
+  {
+    value: 'speaches',
+    labelKey: 'settings.customSttPresetSpeaches',
+    baseUrl: CUSTOM_STT_DEFAULTS.baseUrl,
+    model: CUSTOM_STT_DEFAULTS.model,
+  },
+  {
+    value: 'custom',
+    labelKey: 'settings.customSttPresetCustom',
+  },
+] as const
+
 export const STT_PROVIDERS: { value: string; labelKey: string }[] = [
   { value: 'deepgram', labelKey: 'providers.stt.deepgram' },
   { value: 'assemblyai', labelKey: 'providers.stt.assemblyai' },
@@ -47,8 +68,13 @@ export const STT_PROVIDERS: { value: string; labelKey: string }[] = [
   { value: 'openai-whisper', labelKey: 'providers.stt.openaiWhisper' },
   { value: 'groq-whisper', labelKey: 'providers.stt.groqWhisper' },
   { value: 'siliconflow', labelKey: 'providers.stt.siliconflow' },
+  { value: CUSTOM_WHISPER_PROVIDER, labelKey: 'providers.stt.customWhisper' },
   { value: 'cloud', labelKey: 'providers.stt.cloud' },
 ] as const
+
+export const ONBOARDING_STT_PROVIDERS = STT_PROVIDERS.filter(
+  (provider) => provider.value !== CUSTOM_WHISPER_PROVIDER,
+)
 
 export const LLM_PROVIDERS: { value: string; labelKey: string }[] = [
   { value: 'zhipu', labelKey: 'providers.llm.zhipu' },

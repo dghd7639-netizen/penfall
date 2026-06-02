@@ -169,7 +169,12 @@ function QuotaBar({
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={t('account.quotaUsage', { label, used: usedDisplay, limit: limitDisplay, unit })}
+        aria-label={t('account.quotaUsage', {
+          label,
+          used: usedDisplay,
+          limit: limitDisplay,
+          unit,
+        })}
       >
         <div
           className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-500' : 'bg-accent'}`}

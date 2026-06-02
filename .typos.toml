@@ -6,6 +6,10 @@ llm = "llm"
 byok = "byok"
 hotkey = "hotkey"
 ue = "ue"
+Historial = "Historial"
+speaches = "speaches"
+Speaches = "Speaches"
+SPEACHES = "SPEACHES"
 
 [files]
 extend-exclude = [
@@ -13,6 +17,7 @@ extend-exclude = [
   "node_modules/",
   "target/",
   "dist/",
+  "src/i18n/locales/*.json",
   "*.min.js",
   "*.min.css",
   "CHANGELOG.md",
