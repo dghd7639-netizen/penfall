@@ -10,6 +10,7 @@ use tauri_plugin_store::StoreExt;
 pub struct AppConfig {
     pub stt_provider: String,
     pub stt_api_key: String,
+    pub stt_custom_api_key: String,
     pub stt_language: String,
     pub stt_custom_preset: String,
     pub stt_custom_base_url: String,
@@ -39,6 +40,7 @@ impl Default for AppConfig {
         Self {
             stt_provider: "glm-asr".to_string(),
             stt_api_key: String::new(),
+            stt_custom_api_key: String::new(),
             stt_language: "multi".to_string(),
             stt_custom_preset: crate::stt::config::CUSTOM_WHISPER_PRESET_SPEACHES.to_string(),
             stt_custom_base_url: crate::stt::config::DEFAULT_CUSTOM_WHISPER_BASE_URL.to_string(),
@@ -289,5 +291,24 @@ impl DictionaryStore {
             Err(_) => return Vec::new(),
         };
         rows.filter_map(|r| r.ok()).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_config_defaults_missing_custom_stt_api_key() {
+        let value = serde_json::json!({
+            "stt_provider": "deepgram",
+            "stt_api_key": "hosted-secret"
+        });
+
+        let config: AppConfig = serde_json::from_value(value).unwrap();
+
+        assert_eq!(config.stt_provider, "deepgram");
+        assert_eq!(config.stt_api_key, "hosted-secret");
+        assert_eq!(config.stt_custom_api_key, "");
     }
 }

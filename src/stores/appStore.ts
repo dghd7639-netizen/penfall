@@ -48,6 +48,7 @@ export interface DictionaryEntry {
 export interface AppConfig {
   stt_provider: SttProvider
   stt_api_key: string
+  stt_custom_api_key: string
   stt_custom_preset: 'speaches' | 'custom'
   stt_custom_base_url: string
   stt_custom_model: string
@@ -164,6 +165,7 @@ const isMac =
 const defaultConfig: AppConfig = {
   stt_provider: 'glm-asr',
   stt_api_key: '',
+  stt_custom_api_key: '',
   stt_custom_preset: 'speaches',
   stt_custom_base_url: 'http://localhost:8000/v1',
   stt_custom_model: 'Systran/faster-whisper-large-v3',

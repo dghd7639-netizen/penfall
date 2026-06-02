@@ -387,7 +387,12 @@ function AccountDetails() {
     setBackupLoading(true)
     setBackupMsg(null)
     try {
-      const { stt_api_key: _stt_api_key, llm_api_key: _llm_api_key, ...safeConfig } = config
+      const {
+        stt_api_key: _stt_api_key,
+        stt_custom_api_key: _stt_custom_api_key,
+        llm_api_key: _llm_api_key,
+        ...safeConfig
+      } = config
       await uploadBackup({ history, dictionary, settings: safeConfig })
       setBackupMsg(t('account.toast.backupOk'))
     } catch (e) {

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 use tauri::Manager;
@@ -141,13 +141,49 @@ impl PipelineState {
     }
 }
 
+#[derive(Clone)]
+struct SttTaskControl {
+    id: u64,
+    done: Arc<Notify>,
+    abort: Arc<Notify>,
+}
+
+fn should_finalize_stt_task(
+    abort_flag: &AtomicBool,
+    active_session_id: &AtomicU64,
+    task_session_id: u64,
+) -> bool {
+    !abort_flag.load(Ordering::SeqCst)
+        && active_session_id.load(Ordering::SeqCst) == task_session_id
+}
+
+fn selected_text_from_clipboard_result(selected: Option<String>, sentinel: &str) -> Option<String> {
+    match selected {
+        Some(text) if !text.trim().is_empty() && text != sentinel => Some(text),
+        _ => None,
+    }
+}
+
+fn clipboard_copy_sentinel() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!(
+        "__opentypeless_copy_sentinel_{}_{}__",
+        std::process::id(),
+        nanos
+    )
+}
+
 pub struct PipelineHandle {
     app_handle: tauri::AppHandle,
     state: Arc<AtomicU8>,
     audio_handle: Arc<Mutex<Option<AudioCaptureHandle>>>,
     audio_volume: Arc<Mutex<f32>>,
     accumulated_text: Arc<Mutex<String>>,
-    stt_done: Arc<Notify>,
+    stt_session: Arc<Mutex<Option<SttTaskControl>>>,
+    active_stt_session_id: Arc<AtomicU64>,
     abort_flag: Arc<AtomicBool>,
     preloaded_config: Arc<Mutex<Option<storage::AppConfig>>>,
     preloaded_app_ctx: Arc<Mutex<Option<app_detector::AppContext>>>,
@@ -170,7 +206,8 @@ impl PipelineHandle {
             audio_handle: Arc::new(Mutex::new(None)),
             audio_volume: Arc::new(Mutex::new(0.0)),
             accumulated_text: Arc::new(Mutex::new(String::new())),
-            stt_done: Arc::new(Notify::new()),
+            stt_session: Arc::new(Mutex::new(None)),
+            active_stt_session_id: Arc::new(AtomicU64::new(0)),
             abort_flag: Arc::new(AtomicBool::new(false)),
             preloaded_config: Arc::new(Mutex::new(None)),
             preloaded_app_ctx: Arc::new(Mutex::new(None)),
@@ -217,6 +254,7 @@ impl PipelineHandle {
 
         // Set abort flag so any running stop() exits early
         self.abort_flag.store(true, Ordering::SeqCst);
+        self.active_stt_session_id.fetch_add(1, Ordering::SeqCst);
 
         // Stop audio capture (closes channel → STT task terminates naturally)
         {
@@ -226,9 +264,15 @@ impl PipelineHandle {
             }
             *handle = None;
         }
-
-        // Unblock stop() if it's waiting on stt_done.notified()
-        self.stt_done.notify_one();
+        if let Some(control) = self
+            .stt_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            control.abort.notify_one();
+            control.done.notify_one();
+        }
 
         // Clear accumulated text
         self.accumulated_text
@@ -240,12 +284,21 @@ impl PipelineHandle {
         self.set_state(PipelineState::Idle);
     }
 
+    fn clear_stt_session(&self, session_id: u64) {
+        let mut session = self.stt_session.lock().unwrap_or_else(|e| e.into_inner());
+        if session.as_ref().map(|control| control.id) == Some(session_id) {
+            *session = None;
+        }
+    }
+
     /// Capture selected text from the foreground app by simulating Ctrl+C / Cmd+C.
     /// Must be called when no hotkey modifier keys are physically held down.
     /// Called from async context via block_in_place, so std::thread::sleep is acceptable.
     fn capture_selected_text(&self) -> Option<String> {
         let mut clipboard = arboard::Clipboard::new().ok()?;
         let backup = clipboard.get_text().ok();
+        let sentinel = clipboard_copy_sentinel();
+        let _ = clipboard.set_text(&sentinel);
 
         if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
             #[cfg(target_os = "macos")]
@@ -267,6 +320,8 @@ impl PipelineHandle {
         // Always restore clipboard
         if let Some(ref b) = backup {
             let _ = clipboard.set_text(b);
+        } else {
+            let _ = clipboard.set_text("");
         }
 
         tracing::info!(
@@ -275,22 +330,13 @@ impl PipelineHandle {
             selected.as_deref().map(|s| s.len()).unwrap_or(0)
         );
 
-        // On macOS, if Cmd+C had no effect (e.g., no Accessibility permission),
-        // the clipboard is unchanged, so selected == backup — return None to avoid
-        // passing stale clipboard content to the LLM as if it were selected text.
-        match &selected {
-            Some(s) if !s.trim().is_empty() => {
-                if backup.as_deref() == Some(s.as_str()) {
-                    tracing::debug!(
-                        "Selected text equals clipboard backup — Cmd+C had no effect, ignoring"
-                    );
-                    None
-                } else {
-                    Some(s.clone())
-                }
-            }
-            _ => None,
+        // If Ctrl/Cmd+C had no effect, the clipboard still contains our sentinel.
+        // Ignore it so stale clipboard content is not treated as selected text.
+        let result = selected_text_from_clipboard_result(selected, &sentinel);
+        if result.is_none() {
+            tracing::debug!("Selected text capture did not produce fresh clipboard text");
         }
+        result
     }
 
     async fn load_config(&self) -> storage::AppConfig {
@@ -427,6 +473,8 @@ impl PipelineHandle {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .clone()
+        } else if config_data.stt_provider == stt::config::CUSTOM_WHISPER_PROVIDER {
+            config_data.stt_custom_api_key.clone()
         } else {
             config_data.stt_api_key.clone()
         };
@@ -540,6 +588,30 @@ impl PipelineHandle {
         let audio_vol = handle.get_volume();
         *self.audio_volume.lock().unwrap_or_else(|e| e.into_inner()) = audio_vol;
         *self.audio_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        if self.abort_flag.load(Ordering::SeqCst) {
+            tracing::info!("Pipeline aborted after storing audio capture, stopping capture");
+            {
+                let mut handle = self.audio_handle.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(ref mut h) = *handle {
+                    h.stop();
+                }
+                *handle = None;
+            }
+            *self
+                .preloaded_config
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            *self
+                .preloaded_app_ctx
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            *self
+                .preloaded_dictionary
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            self.set_state(PipelineState::Idle);
+            return Ok(());
+        }
 
         *self
             .recording_start
@@ -577,12 +649,32 @@ impl PipelineHandle {
         // STT streaming task — provider is already connected
         let app_handle = self.app_handle.clone();
         let accumulated = self.accumulated_text.clone();
-        let stt_done = self.stt_done.clone();
+        let session_id = self.active_stt_session_id.fetch_add(1, Ordering::SeqCst) + 1;
+        let stt_control = SttTaskControl {
+            id: session_id,
+            done: Arc::new(Notify::new()),
+            abort: Arc::new(Notify::new()),
+        };
+        *self.stt_session.lock().unwrap_or_else(|e| e.into_inner()) = Some(stt_control.clone());
+        let abort_flag_ref = self.abort_flag.clone();
+        let active_session_id_ref = self.active_stt_session_id.clone();
 
         tokio::spawn(async move {
             // Forward audio to STT and receive transcripts
             loop {
+                if !should_finalize_stt_task(
+                    abort_flag_ref.as_ref(),
+                    active_session_id_ref.as_ref(),
+                    stt_control.id,
+                ) {
+                    break;
+                }
+
                 tokio::select! {
+                    _ = stt_control.abort.notified() => {
+                        tracing::info!("STT task received abort signal");
+                        break;
+                    }
                     chunk = audio_rx.recv() => {
                         match chunk {
                             Some(data) => {
@@ -590,19 +682,45 @@ impl PipelineHandle {
                             }
                             None => {
                                 // Audio channel closed — disconnect and capture final transcript
-                                match provider.disconnect().await {
-                                    Ok(Some(text)) => {
-                                        let mut acc = accumulated.lock().unwrap_or_else(|e| e.into_inner());
-                                        acc.push_str(&text);
-                                        let current = acc.clone();
-                                        drop(acc);
-                                        let _ = app_handle.emit("stt:final", &current);
+                                if !should_finalize_stt_task(
+                                    abort_flag_ref.as_ref(),
+                                    active_session_id_ref.as_ref(),
+                                    stt_control.id,
+                                ) {
+                                    break;
+                                }
+
+                                let disconnect_result = tokio::select! {
+                                    _ = stt_control.abort.notified() => None,
+                                    result = provider.disconnect() => Some(result),
+                                };
+
+                                match disconnect_result {
+                                    Some(Ok(Some(text))) => {
+                                        if should_finalize_stt_task(
+                                            abort_flag_ref.as_ref(),
+                                            active_session_id_ref.as_ref(),
+                                            stt_control.id,
+                                        ) {
+                                            let mut acc = accumulated.lock().unwrap_or_else(|e| e.into_inner());
+                                            acc.push_str(&text);
+                                            let current = acc.clone();
+                                            drop(acc);
+                                            let _ = app_handle.emit("stt:final", &current);
+                                        }
                                     }
-                                    Ok(None) => {}
-                                    Err(e) => {
+                                    Some(Ok(None)) => {}
+                                    Some(Err(e)) => {
                                         tracing::error!("STT disconnect error: {}", e);
-                                        let _ = app_handle.emit("pipeline:error", format!("STT error: {e}"));
+                                        if should_finalize_stt_task(
+                                            abort_flag_ref.as_ref(),
+                                            active_session_id_ref.as_ref(),
+                                            stt_control.id,
+                                        ) {
+                                            let _ = app_handle.emit("pipeline:error", format!("STT error: {e}"));
+                                        }
                                     }
+                                    None => {}
                                 }
                                 break;
                             }
@@ -611,19 +729,37 @@ impl PipelineHandle {
                     transcript = provider.recv_transcript() => {
                         match transcript {
                             Ok(Some(TranscriptEvent::Partial { text })) => {
-                                let _ = app_handle.emit("stt:partial", &text);
+                                if should_finalize_stt_task(
+                                    abort_flag_ref.as_ref(),
+                                    active_session_id_ref.as_ref(),
+                                    stt_control.id,
+                                ) {
+                                    let _ = app_handle.emit("stt:partial", &text);
+                                }
                             }
                             Ok(Some(TranscriptEvent::Final { text, .. })) => {
-                                let mut acc = accumulated.lock().unwrap_or_else(|e| e.into_inner());
-                                acc.push_str(&text);
-                                acc.push(' ');
-                                let current = acc.clone();
-                                drop(acc);
-                                let _ = app_handle.emit("stt:final", &current);
+                                if should_finalize_stt_task(
+                                    abort_flag_ref.as_ref(),
+                                    active_session_id_ref.as_ref(),
+                                    stt_control.id,
+                                ) {
+                                    let mut acc = accumulated.lock().unwrap_or_else(|e| e.into_inner());
+                                    acc.push_str(&text);
+                                    acc.push(' ');
+                                    let current = acc.clone();
+                                    drop(acc);
+                                    let _ = app_handle.emit("stt:final", &current);
+                                }
                             }
                             Ok(Some(TranscriptEvent::Error { message })) => {
                                 tracing::error!("STT error: {}", message);
-                                let _ = app_handle.emit("pipeline:error", format!("STT error: {message}"));
+                                if should_finalize_stt_task(
+                                    abort_flag_ref.as_ref(),
+                                    active_session_id_ref.as_ref(),
+                                    stt_control.id,
+                                ) {
+                                    let _ = app_handle.emit("pipeline:error", format!("STT error: {message}"));
+                                }
                                 // Break out of the loop — STT has failed, no point
                                 // continuing. Without break, the loop keeps running
                                 // and the pipeline stays stuck in Recording forever.
@@ -640,7 +776,7 @@ impl PipelineHandle {
             }
 
             // Signal that STT processing is complete
-            stt_done.notify_one();
+            stt_control.done.notify_one();
         });
 
         Ok(())
@@ -712,6 +848,11 @@ impl PipelineHandle {
             }
             *handle = None;
         }
+        let stt_control = self
+            .stt_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
 
         // P2-1: Pre-build LLM resources while waiting for STT
         let preloaded_config = self
@@ -758,9 +899,14 @@ impl PipelineHandle {
         drop(guard);
 
         // ── Phase 1: Wait for STT ──────────────────────────────────────
-        let raw_text = match self.wait_for_stt().await? {
+        let raw_text = match self.wait_for_stt(stt_control.clone()).await? {
             Some(text) => text,
-            None => return Ok(()), // aborted or no speech detected
+            None => {
+                if let Some(control) = &stt_control {
+                    self.clear_stt_session(control.id);
+                }
+                return Ok(());
+            } // aborted or no speech detected
         };
         let stt_elapsed = stop_start.elapsed();
         tracing::info!(
@@ -771,6 +917,9 @@ impl PipelineHandle {
         // Check abort before entering LLM polish and output
         if self.abort_flag.load(Ordering::SeqCst) {
             tracing::info!("Pipeline aborted before LLM/output");
+            if let Some(control) = &stt_control {
+                self.clear_stt_session(control.id);
+            }
             return Ok(());
         }
 
@@ -820,6 +969,9 @@ impl PipelineHandle {
         self.save_history(&raw_text, &final_text, &app_ctx, duration_ms)
             .await;
 
+        if let Some(control) = &stt_control {
+            self.clear_stt_session(control.id);
+        }
         self.set_state(PipelineState::Idle);
         Ok(())
     }
@@ -827,15 +979,27 @@ impl PipelineHandle {
     /// Wait for the STT task to complete and return the transcribed text.
     /// Returns `Ok(Some(text))` on success, `Ok(None)` if aborted or no speech,
     /// or `Err` on failure.
-    async fn wait_for_stt(&self) -> Result<Option<String>> {
-        let stt_done = self.stt_done.clone();
-        tokio::select! {
-            _ = stt_done.notified() => {
-                tracing::debug!("STT task completed");
+    async fn wait_for_stt(&self, stt_control: Option<SttTaskControl>) -> Result<Option<String>> {
+        if let Some(control) = &stt_control {
+            tokio::select! {
+                _ = control.done.notified() => {
+                    tracing::debug!("STT task completed");
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(STT_FINALIZE_TIMEOUT_SECS)) => {
+                    tracing::warn!("STT timed out after {}s", STT_FINALIZE_TIMEOUT_SECS);
+                }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(STT_FINALIZE_TIMEOUT_SECS)) => {
-                tracing::warn!("STT timed out after {}s", STT_FINALIZE_TIMEOUT_SECS);
+
+            if !should_finalize_stt_task(
+                self.abort_flag.as_ref(),
+                self.active_stt_session_id.as_ref(),
+                control.id,
+            ) {
+                tracing::info!("Ignoring stale or aborted STT task");
+                return Ok(None);
             }
+        } else {
+            tracing::warn!("No STT session was available to wait for");
         }
 
         if self.abort_flag.load(Ordering::SeqCst) {
@@ -1106,5 +1270,76 @@ impl PipelineHandle {
                 .await;
             tracing::debug!("LLM connection pre-warm complete");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicU64};
+
+    #[test]
+    fn stt_task_should_not_finalize_when_abort_flag_is_set() {
+        let abort_flag = AtomicBool::new(true);
+        let active_session_id = AtomicU64::new(7);
+
+        assert!(!should_finalize_stt_task(
+            &abort_flag,
+            &active_session_id,
+            7
+        ));
+    }
+
+    #[test]
+    fn stt_task_should_not_finalize_when_session_is_stale() {
+        let abort_flag = AtomicBool::new(false);
+        let active_session_id = AtomicU64::new(8);
+
+        assert!(!should_finalize_stt_task(
+            &abort_flag,
+            &active_session_id,
+            7
+        ));
+    }
+
+    #[test]
+    fn stt_task_should_finalize_when_session_is_active_and_not_aborted() {
+        let abort_flag = AtomicBool::new(false);
+        let active_session_id = AtomicU64::new(7);
+
+        assert!(should_finalize_stt_task(&abort_flag, &active_session_id, 7));
+    }
+
+    #[test]
+    fn selected_text_rejects_copy_sentinel_when_clipboard_was_unchanged() {
+        assert_eq!(
+            selected_text_from_clipboard_result(
+                Some("__opentypeless_sentinel__".to_string()),
+                "__opentypeless_sentinel__"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn selected_text_accepts_text_that_matches_previous_clipboard_backup() {
+        assert_eq!(
+            selected_text_from_clipboard_result(
+                Some("same as previous clipboard".to_string()),
+                "__opentypeless_sentinel__",
+            ),
+            Some("same as previous clipboard".to_string())
+        );
+    }
+
+    #[test]
+    fn selected_text_rejects_whitespace_only_clipboard() {
+        assert_eq!(
+            selected_text_from_clipboard_result(
+                Some(" \n\t ".to_string()),
+                "__opentypeless_sentinel__"
+            ),
+            None
+        );
     }
 }

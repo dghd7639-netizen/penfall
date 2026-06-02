@@ -42,6 +42,7 @@ jobs:
           TAG_VERSION="${{ github.event.inputs.tag || github.ref_name }}"
           VERSION="${TAG_VERSION#v}"
           echo "Syncing version: $VERSION"
+          echo "VITE_APP_VERSION=v$VERSION" >> "$GITHUB_ENV"
 
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');"
 

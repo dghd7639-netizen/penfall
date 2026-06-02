@@ -24,6 +24,7 @@ export function SttPane() {
 
   const isCloud = config.stt_provider === 'cloud'
   const isCustomWhisper = config.stt_provider === CUSTOM_WHISPER_PROVIDER
+  const apiKeyValue = isCustomWhisper ? config.stt_custom_api_key : config.stt_api_key
   const canTest = isCustomWhisper
     ? Boolean(config.stt_custom_base_url.trim() && config.stt_custom_model.trim())
     : Boolean(config.stt_api_key)
@@ -34,7 +35,7 @@ export function SttPane() {
     try {
       const ms = isCustomWhisper
         ? await benchSttConnection(
-            config.stt_api_key,
+            config.stt_custom_api_key,
             config.stt_provider,
             config.stt_custom_base_url,
             config.stt_custom_model,
@@ -163,9 +164,13 @@ export function SttPane() {
             <div className="flex gap-2">
               <input
                 type="password"
-                value={config.stt_api_key}
+                value={apiKeyValue}
                 onChange={(e) => {
-                  updateConfig({ stt_api_key: e.target.value })
+                  updateConfig(
+                    isCustomWhisper
+                      ? { stt_custom_api_key: e.target.value }
+                      : { stt_api_key: e.target.value },
+                  )
                   setSttTestStatus('idle')
                   setSttLatencyMs(null)
                 }}

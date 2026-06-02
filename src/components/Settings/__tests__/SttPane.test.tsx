@@ -46,6 +46,7 @@ const mockAppStore = {
   config: {
     stt_provider: 'deepgram' as string,
     stt_api_key: '',
+    stt_custom_api_key: '',
     stt_language: 'en',
     stt_custom_preset: 'speaches',
     stt_custom_base_url: 'http://localhost:8000/v1',
@@ -87,6 +88,7 @@ describe('SttPane', () => {
     mockAppStore.config = {
       stt_provider: 'deepgram',
       stt_api_key: '',
+      stt_custom_api_key: '',
       stt_language: 'en',
       stt_custom_preset: 'speaches',
       stt_custom_base_url: 'http://localhost:8000/v1',
@@ -190,6 +192,7 @@ describe('SttPane', () => {
     beforeEach(() => {
       mockAppStore.config.stt_provider = 'custom-whisper'
       mockAppStore.config.stt_api_key = ''
+      mockAppStore.config.stt_custom_api_key = ''
     })
 
     it('shows preset, base URL, model, and optional API key fields', () => {
@@ -256,6 +259,46 @@ describe('SttPane', () => {
           'http://localhost:8000/v1',
           'Systran/faster-whisper-large-v3',
         )
+      })
+    })
+
+    it('does not reuse a hosted STT API key for custom Whisper tests', async () => {
+      const mockBenchStt = vi.mocked(tauri.benchSttConnection)
+      mockBenchStt.mockResolvedValue(123)
+      mockAppStore.config.stt_api_key = 'hosted-secret'
+      mockAppStore.config.stt_custom_api_key = ''
+
+      render(<SttPane />)
+      fireEvent.click(screen.getAllByRole('button', { name: /test/i })[0])
+
+      await waitFor(() => {
+        expect(mockBenchStt).toHaveBeenCalledWith(
+          '',
+          'custom-whisper',
+          'http://localhost:8000/v1',
+          'Systran/faster-whisper-large-v3',
+        )
+      })
+    })
+
+    it('stores the custom Whisper API key separately from hosted provider keys', () => {
+      mockAppStore.config.stt_api_key = 'hosted-secret'
+      mockAppStore.config.stt_custom_api_key = ''
+
+      const { container } = render(<SttPane />)
+      const input = container.querySelector(
+        'input[placeholder="Enter API Key"]',
+      ) as HTMLInputElement
+
+      expect(input.value).toBe('')
+
+      fireEvent.change(input, { target: { value: 'custom-secret' } })
+
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        stt_custom_api_key: 'custom-secret',
+      })
+      expect(mockAppStore.updateConfig).not.toHaveBeenCalledWith({
+        stt_api_key: 'custom-secret',
       })
     })
   })
