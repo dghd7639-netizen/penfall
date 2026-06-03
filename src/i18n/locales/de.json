@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "Hauptnavigation"
   },
+  "errors": {
+    "stt_timeout": "Die Spracherkennung ist abgelaufen. Bitte versuchen Sie es erneut.",
+    "stt_invalid_key": "Der Cloud-Sprachzugriff ist fehlgeschlagen. Melden Sie sich erneut an oder prüfen Sie Ihren API-Schlüssel.",
+    "stt_failed": "Die Spracherkennung ist fehlgeschlagen. {{details}}",
+    "stt_quota_exceeded": "Das Kontingent für Cloud-Spracherkennung ist aufgebraucht. Wechseln Sie zu Pro oder in den BYOK-Modus.",
+    "stt_no_speech_detected": "Keine Sprache erkannt. Bitte versuchen Sie es erneut.",
+    "output_fallback_clipboard": "Die Textausgabe ist fehlgeschlagen. Das Ergebnis wurde stattdessen in die Zwischenablage kopiert. {{details}}"
+  },
   "home": {
     "welcome": "Willkommen bei OpenTypeless",
     "description": "Halten Sie {{hotkey}} gedrückt, um die Sprachaufnahme zu starten. Ihre Sprache wird transkribiert und optional durch KI geglättet.",

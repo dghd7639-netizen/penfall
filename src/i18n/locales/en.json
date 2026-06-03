@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "Main navigation"
   },
+  "errors": {
+    "stt_timeout": "Speech recognition timed out. Please try again.",
+    "stt_invalid_key": "Cloud speech access failed. Please sign in again or check your API key.",
+    "stt_failed": "Speech recognition failed. {{details}}",
+    "stt_quota_exceeded": "Cloud speech quota exceeded. Upgrade to Pro or switch to BYOK mode.",
+    "stt_no_speech_detected": "No speech detected. Please try again.",
+    "output_fallback_clipboard": "Text output failed. The result was copied to clipboard instead. {{details}}"
+  },
   "home": {
     "welcome": "Welcome to OpenTypeless",
     "description": "Hold {{hotkey}} to start voice recording. Your speech will be transcribed and optionally polished by AI.",

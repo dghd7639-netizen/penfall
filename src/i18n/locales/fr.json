@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "Navigation principale"
   },
+  "errors": {
+    "stt_timeout": "La reconnaissance vocale a expiré. Veuillez réessayer.",
+    "stt_invalid_key": "L'accès vocal cloud a échoué. Reconnectez-vous ou vérifiez votre clé API.",
+    "stt_failed": "La reconnaissance vocale a échoué. {{details}}",
+    "stt_quota_exceeded": "Le quota de reconnaissance vocale cloud est dépassé. Passez à Pro ou utilisez le mode BYOK.",
+    "stt_no_speech_detected": "Aucune parole détectée. Veuillez réessayer.",
+    "output_fallback_clipboard": "La sortie de texte a échoué. Le résultat a été copié dans le presse-papiers. {{details}}"
+  },
   "home": {
     "welcome": "Bienvenue dans OpenTypeless",
     "description": "Maintenez {{hotkey}} pour démarrer l'enregistrement vocal. Votre parole sera transcrite et éventuellement améliorée par l'IA.",

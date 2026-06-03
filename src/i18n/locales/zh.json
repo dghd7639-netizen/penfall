@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "主导航"
   },
+  "errors": {
+    "stt_timeout": "语音识别超时，请重试。",
+    "stt_invalid_key": "云端语音访问失败，请重新登录或检查 API Key。",
+    "stt_failed": "语音识别失败。{{details}}",
+    "stt_quota_exceeded": "云端语音识别额度已用完。请升级到 Pro 或切换到 BYOK 模式。",
+    "stt_no_speech_detected": "未检测到语音，请重试。",
+    "output_fallback_clipboard": "文本输出失败，结果已改为复制到剪贴板。{{details}}"
+  },
   "home": {
     "welcome": "欢迎使用 OpenTypeless",
     "description": "按住 {{hotkey}} 开始语音录制。语音将被转录并可选择由 AI 润色。",

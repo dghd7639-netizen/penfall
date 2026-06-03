@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "Navegação principal"
   },
+  "errors": {
+    "stt_timeout": "O reconhecimento de fala expirou. Tente novamente.",
+    "stt_invalid_key": "O acesso à fala na nuvem falhou. Entre novamente ou verifique sua chave de API.",
+    "stt_failed": "O reconhecimento de fala falhou. {{details}}",
+    "stt_quota_exceeded": "A cota de reconhecimento de fala na nuvem acabou. Atualize para Pro ou mude para o modo BYOK.",
+    "stt_no_speech_detected": "Nenhuma fala detectada. Tente novamente.",
+    "output_fallback_clipboard": "A saída de texto falhou. O resultado foi copiado para a área de transferência. {{details}}"
+  },
   "home": {
     "welcome": "Bem-vindo ao OpenTypeless",
     "description": "Segure {{hotkey}} para iniciar a gravação de voz. Sua fala será transcrita e opcionalmente polida pela IA.",

@@ -12,6 +12,14 @@
     "pro": "Pro",
     "mainNavigation": "Navegación principal"
   },
+  "errors": {
+    "stt_timeout": "El reconocimiento de voz agotó el tiempo de espera. Inténtalo de nuevo.",
+    "stt_invalid_key": "El acceso de voz en la nube falló. Inicia sesión de nuevo o revisa tu clave API.",
+    "stt_failed": "El reconocimiento de voz falló. {{details}}",
+    "stt_quota_exceeded": "Se agotó la cuota de reconocimiento de voz en la nube. Actualiza a Pro o cambia al modo BYOK.",
+    "stt_no_speech_detected": "No se detectó voz. Inténtalo de nuevo.",
+    "output_fallback_clipboard": "La salida de texto falló. El resultado se copió al portapapeles. {{details}}"
+  },
   "home": {
     "welcome": "Bienvenido a OpenTypeless",
     "description": "Mantén presionado {{hotkey}} para iniciar la grabación de voz. Tu habla será transcrita y opcionalmente pulida por IA.",
