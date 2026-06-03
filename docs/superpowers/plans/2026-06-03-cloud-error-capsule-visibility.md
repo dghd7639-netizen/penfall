@@ -294,7 +294,8 @@ Run:
 
 ```powershell
 cd src-tauri
-cargo test pipeline::tests::session_error_latch pipeline::tests::no_speech_user_error --lib
+cargo test session_error_latch --lib
+cargo test no_speech_user_error --lib
 ```
 
 Expected: FAIL because helpers do not exist.
@@ -411,7 +412,8 @@ Run:
 
 ```powershell
 cd src-tauri
-cargo test pipeline::tests::session_error_latch pipeline::tests::no_speech_user_error --lib
+cargo test session_error_latch --lib
+cargo test no_speech_user_error --lib
 ```
 
 Expected: PASS.
@@ -422,7 +424,9 @@ Run:
 
 ```powershell
 cd src-tauri
-cargo test pipeline::tests stt::cloud::tests error::tests --lib
+cargo test pipeline::tests --lib
+cargo test stt::cloud::tests --lib
+cargo test error::tests --lib
 ```
 
 Expected: PASS.
@@ -1016,7 +1020,9 @@ Run:
 
 ```powershell
 cd src-tauri
-cargo test storage::tests commands::config::tests tray::tests --lib
+cargo test storage::tests --lib
+cargo test commands::config::tests --lib
+cargo test tray::tests --lib
 ```
 
 Expected: PASS.
