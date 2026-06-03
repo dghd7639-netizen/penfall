@@ -10,6 +10,7 @@ Historial = "Historial"
 speaches = "speaches"
 Speaches = "Speaches"
 SPEACHES = "SPEACHES"
+visibile = "visibile"
 
 [files]
 extend-exclude = [
