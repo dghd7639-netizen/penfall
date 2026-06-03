@@ -22,6 +22,7 @@ The desktop capsule also has an existing `capsule_auto_hide` setting, but the ri
 - The main window and capsule window each keep their own Zustand state. The capsule window loads config once at startup, so using its full config object for persistence can overwrite newer settings saved from the main window.
 - `useCapsuleResize()` hides the capsule only on `becameIdle` and shows it only on `leftIdle`. It does not handle "still idle, auto-hide just enabled" or "still idle, error just appeared."
 - The system tray currently reads `ui_language` from the top level of `settings.json`, while config is saved under `app_config.ui_language`.
+- The settings dirty-bar save path calls full `update_config`, but that Rust command currently saves only; it does not broadcast config changes to the capsule webview or refresh tray labels after language changes.
 - `CapsuleRecording` already shows volume-driven waveform bars through `audioVolume`.
 - `DurationTimer` already shows recording duration and auto-stops at the configured maximum.
 - `CapsuleProcessing` and `CapsulePolishing` already represent transcribing/thinking states.
@@ -137,6 +138,7 @@ Settings page:
 
 - keeps the existing `Hide capsule when idle` toggle and dirty-bar save flow;
 - stays in sync after right-click or tray toggles through a config patch event;
+- saving settings through the dirty bar also broadcasts persisted config fields that affect other webviews;
 - preserves unrelated dirty settings when an external capsule visibility patch arrives.
 
 Default behavior:
@@ -229,6 +231,14 @@ The command should:
 
 The tray menu should call the same Rust helper internally rather than duplicating save logic.
 
+Update the existing full `update_config` command after save:
+
+- compare the previous persisted config with the new config before overwriting the cache;
+- emit `config:patch` for persisted fields that affect the capsule or tray, at minimum `capsule_auto_hide`, `max_recording_seconds`, and `ui_language` when they changed;
+- refresh tray labels/menu when `ui_language` changes;
+- refresh tray labels/menu when `capsule_auto_hide` changes so the tray visibility item is immediately correct;
+- keep full-config saves as the only path that persists ordinary settings-page edits.
+
 Add a frontend store action for persisted patches, for example:
 
 ```ts
@@ -239,6 +249,7 @@ Behavior:
 
 - merge the patch into `config`;
 - merge the same patch into `savedConfig` when `savedConfig` is not null;
+- when the patch contains `ui_language`, update i18n and `localStorage` in that webview;
 - preserve unrelated dirty fields in `config`;
 - keep `savedConfig` as the persisted baseline for patched fields.
 
@@ -251,6 +262,12 @@ Fix tray language lookup before adding the new visibility item:
 - read `app_config.ui_language` from `settings.json`, or use a shared helper that loads `AppConfig`;
 - keep a fallback to English if the store is missing or malformed;
 - add localized labels for both visibility states.
+
+Language changes:
+
+- language selection may update frontend state immediately for responsiveness;
+- persisted tray labels must refresh only after the language is saved through `update_config` or another backend save helper;
+- the old front-end-only `refresh_tray_labels` call is not sufficient because it can run before the new language is persisted.
 
 ### Default Migration
 
@@ -286,6 +303,9 @@ Rust:
 - Real empty successful STT can still emit `stt_no_speech_detected`.
 - Tray menu builds the capsule visibility item for enabled and disabled states.
 - Tray language lookup reads `app_config.ui_language`.
+- Full `update_config` emits `config:patch` when `capsule_auto_hide`, `max_recording_seconds`, or `ui_language` changes.
+- Full `update_config` refreshes tray labels/menu after persisted `ui_language` changes.
+- Full `update_config` refreshes tray labels/menu after persisted `capsule_auto_hide` changes.
 - Config loading defaults new installs to `capsule_auto_hide: true`.
 - Config loading preserves explicit existing `capsule_auto_hide` values.
 - Config loading treats existing configs missing `capsule_auto_hide` as `false`.
@@ -298,7 +318,10 @@ Frontend:
 - Capsule right-click menu shows `Keep capsule visible` when auto-hide is on.
 - Capsule right-click menu calls `set_capsule_auto_hide`, not the full-config `updateConfig`.
 - `config:patch` updates `config.capsule_auto_hide` and `savedConfig.capsule_auto_hide`.
+- `config:patch` updates capsule-relevant persisted settings from full settings saves, including `max_recording_seconds`.
+- `config:patch` with `ui_language` updates i18n and `localStorage` in both main and capsule webviews.
 - `config:patch` preserves unrelated dirty config fields.
+- When a patch field is also dirty locally, the persisted patch wins for that field and updates `savedConfig` for the same field.
 - Auto-hide visibility logic hides when auto-hide is enabled while already idle.
 - Auto-hide visibility logic shows when an error appears while already idle.
 - Auto-hide visibility logic hides again when the error clears while idle.
@@ -313,6 +336,7 @@ Manual:
 - Right-click menu can enable auto-hide without changing unrelated settings.
 - System tray can restore a hidden idle capsule.
 - Changing language updates tray labels from the persisted `app_config.ui_language`.
+- Saving `Hide capsule when idle` from Settings updates the capsule window without restart.
 - Opening settings, making an unrelated unsaved edit, then toggling capsule visibility from tray does not erase the unsaved edit.
 
 ## Release and Communication
@@ -335,6 +359,7 @@ Confirmed issues fixed in this revision:
 - P2: Tray labels read language from the wrong store path. The revised design requires `app_config.ui_language`.
 - P2: Empty or unparsable 403 bodies could be misclassified as quota. The revised design forbids quota as the fallback.
 - P2: Onboarding copy can conflict with hidden-by-default behavior. The revised design requires copy updates if the new-install default is hidden.
+- P2: Full settings saves could persist capsule visibility or language without notifying the capsule window or tray. The revised design requires `update_config` to emit relevant patches and refresh tray labels after persisted language/visibility changes.
 
 Implementation constraints clarified:
 
