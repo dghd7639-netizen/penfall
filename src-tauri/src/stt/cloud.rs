@@ -17,6 +17,46 @@ pub struct CloudSttProvider {
 /// Max audio buffer: ~24 MB PCM ≈ 12.5 min at 16kHz 16-bit mono.
 const MAX_AUDIO_BYTES: usize = 24 * 1024 * 1024;
 
+fn contains_quota_marker(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    value.contains("quota")
+        || value.contains("limit exceeded")
+        || value.contains("usage exceeded")
+        || value.contains("byok")
+}
+
+fn cloud_stt_forbidden_error(body: &str) -> AppError {
+    let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+
+    if let Some(value) = parsed.as_ref() {
+        for field in ["code", "error_code", "type"] {
+            if value
+                .get(field)
+                .and_then(|v| v.as_str())
+                .is_some_and(contains_quota_marker)
+            {
+                let details = value
+                    .get("error")
+                    .or_else(|| value.get("message"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Cloud STT quota exceeded")
+                    .to_string();
+                return AppError::Quota(details);
+            }
+        }
+
+        for field in ["error", "message"] {
+            if let Some(message) = value.get(field).and_then(|v| v.as_str()) {
+                if contains_quota_marker(message) {
+                    return AppError::Quota(message.to_string());
+                }
+            }
+        }
+    }
+
+    AppError::Auth("Cloud STT access denied".to_string())
+}
+
 impl CloudSttProvider {
     pub fn new(api_base_url: String) -> Self {
         Self {
@@ -123,11 +163,7 @@ impl SttProvider for CloudSttProvider {
 
                         return Ok(if text.is_empty() { None } else { Some(text) });
                     } else if status.as_u16() == 403 {
-                        let msg = serde_json::from_str::<serde_json::Value>(&body)
-                            .ok()
-                            .and_then(|v| v["error"].as_str().map(String::from))
-                            .unwrap_or_else(|| "STT quota exceeded".to_string());
-                        return Err(AppError::Auth(msg));
+                        return Err(cloud_stt_forbidden_error(&body));
                     } else if status.as_u16() >= 500 && attempt < 2 {
                         let truncate_at = body
                             .char_indices()
@@ -184,6 +220,32 @@ impl SttProvider for CloudSttProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forbidden_error_uses_quota_code() {
+        let err = cloud_stt_forbidden_error(r#"{"code":"stt_quota_exceeded","error":"limit hit"}"#);
+        assert!(matches!(err, AppError::Quota(_)));
+    }
+
+    #[test]
+    fn forbidden_error_uses_quota_message() {
+        let err = cloud_stt_forbidden_error(
+            r#"{"error":"STT quota exceeded. Please switch to BYOK mode."}"#,
+        );
+        assert!(matches!(err, AppError::Quota(_)));
+    }
+
+    #[test]
+    fn forbidden_error_empty_body_is_auth_not_quota() {
+        let err = cloud_stt_forbidden_error("");
+        assert!(matches!(err, AppError::Auth(_)));
+    }
+
+    #[test]
+    fn forbidden_error_unknown_json_is_auth_not_quota() {
+        let err = cloud_stt_forbidden_error(r#"{"error":"Forbidden"}"#);
+        assert!(matches!(err, AppError::Auth(_)));
+    }
 
     #[tokio::test]
     async fn recv_transcript_waits_for_buffered_cloud_provider() {

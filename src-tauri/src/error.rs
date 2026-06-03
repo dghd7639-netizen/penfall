@@ -19,6 +19,7 @@ pub enum AppError {
     Timeout(Duration),
     Api { status: u16, body: String },
     Auth(String),
+    Quota(String),
     Output(String),
     Config(String),
 }
@@ -30,6 +31,7 @@ impl AppError {
             AppError::Timeout(_) => true,
             AppError::Api { status, .. } => *status >= 500,
             AppError::Auth(_) => false,
+            AppError::Quota(_) => false,
             AppError::Output(_) => false,
             AppError::Config(_) => false,
         }
@@ -47,6 +49,7 @@ impl AppError {
                 }
             }
             AppError::Auth(msg) => ("stt_invalid_key".to_string(), Some(msg.clone())),
+            AppError::Quota(msg) => ("stt_quota_exceeded".to_string(), Some(msg.clone())),
             AppError::Output(msg) => ("output_fallback_clipboard".to_string(), Some(msg.clone())),
             AppError::Config(msg) => ("stt_failed".to_string(), Some(msg.clone())),
         };
@@ -71,6 +74,7 @@ impl std::fmt::Display for AppError {
             AppError::Timeout(d) => write!(f, "Timeout after {:.1}s", d.as_secs_f64()),
             AppError::Api { status, body } => write!(f, "API error {}: {}", status, body),
             AppError::Auth(msg) => write!(f, "Auth error: {}", msg),
+            AppError::Quota(msg) => write!(f, "Quota error: {}", msg),
             AppError::Output(msg) => write!(f, "Output error: {}", msg),
             AppError::Config(msg) => write!(f, "Config error: {}", msg),
         }
@@ -208,6 +212,20 @@ mod tests {
     fn test_config_not_retryable() {
         let err = AppError::Config("bad config".to_string());
         assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_quota_is_not_retryable() {
+        let err = AppError::Quota("quota exceeded".to_string());
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_quota_maps_to_quota_code() {
+        let err = AppError::Quota("quota exceeded".to_string());
+        let ue = err.to_user_error();
+        assert_eq!(ue.code, "stt_quota_exceeded");
+        assert_eq!(ue.details.as_deref(), Some("quota exceeded"));
     }
 
     #[test]
