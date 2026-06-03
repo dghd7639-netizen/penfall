@@ -48,7 +48,6 @@ vi.mock('framer-motion', () => ({
     {
       get:
         (_t, tag: string) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ({ children, ...rest }: any) => {
           const domProps: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(rest)) {
@@ -422,6 +421,18 @@ describe('DirtyBar 行为', () => {
       expect(screen.getByText('Save')).toBeDefined()
       expect(screen.getByText('Reset')).toBeDefined()
     })
+  })
+
+  it('persisted capsule visibility patch does not erase unrelated dirty settings', async () => {
+    renderSettings()
+
+    act(() => {
+      useAppStore.getState().updateConfig({ theme: 'dark' })
+      useAppStore.getState().applyPersistedConfigPatch({ capsule_auto_hide: true })
+    })
+
+    expect(useAppStore.getState().config.theme).toBe('dark')
+    expect(useAppStore.getState().config.capsule_auto_hide).toBe(true)
   })
 })
 

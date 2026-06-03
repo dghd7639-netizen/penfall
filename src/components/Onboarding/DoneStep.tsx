@@ -59,7 +59,7 @@ export function DoneStep() {
           {t('onboarding.done.title')}
         </h2>
         <p className="text-[13px] text-text-secondary mt-1">
-          {t('onboarding.done.capsuleOnDesktop')}
+          {t('onboarding.done.capsuleAppearsWhenRecording')}
         </p>
       </div>
 
@@ -83,7 +83,7 @@ export function DoneStep() {
         <Tip
           icon={MousePointer}
           title={t('onboarding.done.rightClickMenu')}
-          desc={t('onboarding.done.rightClickMenuSub')}
+          desc={t('onboarding.done.restoreCapsuleSub')}
         />
       </div>
 
