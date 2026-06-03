@@ -26,6 +26,10 @@ export function getCapsuleVisibility({
   )
 }
 
+export function getCapsuleFocusable(): boolean {
+  return false
+}
+
 function getSizeForState(
   state: PipelineState,
   expanded: boolean,
@@ -77,6 +81,7 @@ export function useCapsuleResize() {
     import('@tauri-apps/api/window')
       .then(async ({ getCurrentWindow, LogicalSize, LogicalPosition, currentMonitor }) => {
         const win = getCurrentWindow()
+        await win.setFocusable(getCapsuleFocusable()).catch(() => {})
 
         if (!initialized.current) {
           // First mount: position at bottom-center of screen, then show
