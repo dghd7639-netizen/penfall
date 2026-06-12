@@ -16,9 +16,9 @@ pub trait TextOutput: Send + Sync {
     fn mode(&self) -> OutputMode;
 }
 
-pub fn create_output(mode: OutputMode) -> Box<dyn TextOutput> {
+pub fn create_output(mode: OutputMode, app_handle: &tauri::AppHandle) -> Box<dyn TextOutput> {
     match mode {
-        OutputMode::Keyboard => Box::new(keyboard::KeyboardOutput::new()),
+        OutputMode::Keyboard => Box::new(keyboard::KeyboardOutput::new(app_handle)),
         OutputMode::Clipboard => Box::new(clipboard::ClipboardOutput::new()),
     }
 }
@@ -28,11 +28,12 @@ pub fn create_output(mode: OutputMode) -> Box<dyn TextOutput> {
 /// Returns Ok(None) if primary output succeeded.
 /// Returns Err if both keyboard and clipboard failed.
 pub async fn output_with_fallback(
+    app_handle: &tauri::AppHandle,
     text: &str,
     mode: OutputMode,
 ) -> Result<Option<UserError>, String> {
     if mode == OutputMode::Clipboard {
-        let output = create_output(OutputMode::Clipboard);
+        let output = create_output(OutputMode::Clipboard, app_handle);
         return output
             .type_text(text)
             .await
@@ -41,7 +42,7 @@ pub async fn output_with_fallback(
     }
 
     // Try keyboard first
-    let keyboard = create_output(OutputMode::Keyboard);
+    let keyboard = create_output(OutputMode::Keyboard, app_handle);
     match keyboard.type_text(text).await {
         Ok(()) => Ok(None),
         Err(kb_err) => {
@@ -49,7 +50,7 @@ pub async fn output_with_fallback(
                 "Keyboard output failed: {}, falling back to clipboard",
                 kb_err
             );
-            let clipboard = create_output(OutputMode::Clipboard);
+            let clipboard = create_output(OutputMode::Clipboard, app_handle);
             match clipboard.type_text(text).await {
                 Ok(()) => Ok(Some(UserError {
                     code: "output_fallback_clipboard".to_string(),
