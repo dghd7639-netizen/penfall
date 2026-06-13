@@ -17,36 +17,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v0.1.38
-          EXPECTED_ASSETS: '1'
         run: |
           set -euo pipefail
 
-          for attempt in $(seq 1 180); do
-            releases="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" 2>/tmp/release_api_error || true)"
-            metadata="$(printf '%s' "$releases" | node -e "const fs=require('fs'); const input=fs.readFileSync(0,'utf8').trim(); const releases=input ? JSON.parse(input) : []; const release=releases.find((item) => item.tag_name === process.env.TAG); if (release) console.log([release.id, (release.assets || []).length, release.draft].join('\t'));")"
-
-            if [ -n "$metadata" ]; then
-              IFS=$'\t' read -r release_id asset_count draft <<< "$metadata"
-
-              echo "Attempt $attempt: release=$release_id draft=$draft assets=$asset_count"
-
-              if [ "$draft" = "false" ]; then
-                echo "$TAG is already published."
-                exit 0
-              fi
-
-              if [ "$asset_count" -ge "$EXPECTED_ASSETS" ]; then
-                gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" -F draft=false >/dev/null
-                echo "Published $TAG with $asset_count assets."
-                exit 0
-              fi
-            else
-              echo "Attempt $attempt: release $TAG not visible in release list yet"
-              cat /tmp/release_api_error || true
-            fi
-
-            sleep 30
-          done
-
-          echo "Timed out waiting for $TAG assets" >&2
-          exit 1
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,url
