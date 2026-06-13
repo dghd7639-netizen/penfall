@@ -23,12 +23,10 @@ jobs:
 
           for attempt in $(seq 1 180); do
             releases="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" 2>/tmp/release_api_error || true)"
-            json="$(node -e "const releases=JSON.parse(process.argv[1] || '[]'); const release=releases.find((item) => item.tag_name === process.env.TAG); if (release) console.log(JSON.stringify(release));" "$releases")"
+            metadata="$(printf '%s' "$releases" | node -e "const fs=require('fs'); const input=fs.readFileSync(0,'utf8').trim(); const releases=input ? JSON.parse(input) : []; const release=releases.find((item) => item.tag_name === process.env.TAG); if (release) console.log([release.id, (release.assets || []).length, release.draft].join('\t'));")"
 
-            if [ -n "$json" ]; then
-              release_id="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.id)" "$json")"
-              asset_count="$(node -e "const j=JSON.parse(process.argv[1]); console.log((j.assets || []).length)" "$json")"
-              draft="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.draft)" "$json")"
+            if [ -n "$metadata" ]; then
+              IFS=$'\t' read -r release_id asset_count draft <<< "$metadata"
 
               echo "Attempt $attempt: release=$release_id draft=$draft assets=$asset_count"
 
