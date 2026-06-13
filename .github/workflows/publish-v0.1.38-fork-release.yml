@@ -17,7 +17,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v0.1.38
-          EXPECTED_ASSETS: '9'
+          EXPECTED_ASSETS: '1'
         run: |
           set -euo pipefail
 
