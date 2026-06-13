@@ -174,6 +174,23 @@
     "done": "Fatto",
     "errorOccurred": "Si è verificato un errore",
     "accessibilityRequired": "Accessibilità necessaria — apri Impostazioni",
+    "errors": {
+      "stt_timeout": "Timeout STT",
+      "stt_invalid_key": "Controlla STT",
+      "stt_failed": "STT fallito",
+      "stt_quota_exceeded": "Quota voce finita",
+      "stt_no_speech_detected": "Nessuna voce",
+      "output_fallback_clipboard": "Copiato",
+      "output_wayland_unsupported": "Copiato",
+      "llm_failed": "IA fallita",
+      "llm_quota_exceeded": "Quota IA finita",
+      "accessibility_required": "Serve accesso",
+      "stt_not_configured": "Configura STT",
+      "stt_connection_failed": "STT offline",
+      "audio_failed": "Micro fallito",
+      "output_failed": "Output fallito",
+      "unknown": "Errore"
+    },
     "menu": {
       "hideWhenIdle": "Nascondi capsula quando inattiva",
       "keepVisible": "Mantieni capsula visibile",

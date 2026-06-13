@@ -33,9 +33,7 @@ export function CapsuleError() {
       {/* White dot */}
       <motion.div className="w-2 h-2 rounded-full bg-white/80 flex-shrink-0" />
       <p className="text-[11px] text-white truncate flex-1">
-        {pipelineError === 'ACCESSIBILITY_REQUIRED'
-          ? t('capsule.accessibilityRequired')
-          : pipelineError || t('capsule.errorOccurred')}
+        {pipelineError || t('capsule.errors.unknown')}
       </p>
     </motion.div>
   )

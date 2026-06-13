@@ -87,7 +87,7 @@ pub fn parse_hotkey(s: &str) -> Option<Shortcut> {
 
     for &part in &parts[..parts.len() - 1] {
         match part.to_lowercase().as_str() {
-            "alt" => modifiers |= Modifiers::ALT,
+            "alt" | "option" => modifiers |= Modifiers::ALT,
             "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
             "shift" => modifiers |= Modifiers::SHIFT,
             "meta" | "super" | "win" | "cmd" => modifiers |= Modifiers::META,
@@ -209,6 +209,15 @@ mod tests {
         assert!(s.is_some());
         let s = s.unwrap();
         assert_eq!(s.mods, Modifiers::CONTROL);
+        assert_eq!(s.key, Code::Slash);
+    }
+
+    #[test]
+    fn test_parse_hotkey_option_slash() {
+        let s = parse_hotkey("Option+/");
+        assert!(s.is_some());
+        let s = s.unwrap();
+        assert_eq!(s.mods, Modifiers::ALT);
         assert_eq!(s.key, Code::Slash);
     }
 

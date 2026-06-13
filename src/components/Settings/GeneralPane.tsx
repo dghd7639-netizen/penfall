@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '../../stores/appStore'
+import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode } from '../../stores/appStore'
 import {
   updateHotkey,
@@ -47,6 +47,7 @@ function HotkeyRecorder() {
   const config = useAppStore((s) => s.config)
   const updateConfig = useAppStore((s) => s.updateConfig)
   const { t } = useTranslation()
+  const isMac = isMacPlatform()
   const [recording, setRecording] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [modifierHint, setModifierHint] = useState<string | null>(null)
@@ -80,9 +81,9 @@ function HotkeyRecorder() {
       // Build modifier prefix
       const parts: string[] = []
       if (e.ctrlKey) parts.push('Ctrl')
-      if (e.altKey) parts.push('Alt')
+      if (e.altKey) parts.push(isMac ? 'Option' : 'Alt')
       if (e.shiftKey) parts.push('Shift')
-      if (e.metaKey) parts.push('Meta')
+      if (e.metaKey) parts.push(isMac ? 'Cmd' : 'Meta')
 
       // If only modifier keys are pressed, show hint like "Alt+..."
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
@@ -126,7 +127,7 @@ function HotkeyRecorder() {
         confirmHotkey(combo)
       }, 1500)
     },
-    [confirmHotkey],
+    [confirmHotkey, isMac],
   )
 
   const handleKeyUp = useCallback(() => {
@@ -189,8 +190,7 @@ export function GeneralPane() {
   const config = useAppStore((s) => s.config)
   const updateConfig = useAppStore((s) => s.updateConfig)
   const { t } = useTranslation()
-  const isMac =
-    typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+  const isMac = isMacPlatform()
   const [a11yTrusted, setA11yTrusted] = useState<boolean | null>(null)
 
   useEffect(() => {

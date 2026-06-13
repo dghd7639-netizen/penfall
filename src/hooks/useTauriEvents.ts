@@ -6,6 +6,7 @@ import { useAppStore } from '../stores/appStore'
 import type { AppConfig, PipelineState } from '../stores/appStore'
 import { getHistory } from '../lib/tauri'
 import { toast } from '../components/Toast'
+import { capsuleErrorKeyFromPayload, type PipelineErrorPayload } from '../lib/capsuleError'
 
 export function useTauriEvents() {
   const { t } = useTranslation()
@@ -62,22 +63,13 @@ export function useTauriEvents() {
       }
     })
     addListener<string>('pipeline:target_app', setTargetApp)
-    addListener<string | { code: string; details?: string; retry_count: number }>(
-      'pipeline:error',
-      (payload) => {
-        const message =
-          typeof payload === 'string'
-            ? payload
-            : t(`errors.${payload.code}`, { details: payload.details ?? '' })
-        setPipelineError(message)
-        if (
-          message === 'ACCESSIBILITY_REQUIRED' ||
-          (typeof payload === 'string' && payload === 'ACCESSIBILITY_REQUIRED')
-        ) {
-          setAccessibilityTrusted(false)
-        }
-      },
-    )
+    addListener<PipelineErrorPayload>('pipeline:error', (payload) => {
+      const capsuleErrorKey = capsuleErrorKeyFromPayload(payload)
+      setPipelineError(t(`capsule.errors.${capsuleErrorKey}`))
+      if (capsuleErrorKey === 'accessibility_required') {
+        setAccessibilityTrusted(false)
+      }
+    })
     addListener<{ code: string; details?: string }>('pipeline:warning', (payload) => {
       const message = t(`errors.${payload.code}`, { details: payload.details ?? '' })
       toast(message, 'info')

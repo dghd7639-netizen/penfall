@@ -117,7 +117,6 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(

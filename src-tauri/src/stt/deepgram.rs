@@ -43,6 +43,40 @@ impl DeepgramProvider {
     }
 }
 
+fn parse_transcript_message(text: &str) -> Result<Option<TranscriptEvent>, AppError> {
+    let v: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| AppError::Config(e.to_string()))?;
+
+    if v.get("type").and_then(|t| t.as_str()) == Some("Error") {
+        let msg = v["message"].as_str().unwrap_or("Unknown error").to_string();
+        return Ok(Some(TranscriptEvent::Error { message: msg }));
+    }
+
+    let transcript = v["channel"]["alternatives"][0]["transcript"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    if transcript.is_empty() {
+        return Ok(None);
+    }
+
+    let is_final = v["is_final"].as_bool().unwrap_or(false);
+
+    if is_final {
+        let confidence = v["channel"]["alternatives"][0]["confidence"]
+            .as_f64()
+            .unwrap_or(0.0) as f32;
+
+        return Ok(Some(TranscriptEvent::Final {
+            text: transcript,
+            confidence,
+        }));
+    }
+
+    Ok(Some(TranscriptEvent::Partial { text: transcript }))
+}
+
 #[async_trait]
 impl SttProvider for DeepgramProvider {
     async fn connect(&mut self, config: &SttConfig) -> Result<(), AppError> {
@@ -99,46 +133,7 @@ impl SttProvider for DeepgramProvider {
         };
 
         match ws.next().await {
-            Some(Ok(Message::Text(text))) => {
-                let v: serde_json::Value =
-                    serde_json::from_str(&text).map_err(|e| AppError::Config(e.to_string()))?;
-
-                // Check for error
-                if v.get("type").and_then(|t| t.as_str()) == Some("Error") {
-                    let msg = v["message"].as_str().unwrap_or("Unknown error").to_string();
-                    return Ok(Some(TranscriptEvent::Error { message: msg }));
-                }
-
-                // Parse transcript
-                let transcript = v["channel"]["alternatives"][0]["transcript"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
-
-                if transcript.is_empty() {
-                    return Ok(None);
-                }
-
-                let is_final = v["is_final"].as_bool().unwrap_or(false);
-                let speech_final = v["speech_final"].as_bool().unwrap_or(false);
-
-                if is_final {
-                    let confidence = v["channel"]["alternatives"][0]["confidence"]
-                        .as_f64()
-                        .unwrap_or(0.0) as f32;
-
-                    if speech_final {
-                        return Ok(Some(TranscriptEvent::SpeechEnded));
-                    }
-
-                    Ok(Some(TranscriptEvent::Final {
-                        text: transcript,
-                        confidence,
-                    }))
-                } else {
-                    Ok(Some(TranscriptEvent::Partial { text: transcript }))
-                }
-            }
+            Some(Ok(Message::Text(text))) => parse_transcript_message(&text),
             Some(Ok(Message::Close(_))) => {
                 tracing::info!("Deepgram WebSocket closed");
                 Ok(None)
@@ -166,5 +161,52 @@ impl SttProvider for DeepgramProvider {
 
     fn name(&self) -> &str {
         "Deepgram Nova-3"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_speech_final_message_as_final_transcript() {
+        let message = serde_json::json!({
+            "is_final": true,
+            "speech_final": true,
+            "channel": {
+                "alternatives": [{
+                    "transcript": "hello world",
+                    "confidence": 0.97
+                }]
+            }
+        })
+        .to_string();
+
+        let event = parse_transcript_message(&message).unwrap();
+
+        match event {
+            Some(TranscriptEvent::Final { text, confidence }) => {
+                assert_eq!(text, "hello world");
+                assert!((confidence - 0.97).abs() < f32::EPSILON);
+            }
+            other => panic!("expected final transcript, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_empty_transcript_as_none() {
+        let message = serde_json::json!({
+            "is_final": true,
+            "speech_final": true,
+            "channel": {
+                "alternatives": [{
+                    "transcript": "",
+                    "confidence": 0.0
+                }]
+            }
+        })
+        .to_string();
+
+        assert!(parse_transcript_message(&message).unwrap().is_none());
     }
 }

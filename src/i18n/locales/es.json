@@ -174,6 +174,23 @@
     "done": "Listo",
     "errorOccurred": "Ocurrió un error",
     "accessibilityRequired": "Se necesita accesibilidad — abre Configuración",
+    "errors": {
+      "stt_timeout": "STT agotado",
+      "stt_invalid_key": "Revisa STT",
+      "stt_failed": "Falló STT",
+      "stt_quota_exceeded": "Sin cuota voz",
+      "stt_no_speech_detected": "Sin voz",
+      "output_fallback_clipboard": "Copiado",
+      "output_wayland_unsupported": "Copiado",
+      "llm_failed": "Falló IA",
+      "llm_quota_exceeded": "Sin cuota IA",
+      "accessibility_required": "Falta acceso",
+      "stt_not_configured": "Configura STT",
+      "stt_connection_failed": "STT sin conexión",
+      "audio_failed": "Falló micro",
+      "output_failed": "Falló salida",
+      "unknown": "Error"
+    },
     "menu": {
       "hideWhenIdle": "Ocultar cápsula en reposo",
       "keepVisible": "Mantener cápsula visible",

@@ -160,7 +160,7 @@ interface AppState {
   resetConfig: () => void
 }
 
-const isMac =
+export const isMacPlatform = () =>
   typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
 
 const defaultConfig: AppConfig = {
@@ -178,7 +178,7 @@ const defaultConfig: AppConfig = {
   polish_enabled: true,
   translate_enabled: false,
   target_lang: 'en',
-  hotkey: isMac ? 'Alt+/' : 'Ctrl+/',
+  hotkey: isMacPlatform() ? 'Option+/' : 'Ctrl+/',
   hotkey_mode: 'hold',
   output_mode: 'keyboard',
   selected_text_enabled: false,

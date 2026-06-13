@@ -174,6 +174,23 @@
     "done": "Done",
     "errorOccurred": "An error occurred",
     "accessibilityRequired": "Accessibility needed — open Settings",
+    "errors": {
+      "stt_timeout": "STT timeout",
+      "stt_invalid_key": "Check STT key",
+      "stt_failed": "STT failed",
+      "stt_quota_exceeded": "Voice quota used",
+      "stt_no_speech_detected": "No speech",
+      "output_fallback_clipboard": "Copied",
+      "output_wayland_unsupported": "Copied",
+      "llm_failed": "AI failed",
+      "llm_quota_exceeded": "AI quota used",
+      "accessibility_required": "Need access",
+      "stt_not_configured": "Set up STT",
+      "stt_connection_failed": "STT offline",
+      "audio_failed": "Mic failed",
+      "output_failed": "Output failed",
+      "unknown": "Error"
+    },
     "menu": {
       "hideWhenIdle": "Hide capsule when idle",
       "keepVisible": "Keep capsule visible",

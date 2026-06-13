@@ -24,6 +24,16 @@ const requiredErrorKeys = [
   'llm_quota_exceeded',
 ] as const
 
+const requiredCapsuleErrorKeys = [
+  ...requiredErrorKeys,
+  'accessibility_required',
+  'stt_not_configured',
+  'stt_connection_failed',
+  'audio_failed',
+  'output_failed',
+  'unknown',
+] as const
+
 describe('localized error messages', () => {
   it('defines all structured error keys for every locale', () => {
     for (const [locale, messages] of Object.entries(locales)) {
@@ -34,6 +44,19 @@ describe('localized error messages', () => {
         const value = errors?.[key]
         expect(value, `${locale}.${key}`).toEqual(expect.any(String))
         expect(value?.trim(), `${locale}.${key}`).not.toBe('')
+      }
+    }
+  })
+
+  it('defines all short capsule error labels for every locale', () => {
+    for (const [locale, messages] of Object.entries(locales)) {
+      const capsule = (messages as { capsule?: { errors?: Record<string, string> } }).capsule
+      expect(capsule?.errors, `${locale}.capsule.errors`).toEqual(expect.any(Object))
+
+      for (const key of requiredCapsuleErrorKeys) {
+        const value = capsule?.errors?.[key]
+        expect(value, `${locale}.capsule.errors.${key}`).toEqual(expect.any(String))
+        expect(value?.trim(), `${locale}.capsule.errors.${key}`).not.toBe('')
       }
     }
   })

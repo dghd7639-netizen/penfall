@@ -174,6 +174,23 @@
     "done": "완료",
     "errorOccurred": "오류가 발생했습니다",
     "accessibilityRequired": "접근성 권한이 필요합니다 — 설정을 여세요",
+    "errors": {
+      "stt_timeout": "STT 시간 초과",
+      "stt_invalid_key": "STT 확인",
+      "stt_failed": "STT 실패",
+      "stt_quota_exceeded": "음성 한도 소진",
+      "stt_no_speech_detected": "음성 없음",
+      "output_fallback_clipboard": "복사됨",
+      "output_wayland_unsupported": "복사됨",
+      "llm_failed": "AI 실패",
+      "llm_quota_exceeded": "AI 한도 소진",
+      "accessibility_required": "권한 필요",
+      "stt_not_configured": "STT 설정",
+      "stt_connection_failed": "STT 연결 실패",
+      "audio_failed": "마이크 실패",
+      "output_failed": "출력 실패",
+      "unknown": "오류"
+    },
     "menu": {
       "hideWhenIdle": "유휴 시 캡슐 숨기기",
       "keepVisible": "캡슐 항상 표시",

@@ -53,7 +53,7 @@ impl Default for AppConfig {
             translate_enabled: false,
             target_lang: "en".to_string(),
             #[cfg(target_os = "macos")]
-            hotkey: "Alt+/".to_string(),
+            hotkey: "Option+/".to_string(),
             #[cfg(not(target_os = "macos"))]
             hotkey: "Ctrl+/".to_string(),
             hotkey_mode: "hold".to_string(),
@@ -78,6 +78,13 @@ impl AppConfig {
         }
     }
 
+    fn normalize_platform_hotkey(&mut self) {
+        #[cfg(target_os = "macos")]
+        if self.hotkey == "Alt+/" {
+            self.hotkey = "Option+/".to_string();
+        }
+    }
+
     pub fn from_stored_value(value: serde_json::Value) -> Result<Self, serde_json::Error> {
         let has_capsule_auto_hide = value
             .as_object()
@@ -86,6 +93,7 @@ impl AppConfig {
         if !has_capsule_auto_hide {
             config.capsule_auto_hide = false;
         }
+        config.normalize_platform_hotkey();
         Ok(config)
     }
 }
@@ -362,5 +370,17 @@ mod tests {
         let config = AppConfig::from_stored_value(value).unwrap();
 
         assert!(config.capsule_auto_hide);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn app_config_migrates_legacy_mac_alt_slash_label() {
+        let value = serde_json::json!({
+            "hotkey": "Alt+/"
+        });
+
+        let config = AppConfig::from_stored_value(value).unwrap();
+
+        assert_eq!(config.hotkey, "Option+/");
     }
 }
