@@ -3,17 +3,25 @@ import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
 import { useAppStore } from '../../stores/appStore'
-import { useAuthStore } from '../../stores/authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { useRoute } from '../../lib/router'
 
 export function HomePage() {
   const config = useAppStore((s) => s.config)
   const history = useAppStore((s) => s.history)
   const { navigate } = useRoute()
-  const { user, plan, sttSecondsUsed, sttSecondsLimit, llmTokensUsed, llmTokensLimit } =
-    useAuthStore()
+  const {
+    user,
+    displayName,
+    cloudWordsUsed,
+    cloudWordsLimit,
+    sttSecondsUsed,
+    sttSecondsLimit,
+    llmTokensUsed,
+    llmTokensLimit,
+  } = useAuthStore()
   const { t } = useTranslation()
-  const isPro = plan === 'pro'
+  const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
 
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -58,27 +66,39 @@ export function HomePage() {
       {/* Plan / Quota summary */}
       {user && (
         <div className="rounded-[18px] p-5 jelly-card">
-          {isPro ? (
+          {hasCloudAccess ? (
             <>
               <div className="flex items-center gap-2 mb-3">
                 <Crown size={16} className="text-amber-500" />
-                <h3 className="text-[13px] font-medium">{t('home.proPlan')}</h3>
+                <h3 className="text-[13px] font-medium">{displayName}</h3>
               </div>
               <div className="space-y-3">
-                <QuotaBar
-                  label={t('upgrade.stt')}
-                  used={sttSecondsUsed}
-                  limit={sttSecondsLimit}
-                  unit={t('account.quotaHours')}
-                  divisor={3600}
-                />
-                <QuotaBar
-                  label={t('upgrade.llm')}
-                  used={llmTokensUsed}
-                  limit={llmTokensLimit}
-                  unit={t('account.quotaTokens')}
-                  divisor={1000}
-                />
+                {cloudWordsLimit > 0 ? (
+                  <QuotaBar
+                    label={t('account.cloudWords', 'Cloud words')}
+                    used={cloudWordsUsed}
+                    limit={cloudWordsLimit}
+                    unit={t('account.quotaKWords', 'k words')}
+                    divisor={1000}
+                  />
+                ) : (
+                  <>
+                    <QuotaBar
+                      label={t('upgrade.stt')}
+                      used={sttSecondsUsed}
+                      limit={sttSecondsLimit}
+                      unit={t('account.quotaHours')}
+                      divisor={3600}
+                    />
+                    <QuotaBar
+                      label={t('upgrade.llm')}
+                      used={llmTokensUsed}
+                      limit={llmTokensLimit}
+                      unit={t('account.quotaTokens')}
+                      divisor={1000}
+                    />
+                  </>
+                )}
               </div>
             </>
           ) : (

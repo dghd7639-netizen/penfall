@@ -2,6 +2,7 @@ pub mod assemblyai;
 pub mod cloud;
 pub mod config;
 pub mod deepgram;
+pub mod volcengine;
 pub mod whisper_compat;
 
 use async_trait::async_trait;
@@ -17,6 +18,7 @@ pub struct SttConfig {
     pub language: Option<String>,
     pub smart_format: bool,
     pub sample_rate: u32,
+    pub resource_id: Option<String>,
 }
 
 impl Default for SttConfig {
@@ -26,6 +28,7 @@ impl Default for SttConfig {
             language: None,
             smart_format: true,
             sample_rate: 16000,
+            resource_id: None,
         }
     }
 }
@@ -67,6 +70,9 @@ pub fn create_provider(
         }
         "assemblyai" => Ok(Box::new(assemblyai::AssemblyAiProvider::new())),
         "deepgram" => Ok(Box::new(deepgram::DeepgramProvider::new())),
+        volcengine::VOLCENGINE_DOUBAO_PROVIDER => {
+            Ok(Box::new(volcengine::VolcengineDoubaoProvider::new()))
+        }
         config::CUSTOM_WHISPER_PROVIDER => {
             let wc = custom_whisper_config.ok_or_else(|| {
                 AppError::Config("Local / Custom Whisper is missing base URL or model".to_string())
@@ -109,6 +115,12 @@ mod tests {
 
         let provider = create_provider(config::CUSTOM_WHISPER_PROVIDER, Some(cfg), None).unwrap();
         assert_eq!(provider.name(), config::CUSTOM_WHISPER_PROVIDER);
+    }
+
+    #[test]
+    fn creates_volcengine_doubao_realtime_provider() {
+        let provider = create_provider("volcengine-doubao", None, None).unwrap();
+        assert_eq!(provider.name(), "Volcengine Doubao Realtime ASR");
     }
 
     #[test]

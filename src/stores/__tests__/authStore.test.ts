@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAuthStore } from '../authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../authStore'
 
 // Mock external dependencies
 vi.mock('@tauri-apps/api/core', () => ({
@@ -37,11 +37,19 @@ describe('authStore', () => {
     useAuthStore.setState({
       user: null,
       plan: 'free',
+      source: 'free',
+      displayName: 'Free',
       subscriptionEnd: null,
+      subscriptionStatus: null,
+      licenseStatus: null,
       sttSecondsUsed: 0,
       sttSecondsLimit: 0,
       llmTokensUsed: 0,
       llmTokensLimit: 0,
+      cloudWordsUsed: 0,
+      cloudWordsLimit: 0,
+      cloudWordsResetAt: null,
+      byokUnlimited: true,
       loading: false,
       error: null,
     })
@@ -52,11 +60,19 @@ describe('authStore', () => {
     vi.mocked(authClient.signOut).mockResolvedValue(undefined as never)
     vi.mocked(getSubscriptionStatus).mockResolvedValue({
       plan: 'pro',
+      source: 'creem',
+      displayName: 'Pro',
       subscriptionEnd: '2025-12-31',
+      subscriptionStatus: 'active',
+      licenseStatus: null,
       sttSecondsUsed: 100,
       sttSecondsLimit: 36000,
       llmTokensUsed: 5000,
       llmTokensLimit: 5000000,
+      cloudWordsUsed: 0,
+      cloudWordsLimit: 0,
+      cloudWordsResetAt: null,
+      byokUnlimited: true,
     })
   })
 
@@ -74,11 +90,19 @@ describe('authStore', () => {
       useAuthStore.setState({
         user: { id: '1', email: 'test@example.com', name: 'Test' },
         plan: 'pro',
+        source: 'creem',
+        displayName: 'Pro',
         subscriptionEnd: '2025-12-31',
+        subscriptionStatus: 'active',
+        licenseStatus: null,
         sttSecondsUsed: 100,
         sttSecondsLimit: 36000,
         llmTokensUsed: 5000,
         llmTokensLimit: 5000000,
+        cloudWordsUsed: 0,
+        cloudWordsLimit: 0,
+        cloudWordsResetAt: null,
+        byokUnlimited: true,
       })
 
       await getState().signOut()
@@ -105,6 +129,41 @@ describe('authStore', () => {
       expect(getState().sttSecondsLimit).toBe(36000)
       expect(getState().llmTokensUsed).toBe(5000)
       expect(getState().llmTokensLimit).toBe(5000000)
+    })
+  })
+
+  describe('hasManagedCloudAccess', () => {
+    it('allows AppSumo lifetime plans with cloud words', () => {
+      expect(
+        hasManagedCloudAccess({
+          plan: 'appsumo_tier1',
+          source: 'appsumo',
+          cloudWordsLimit: 200000,
+          licenseStatus: 'active',
+        }),
+      ).toBe(true)
+    })
+
+    it('allows Creem Pro plans with cloud words', () => {
+      expect(
+        hasManagedCloudAccess({
+          plan: 'pro',
+          source: 'creem',
+          cloudWordsLimit: 200000,
+          licenseStatus: null,
+        }),
+      ).toBe(true)
+    })
+
+    it('denies revoked lifetime licenses even when a quota remains', () => {
+      expect(
+        hasManagedCloudAccess({
+          plan: 'appsumo_tier1',
+          source: 'appsumo',
+          cloudWordsLimit: 200000,
+          licenseStatus: 'refunded',
+        }),
+      ).toBe(false)
     })
   })
 

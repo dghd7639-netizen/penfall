@@ -137,6 +137,26 @@ fn llm_polish_user_error(error: &crate::error::AppError) -> crate::error::UserEr
     }
 }
 
+fn output_user_error(error: &anyhow::Error) -> crate::error::UserError {
+    let details = error.to_string();
+    let is_accessibility_error = details.contains("ACCESSIBILITY_REQUIRED");
+
+    crate::error::UserError {
+        code: if is_accessibility_error {
+            "accessibility_required"
+        } else {
+            "output_failed"
+        }
+        .to_string(),
+        details: if is_accessibility_error {
+            None
+        } else {
+            Some(details)
+        },
+        retry_count: 0,
+    }
+}
+
 fn take_matching_stt_error(
     stt_error: &Mutex<Option<(u64, crate::error::UserError)>>,
     session_id: u64,
@@ -515,6 +535,12 @@ impl PipelineHandle {
             },
             smart_format: true,
             sample_rate: 16000,
+            resource_id: if config_data.stt_provider == stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER
+            {
+                Some(config_data.stt_volcengine_resource_id.clone())
+            } else {
+                None
+            },
         };
 
         let mut provider = match stt::create_provider(
@@ -1094,7 +1120,7 @@ impl PipelineHandle {
                 tracing::error!("Output failed: {}", e);
                 let _ = self
                     .app_handle
-                    .emit("pipeline:error", format!("Output failed: {e}"));
+                    .emit("pipeline:error", output_user_error(&e));
             }
             return (raw_text.to_string(), std::time::Duration::ZERO);
         }
@@ -1149,7 +1175,7 @@ impl PipelineHandle {
                         tracing::error!("Output failed: {}", e);
                         let _ = self
                             .app_handle
-                            .emit("pipeline:error", format!("Output failed: {e}"));
+                            .emit("pipeline:error", output_user_error(&e));
                     }
                     (response.polished_text, elapsed)
                 }
@@ -1169,7 +1195,7 @@ impl PipelineHandle {
                         tracing::error!("Output failed: {}", e);
                         let _ = self
                             .app_handle
-                            .emit("pipeline:error", format!("Output failed: {e}"));
+                            .emit("pipeline:error", output_user_error(&e));
                     }
                     (raw_text.to_string(), elapsed)
                 }
@@ -1285,6 +1311,9 @@ impl PipelineHandle {
             "siliconflow" => "https://api.siliconflow.cn/v1/audio/transcriptions".to_string(),
             "deepgram" => "https://api.deepgram.com/v1/listen".to_string(),
             "assemblyai" => "https://api.assemblyai.com/v2/transcript".to_string(),
+            stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER => {
+                "https://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string()
+            }
             _ => {
                 tracing::debug!(
                     "Unknown STT provider '{}', skipping pre-warm",
@@ -1326,6 +1355,27 @@ impl PipelineHandle {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, AtomicU64};
+
+    #[test]
+    fn output_user_error_preserves_accessibility_required() {
+        let err = anyhow::anyhow!("Output failed: ACCESSIBILITY_REQUIRED");
+        let user_error = output_user_error(&err);
+
+        assert_eq!(user_error.code, "accessibility_required");
+        assert_eq!(user_error.details, None);
+    }
+
+    #[test]
+    fn output_user_error_keeps_non_permission_details() {
+        let err = anyhow::anyhow!("Both keyboard and clipboard output failed");
+        let user_error = output_user_error(&err);
+
+        assert_eq!(user_error.code, "output_failed");
+        assert_eq!(
+            user_error.details.as_deref(),
+            Some("Both keyboard and clipboard output failed")
+        );
+    }
 
     #[test]
     fn stt_task_should_not_finalize_when_abort_flag_is_set() {

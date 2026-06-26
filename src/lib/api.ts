@@ -49,17 +49,56 @@ export class ApiError extends Error {
 }
 
 // Subscription
+export type SubscriptionPlan =
+  | 'free'
+  | 'pro'
+  | 'appsumo_tier1'
+  | 'appsumo_tier2'
+  | 'appsumo_tier3'
+
+export type SubscriptionSource = 'free' | 'creem' | 'appsumo'
+export type LicenseStatus = 'pending' | 'active' | 'refunded' | 'deactivated'
+
 export interface SubscriptionStatus {
-  plan: 'free' | 'pro'
+  plan: SubscriptionPlan
+  source: SubscriptionSource
+  displayName: string
   subscriptionEnd: string | null
+  subscriptionStatus: string | null
+  licenseStatus?: LicenseStatus | null
   sttSecondsUsed: number
   sttSecondsLimit: number
   llmTokensUsed: number
   llmTokensLimit: number
+  cloudWordsUsed: number
+  cloudWordsLimit: number
+  cloudWordsResetAt: string | null
+  byokUnlimited: boolean
 }
 
 export function getSubscriptionStatus(): Promise<SubscriptionStatus> {
-  return request('/api/subscription/status')
+  return request<Partial<SubscriptionStatus>>('/api/subscription/status').then((status) => {
+    const plan = (status.plan ?? 'free') as SubscriptionPlan
+    const source =
+      status.source ?? (plan === 'pro' ? 'creem' : plan.startsWith('appsumo_') ? 'appsumo' : 'free')
+
+    return {
+      plan,
+      source: source as SubscriptionSource,
+      displayName: status.displayName ?? (plan === 'pro' ? 'Pro' : plan === 'free' ? 'Free' : 'AppSumo Lifetime'),
+      subscriptionEnd: status.subscriptionEnd ?? null,
+      subscriptionStatus: status.subscriptionStatus ?? null,
+      licenseStatus: status.licenseStatus ?? null,
+      sttSecondsUsed: status.sttSecondsUsed ?? 0,
+      sttSecondsLimit: status.sttSecondsLimit ?? 0,
+      llmTokensUsed: status.llmTokensUsed ?? 0,
+      llmTokensLimit: status.llmTokensLimit ?? 0,
+      cloudWordsUsed: status.cloudWordsUsed ?? 0,
+      cloudWordsLimit: status.cloudWordsLimit ?? 0,
+      cloudWordsResetAt: status.cloudWordsResetAt ?? null,
+      byokUnlimited: status.byokUnlimited ?? true,
+    }
+  })
 }
 
 // Checkout

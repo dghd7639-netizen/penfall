@@ -35,6 +35,12 @@ vi.mock('react-i18next', () => ({
           'Start your local OpenAI-compatible STT server first, then test the connection here.',
         'settings.customSttConnectionFailed':
           'Local STT server is not reachable. Check that it is running and the port is correct.',
+        'settings.volcengineSttKeyHint':
+          'Use a Volcengine Speech API key, or app_id:access_token from the old console. Ark LLM keys are separate.',
+        'settings.volcengineResourceId': 'Volcengine ASR resource',
+        'settings.volcengineResourceSeedAsr': 'SeedASR 2.0',
+        'settings.volcengineResourceBigAsr': 'BigASR 1.0',
+        'providers.stt.volcengineDoubao': 'Volcengine Doubao Realtime ASR',
       }
       return translations[key] || key
     },
@@ -51,6 +57,7 @@ const mockAppStore = {
     stt_custom_preset: 'speaches',
     stt_custom_base_url: 'http://localhost:8000/v1',
     stt_custom_model: 'Systran/faster-whisper-large-v3',
+    stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
   },
   updateConfig: vi.fn(),
   sttTestStatus: 'idle' as 'idle' | 'testing' | 'success' | 'error',
@@ -62,6 +69,9 @@ const mockAppStore = {
 const mockAuthStore = {
   user: null as any,
   plan: null as any,
+  source: 'free',
+  cloudWordsLimit: 0,
+  licenseStatus: null as any,
 }
 
 vi.mock('../../../stores/appStore', () => ({
@@ -74,6 +84,11 @@ vi.mock('../../../stores/appStore', () => ({
 }))
 
 vi.mock('../../../stores/authStore', () => ({
+  hasManagedCloudAccess: (state: typeof mockAuthStore) =>
+    state.licenseStatus !== 'refunded' &&
+    state.licenseStatus !== 'deactivated' &&
+    (((state.source === 'creem' || state.source === 'appsumo') && state.cloudWordsLimit > 0) ||
+      state.plan === 'pro'),
   useAuthStore: (selector: any) => {
     if (typeof selector === 'function') {
       return selector(mockAuthStore)
@@ -93,11 +108,15 @@ describe('SttPane', () => {
       stt_custom_preset: 'speaches',
       stt_custom_base_url: 'http://localhost:8000/v1',
       stt_custom_model: 'Systran/faster-whisper-large-v3',
+      stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
     }
     mockAppStore.sttTestStatus = 'idle'
     mockAppStore.sttLatencyMs = null
     mockAuthStore.user = null
     mockAuthStore.plan = null
+    mockAuthStore.source = 'free'
+    mockAuthStore.cloudWordsLimit = 0
+    mockAuthStore.licenseStatus = null
 
     // Clear all mock function calls
     vi.clearAllMocks()
@@ -114,6 +133,42 @@ describe('SttPane', () => {
       const selects = screen.getAllByRole('combobox')
       const providerSelect = selects[0] // First select is provider
       expect(providerSelect).toHaveValue('deepgram')
+    })
+
+    it('lists Volcengine Doubao realtime ASR as an STT provider', () => {
+      render(<SttPane />)
+      expect(screen.getByRole('option', { name: 'Volcengine Doubao Realtime ASR' })).toHaveValue(
+        'volcengine-doubao',
+      )
+    })
+
+    it('shows a credential hint for Volcengine Doubao realtime ASR', () => {
+      mockAppStore.config.stt_provider = 'volcengine-doubao'
+
+      render(<SttPane />)
+
+      expect(
+        screen.getByText(
+          'Use a Volcengine Speech API key, or app_id:access_token from the old console. Ark LLM keys are separate.',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    it('shows and updates Volcengine ASR resource id', () => {
+      mockAppStore.config.stt_provider = 'volcengine-doubao'
+
+      render(<SttPane />)
+
+      const resourceSelect = screen.getByLabelText('Volcengine ASR resource')
+      expect(resourceSelect).toHaveValue('volc.seedasr.sauc.duration')
+
+      fireEvent.change(resourceSelect, { target: { value: 'volc.bigasr.sauc.duration' } })
+
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        stt_volcengine_resource_id: 'volc.bigasr.sauc.duration',
+      })
+      expect(mockAppStore.setSttTestStatus).toHaveBeenCalledWith('idle')
+      expect(mockAppStore.setSttLatencyMs).toHaveBeenCalledWith(null)
     })
 
     it('updates config and resets state when provider changes', () => {
@@ -373,6 +428,22 @@ describe('SttPane', () => {
 
       render(<SttPane />)
       expect(screen.getByText('Connection failed')).toBeInTheDocument()
+    })
+
+    it('displays backend error details when benchmark fails', async () => {
+      const mockBenchStt = vi.mocked(tauri.benchSttConnection)
+      mockBenchStt.mockRejectedValue(new Error('Use a Volcengine Speech API key.'))
+
+      mockAppStore.config.stt_provider = 'volcengine-doubao'
+      mockAppStore.config.stt_api_key = 'ark-test'
+
+      render(<SttPane />)
+      fireEvent.click(screen.getAllByRole('button', { name: /test/i })[0])
+
+      await waitFor(() => {
+        expect(mockAppStore.setSttTestStatus).toHaveBeenCalledWith('error')
+        expect(screen.getByText('Use a Volcengine Speech API key.')).toBeInTheDocument()
+      })
     })
 
     it('does not display latency when status is error', () => {

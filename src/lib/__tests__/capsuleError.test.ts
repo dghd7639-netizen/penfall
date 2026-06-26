@@ -40,6 +40,21 @@ describe('capsuleErrorKeyFromPayload', () => {
     expect(capsuleErrorKeyFromPayload('ACCESSIBILITY_REQUIRED')).toBe('accessibility_required')
   })
 
+  it('maps wrapped accessibility output failures to the permission label', () => {
+    expect(capsuleErrorKeyFromPayload('Output failed: ACCESSIBILITY_REQUIRED')).toBe(
+      'accessibility_required',
+    )
+  })
+
+  it('keeps structured accessibility errors short', () => {
+    expect(
+      capsuleErrorKeyFromPayload({
+        code: 'accessibility_required',
+        retry_count: 0,
+      }),
+    ).toBe('accessibility_required')
+  })
+
   it('maps output failures to a short output label', () => {
     expect(capsuleErrorKeyFromPayload('Output failed: permission denied')).toBe('output_failed')
   })

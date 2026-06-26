@@ -3087,6 +3087,7 @@ dependencies = [
  "chrono",
  "cpal",
  "enigo",
+ "flate2",
  "futures-util",
  "http",
  "libloading 0.8.9",

@@ -101,8 +101,22 @@ vi.mock('../../../lib/api', () => ({
 }))
 
 // ─── Mock stores/authStore ────────────────────────────────────────────────────
+const mockAuthState = {
+  user: null,
+  plan: 'free',
+  source: 'free',
+  cloudWordsLimit: 0,
+  licenseStatus: null,
+}
+
 vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: () => ({ user: null, plan: 'free' }),
+  hasManagedCloudAccess: (state: typeof mockAuthState) =>
+    state.licenseStatus !== 'refunded' &&
+    state.licenseStatus !== 'deactivated' &&
+    (((state.source === 'creem' || state.source === 'appsumo') && state.cloudWordsLimit > 0) ||
+      state.plan === 'pro'),
+  useAuthStore: (selector: any) =>
+    typeof selector === 'function' ? selector(mockAuthState) : mockAuthState,
 }))
 
 // ─── Import components AFTER mocks ───────────────────────────────────────────

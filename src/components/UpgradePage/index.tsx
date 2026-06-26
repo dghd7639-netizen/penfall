@@ -2,20 +2,28 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Cloud, Crown, KeyRound, Loader2, Mic, Sparkles } from 'lucide-react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { useAuthStore } from '../../stores/authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { PRO_PLAN } from '../../lib/constants'
 import { createCheckout } from '../../lib/api'
 
 const benefitIcons = [Mic, Sparkles, KeyRound, Cloud]
 
 export function UpgradePage() {
-  const { user, plan, sttSecondsUsed, sttSecondsLimit, llmTokensUsed, llmTokensLimit } =
-    useAuthStore()
+  const {
+    user,
+    displayName,
+    cloudWordsUsed,
+    cloudWordsLimit,
+    sttSecondsUsed,
+    sttSecondsLimit,
+    llmTokensUsed,
+    llmTokensLimit,
+  } = useAuthStore()
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const isPro = plan === 'pro'
+  const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
 
   const handleSubscribe = async () => {
     setLoading(true)
@@ -46,10 +54,10 @@ export function UpgradePage() {
       <div className="flex items-center justify-center mb-6">
         <span
           className={`px-3 py-1 rounded-full text-[12px] font-medium ${
-            isPro ? 'bg-amber-500/10 text-amber-600' : 'bg-bg-secondary text-text-secondary'
+            hasCloudAccess ? 'bg-amber-500/10 text-amber-600' : 'bg-bg-secondary text-text-secondary'
           }`}
         >
-          {t('upgrade.currentPlan', { plan: isPro ? t('upgrade.pro') : t('upgrade.free') })}
+          {t('upgrade.currentPlan', { plan: displayName })}
         </span>
       </div>
 
@@ -105,7 +113,7 @@ export function UpgradePage() {
       </div>
 
       {/* Pro quota progress */}
-      {isPro && (
+      {hasCloudAccess && (
         <div className="border border-border rounded-[10px] overflow-hidden mb-5">
           <div className="px-4 py-2.5 bg-bg-secondary/50 border-b border-border">
             <h3 className="text-[13px] font-medium text-text-primary">
@@ -113,26 +121,38 @@ export function UpgradePage() {
             </h3>
           </div>
           <div className="px-4 py-3 space-y-3">
-            <QuotaBar
-              label={t('upgrade.stt')}
-              used={sttSecondsUsed}
-              limit={sttSecondsLimit}
-              unit={t('account.quotaHours')}
-              divisor={3600}
-            />
-            <QuotaBar
-              label={t('upgrade.llm')}
-              used={llmTokensUsed}
-              limit={llmTokensLimit}
-              unit={t('account.quotaTokens')}
-              divisor={1000}
-            />
+            {cloudWordsLimit > 0 ? (
+              <QuotaBar
+                label={t('account.cloudWords', 'Cloud words')}
+                used={cloudWordsUsed}
+                limit={cloudWordsLimit}
+                unit={t('account.quotaKWords', 'k words')}
+                divisor={1000}
+              />
+            ) : (
+              <>
+                <QuotaBar
+                  label={t('upgrade.stt')}
+                  used={sttSecondsUsed}
+                  limit={sttSecondsLimit}
+                  unit={t('account.quotaHours')}
+                  divisor={3600}
+                />
+                <QuotaBar
+                  label={t('upgrade.llm')}
+                  used={llmTokensUsed}
+                  limit={llmTokensLimit}
+                  unit={t('account.quotaTokens')}
+                  divisor={1000}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Action */}
-      {isPro ? (
+      {hasCloudAccess ? (
         <div className="text-center py-3">
           <p className="text-text-secondary flex items-center justify-center gap-1.5">
             <Crown size={14} className="text-amber-500" />

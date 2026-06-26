@@ -270,6 +270,7 @@ mod tests {
                 language: None,
                 smart_format: true,
                 sample_rate: 16000,
+                resource_id: None,
             })
             .await;
 

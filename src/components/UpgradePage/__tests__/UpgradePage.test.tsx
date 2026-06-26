@@ -2,9 +2,18 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UpgradePage } from '../index'
 
+type MockPlan = 'free' | 'pro' | 'appsumo_tier1' | 'appsumo_tier2' | 'appsumo_tier3'
+type MockSource = 'free' | 'creem' | 'appsumo'
+type MockLicenseStatus = 'pending' | 'active' | 'refunded' | 'deactivated' | null
+
 const mockAuthState = {
   user: null,
-  plan: 'free' as const,
+  plan: 'free' as MockPlan,
+  source: 'free' as MockSource,
+  displayName: 'Free',
+  licenseStatus: null as MockLicenseStatus,
+  cloudWordsUsed: 0,
+  cloudWordsLimit: 0,
   sttSecondsUsed: 0,
   sttSecondsLimit: 0,
   llmTokensUsed: 0,
@@ -20,7 +29,17 @@ vi.mock('../../../lib/api', () => ({
 }))
 
 vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: Object.assign(() => mockAuthState, {
+  hasManagedCloudAccess: (state: typeof mockAuthState) =>
+    state.licenseStatus !== 'refunded' &&
+    state.licenseStatus !== 'deactivated' &&
+    (((state.source === 'creem' || state.source === 'appsumo') && state.cloudWordsLimit > 0) ||
+      state.plan === 'pro'),
+  useAuthStore: Object.assign((selector: any) => {
+    if (typeof selector === 'function') {
+      return selector(mockAuthState)
+    }
+    return mockAuthState
+  }, {
     setState: vi.fn(),
   }),
 }))
@@ -51,7 +70,12 @@ vi.mock('react-i18next', () => ({
 beforeEach(() => {
   Object.assign(mockAuthState, {
     user: null,
-    plan: 'free' as const,
+    plan: 'free' as MockPlan,
+    source: 'free' as MockSource,
+    displayName: 'Free',
+    licenseStatus: null as MockLicenseStatus,
+    cloudWordsUsed: 0,
+    cloudWordsLimit: 0,
     sttSecondsUsed: 0,
     sttSecondsLimit: 0,
     llmTokensUsed: 0,

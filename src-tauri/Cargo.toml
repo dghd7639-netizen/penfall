@@ -42,6 +42,7 @@ http = "1"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
 url = "2"
+flate2 = "1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = [

@@ -70,12 +70,24 @@ export const CUSTOM_STT_PRESETS = [
 export const STT_PROVIDERS: { value: string; labelKey: string }[] = [
   { value: 'deepgram', labelKey: 'providers.stt.deepgram' },
   { value: 'assemblyai', labelKey: 'providers.stt.assemblyai' },
+  { value: 'volcengine-doubao', labelKey: 'providers.stt.volcengineDoubao' },
   { value: 'glm-asr', labelKey: 'providers.stt.glmAsr' },
   { value: 'openai-whisper', labelKey: 'providers.stt.openaiWhisper' },
   { value: 'groq-whisper', labelKey: 'providers.stt.groqWhisper' },
   { value: 'siliconflow', labelKey: 'providers.stt.siliconflow' },
   { value: CUSTOM_WHISPER_PROVIDER, labelKey: 'providers.stt.customWhisper' },
   { value: 'cloud', labelKey: 'providers.stt.cloud' },
+] as const
+
+export const VOLCENGINE_STT_RESOURCES = [
+  {
+    value: 'volc.seedasr.sauc.duration',
+    labelKey: 'settings.volcengineResourceSeedAsr',
+  },
+  {
+    value: 'volc.bigasr.sauc.duration',
+    labelKey: 'settings.volcengineResourceBigAsr',
+  },
 ] as const
 
 export const ONBOARDING_STT_PROVIDERS = STT_PROVIDERS.filter(
@@ -89,6 +101,7 @@ export const LLM_PROVIDERS: { value: string; labelKey: string }[] = [
   { value: 'openai', labelKey: 'providers.llm.openai' },
   { value: 'gemini', labelKey: 'providers.llm.gemini' },
   { value: 'moonshot', labelKey: 'providers.llm.moonshot' },
+  { value: 'doubao', labelKey: 'providers.llm.doubao' },
   { value: 'qwen', labelKey: 'providers.llm.qwen' },
   { value: 'groq', labelKey: 'providers.llm.groq' },
   { value: 'claude', labelKey: 'providers.llm.claude' },
@@ -107,6 +120,10 @@ export const LLM_DEFAULT_CONFIG: Record<string, { baseUrl: string; model: string
     model: 'gemini-2.0-flash',
   },
   moonshot: { baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+  doubao: {
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    model: 'doubao-seed-1-6-flash-250615',
+  },
   qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo' },
   groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
   claude: { baseUrl: 'https://openrouter.ai/api/v1', model: 'anthropic/claude-sonnet-4' },

@@ -33,6 +33,11 @@ const structuredCapsuleErrorKeys = new Set<CapsuleErrorKey>([
   'output_wayland_unsupported',
   'llm_failed',
   'llm_quota_exceeded',
+  'accessibility_required',
+  'stt_not_configured',
+  'stt_connection_failed',
+  'audio_failed',
+  'output_failed',
 ])
 
 function isStructuredCapsuleErrorKey(code: string): code is CapsuleErrorKey {
@@ -46,7 +51,7 @@ export function capsuleErrorKeyFromPayload(payload: PipelineErrorPayload): Capsu
 
   const normalized = payload.trim().toLowerCase()
 
-  if (payload === 'ACCESSIBILITY_REQUIRED') {
+  if (payload === 'ACCESSIBILITY_REQUIRED' || normalized.includes('accessibility_required')) {
     return 'accessibility_required'
   }
 

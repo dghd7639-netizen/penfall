@@ -1,6 +1,41 @@
 use crate::api_base_url;
 use crate::stt;
+use crate::stt::SttProvider;
 use crate::SessionTokenStore;
+
+async fn check_volcengine_doubao_connection(
+    api_key: &str,
+    resource_id: Option<String>,
+) -> Result<(), String> {
+    let mut provider = stt::volcengine::VolcengineDoubaoProvider::new();
+    let config = stt::SttConfig {
+        api_key: api_key.to_string(),
+        language: Some("zh".to_string()),
+        smart_format: true,
+        sample_rate: 16000,
+        resource_id,
+    };
+    provider.connect(&config).await.map_err(|e| e.to_string())?;
+    let _ = provider.disconnect().await;
+    Ok(())
+}
+
+fn has_managed_cloud_access(body: &serde_json::Value) -> bool {
+    if matches!(
+        body["licenseStatus"].as_str(),
+        Some("refunded") | Some("deactivated")
+    ) {
+        return false;
+    }
+
+    let source = body["source"].as_str().unwrap_or_default();
+    let cloud_words_limit = body["cloudWordsLimit"].as_i64().unwrap_or_default();
+    if matches!(source, "creem" | "appsumo") && cloud_words_limit > 0 {
+        return true;
+    }
+
+    body["plan"].as_str() == Some("pro")
+}
 
 fn resolve_whisper_test_config(
     provider: &str,
@@ -24,6 +59,7 @@ pub async fn test_stt_connection(
     provider: String,
     custom_base_url: Option<String>,
     custom_model: Option<String>,
+    volcengine_resource_id: Option<String>,
     token_store: tauri::State<'_, SessionTokenStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<bool, String> {
@@ -31,7 +67,7 @@ pub async fn test_stt_connection(
         return Ok(false);
     }
 
-    // Cloud provider: verify session token + Pro status via API
+    // Cloud provider: verify session token + managed cloud entitlement via API.
     if provider == "cloud" {
         let token = token_store
             .0
@@ -53,7 +89,7 @@ pub async fn test_stt_connection(
             return Ok(false);
         }
         let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-        return Ok(body["plan"].as_str() == Some("pro"));
+        return Ok(has_managed_cloud_access(&body));
     }
 
     if stt::config::stt_provider_requires_api_key(&provider) && api_key.is_empty() {
@@ -81,6 +117,12 @@ pub async fn test_stt_connection(
                 .map_err(|e| e.to_string())?;
             Ok(resp.status().is_success())
         }
+        stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER => Ok(check_volcengine_doubao_connection(
+            &api_key,
+            volcengine_resource_id,
+        )
+        .await
+        .is_ok()),
         _ => {
             let cfg = resolve_whisper_test_config(&provider, custom_base_url, custom_model)?;
 
@@ -150,6 +192,7 @@ pub async fn bench_stt_connection(
     provider: String,
     custom_base_url: Option<String>,
     custom_model: Option<String>,
+    volcengine_resource_id: Option<String>,
     token_store: tauri::State<'_, SessionTokenStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<u32, String> {
@@ -180,8 +223,8 @@ pub async fn bench_stt_connection(
             return Err("Request failed".to_string());
         }
         let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-        if body["plan"].as_str() != Some("pro") {
-            return Err("Pro plan required".to_string());
+        if !has_managed_cloud_access(&body) {
+            return Err("Cloud plan required".to_string());
         }
         return Ok(elapsed);
     }
@@ -220,6 +263,11 @@ pub async fn bench_stt_connection(
                 return Err(format!("HTTP {}", resp.status()));
             }
             Ok(elapsed)
+        }
+        stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER => {
+            let t0 = std::time::Instant::now();
+            check_volcengine_doubao_connection(&api_key, volcengine_resource_id).await?;
+            Ok(t0.elapsed().as_millis() as u32)
         }
         _ => {
             let cfg = resolve_whisper_test_config(&provider, custom_base_url, custom_model)?;

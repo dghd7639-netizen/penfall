@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Crown, Copy, Check, BookOpen } from 'lucide-react'
-import { useAuthStore } from '../../stores/authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { useAppStore } from '../../stores/appStore'
 import { getScenes, type ScenePack } from '../../lib/api'
 import { addDictionaryEntry, getDictionary } from '../../lib/tauri'
@@ -9,7 +9,8 @@ import { addDictionaryEntry, getDictionary } from '../../lib/tauri'
 type Status = 'idle' | 'loading' | 'error'
 
 export function ScenesPane() {
-  const { user, plan } = useAuthStore()
+  const { user } = useAuthStore()
+  const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
   const { t } = useTranslation()
   const [scenes, setScenes] = useState<ScenePack[]>([])
   const [status, setStatus] = useState<Status>('idle')
@@ -116,7 +117,7 @@ export function ScenesPane() {
     }
   }
 
-  const isLocked = (scene: ScenePack) => scene.isPro && plan !== 'pro'
+  const isLocked = (scene: ScenePack) => scene.isPro && !hasCloudAccess
 
   return (
     <div className="space-y-4">

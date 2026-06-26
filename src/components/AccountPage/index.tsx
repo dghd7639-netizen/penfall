@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LogOut, Upload, Download, Loader2, ExternalLink } from 'lucide-react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { useAuthStore } from '../../stores/authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { useAppStore } from '../../stores/appStore'
 import { API_BASE_URL } from '../../lib/constants'
 import { uploadBackup, downloadBackup, createPortalSession } from '../../lib/api'
@@ -363,7 +363,12 @@ function AccountDetails() {
   const {
     user,
     plan,
+    source,
+    displayName,
     subscriptionEnd,
+    cloudWordsUsed,
+    cloudWordsLimit,
+    cloudWordsResetAt,
     sttSecondsUsed,
     sttSecondsLimit,
     llmTokensUsed,
@@ -381,7 +386,9 @@ function AccountDetails() {
   const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
 
-  const isPro = plan === 'pro'
+  const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
+  const isAppSumo = source === 'appsumo'
+  const canManageSubscription = source === 'creem' || plan === 'pro'
 
   const handleBackup = async () => {
     setBackupLoading(true)
@@ -440,21 +447,48 @@ function AccountDetails() {
       <div className="border border-border rounded-[10px] overflow-hidden">
         <InfoRow label={t('account.email')} value={user!.email} />
         {user!.name && <InfoRow label={t('account.name')} value={user!.name} />}
-        <InfoRow label={t('account.plan')} value={isPro ? t('upgrade.pro') : t('upgrade.free')} />
-        {isPro && subscriptionEnd && (
+        <InfoRow label={t('account.plan')} value={displayName} />
+        {isAppSumo && <InfoRow label={t('account.license', 'License')} value={t('account.lifetime', 'Lifetime')} />}
+        {canManageSubscription && subscriptionEnd && (
           <InfoRow
             label={t('account.renews')}
             value={new Date(subscriptionEnd).toLocaleDateString()}
           />
         )}
+        {cloudWordsResetAt && (
+          <InfoRow
+            label={t('account.resets', 'Resets')}
+            value={new Date(cloudWordsResetAt).toLocaleDateString()}
+          />
+        )}
       </div>
 
       {/* Quota */}
-      {sttSecondsLimit > 0 && (
+      {cloudWordsLimit > 0 ? (
         <div className="border border-border rounded-[10px] overflow-hidden">
           <div className="px-3 py-2.5 bg-bg-secondary/50 border-b border-border">
             <h3 className="text-[13px] font-medium text-text-primary">
-              {isPro ? t('account.usageThisMonth') : t('account.freeCredit', 'Free Credit')}
+              {t('account.cloudWordsThisMonth', 'Cloud words this month')}
+            </h3>
+          </div>
+          <div className="px-3 py-3 space-y-3">
+            <QuotaBar
+              label={t('account.cloudWords', 'Cloud words')}
+              used={cloudWordsUsed}
+              limit={cloudWordsLimit}
+              unit={t('account.quotaKWords', 'k words')}
+              divisor={1000}
+            />
+            <p className="text-[11px] text-text-tertiary">
+              {t('account.byokUnlimited', 'BYOK usage is unlimited and does not count toward cloud words.')}
+            </p>
+          </div>
+        </div>
+      ) : sttSecondsLimit > 0 ? (
+        <div className="border border-border rounded-[10px] overflow-hidden">
+          <div className="px-3 py-2.5 bg-bg-secondary/50 border-b border-border">
+            <h3 className="text-[13px] font-medium text-text-primary">
+              {hasCloudAccess ? t('account.usageThisMonth') : t('account.freeCredit', 'Free Credit')}
             </h3>
           </div>
           <div className="px-3 py-3 space-y-3">
@@ -474,10 +508,10 @@ function AccountDetails() {
             />
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Cloud backup (Pro) */}
-      {isPro && (
+      {hasCloudAccess && (
         <div className="border border-border rounded-[10px] overflow-hidden">
           <div className="px-3 py-2.5 bg-bg-secondary/50 border-b border-border">
             <h3 className="text-[13px] font-medium text-text-primary">
@@ -514,7 +548,7 @@ function AccountDetails() {
       )}
 
       {/* Manage subscription (Pro) */}
-      {isPro && (
+      {canManageSubscription && (
         <button
           onClick={handleManageSubscription}
           disabled={portalLoading}

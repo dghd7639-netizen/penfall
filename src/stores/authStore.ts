@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
 import { authClient } from '../lib/auth-client'
-import { getSubscriptionStatus } from '../lib/api'
+import {
+  getSubscriptionStatus,
+  type LicenseStatus,
+  type SubscriptionPlan,
+  type SubscriptionSource,
+} from '../lib/api'
 import { toast } from '../components/Toast'
 import i18n from '../i18n'
 
@@ -17,14 +22,22 @@ export interface AuthUser {
 interface AuthState {
   // User
   user: AuthUser | null
-  plan: 'free' | 'pro'
+  plan: SubscriptionPlan
+  source: SubscriptionSource
+  displayName: string
   subscriptionEnd: string | null
+  subscriptionStatus: string | null
+  licenseStatus: LicenseStatus | null
 
   // Quotas
   sttSecondsUsed: number
   sttSecondsLimit: number
   llmTokensUsed: number
   llmTokensLimit: number
+  cloudWordsUsed: number
+  cloudWordsLimit: number
+  cloudWordsResetAt: string | null
+  byokUnlimited: boolean
 
   // Loading
   loading: boolean
@@ -45,14 +58,30 @@ interface AuthState {
   handleDeepLinkToken: (token: string) => Promise<void>
 }
 
+export function hasManagedCloudAccess(state: Pick<AuthState, 'plan' | 'source' | 'cloudWordsLimit' | 'licenseStatus'>): boolean {
+  if (state.licenseStatus === 'refunded' || state.licenseStatus === 'deactivated') return false
+  if ((state.source === 'creem' || state.source === 'appsumo') && state.cloudWordsLimit > 0) {
+    return true
+  }
+  return state.plan === 'pro'
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   plan: 'free',
+  source: 'free',
+  displayName: 'Free',
   subscriptionEnd: null,
+  subscriptionStatus: null,
+  licenseStatus: null,
   sttSecondsUsed: 0,
   sttSecondsLimit: 0,
   llmTokensUsed: 0,
   llmTokensLimit: 0,
+  cloudWordsUsed: 0,
+  cloudWordsLimit: 0,
+  cloudWordsResetAt: null,
+  byokUnlimited: true,
   loading: false,
   error: null,
   emailVerificationPending: false,
@@ -186,11 +215,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: null,
         plan: 'free',
+        source: 'free',
+        displayName: 'Free',
         subscriptionEnd: null,
+        subscriptionStatus: null,
+        licenseStatus: null,
         sttSecondsUsed: 0,
         sttSecondsLimit: 0,
         llmTokensUsed: 0,
         llmTokensLimit: 0,
+        cloudWordsUsed: 0,
+        cloudWordsLimit: 0,
+        cloudWordsResetAt: null,
+        byokUnlimited: true,
         error: null,
         emailVerificationPending: false,
         pendingEmail: null,
@@ -206,17 +243,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const status = await getSubscriptionStatus()
       set({
         plan: status.plan,
+        source: status.source,
+        displayName: status.displayName,
         subscriptionEnd: status.subscriptionEnd,
+        subscriptionStatus: status.subscriptionStatus,
+        licenseStatus: status.licenseStatus ?? null,
         sttSecondsUsed: status.sttSecondsUsed,
         sttSecondsLimit: status.sttSecondsLimit,
         llmTokensUsed: status.llmTokensUsed,
         llmTokensLimit: status.llmTokensLimit,
+        cloudWordsUsed: status.cloudWordsUsed,
+        cloudWordsLimit: status.cloudWordsLimit,
+        cloudWordsResetAt: status.cloudWordsResetAt,
+        byokUnlimited: status.byokUnlimited,
       })
       // Clear checkout pending flag after first post-checkout refresh
       if (get().checkoutPending) {
         set({ checkoutPending: false })
       }
-      if (
+      if (status.cloudWordsLimit > 0 && status.cloudWordsUsed / status.cloudWordsLimit >= 0.9) {
+        toast(i18n.t('account.cloudQuotaWarning', 'Cloud words are almost used up.'), 'error')
+        sttWarningShown = true
+        llmWarningShown = true
+      } else if (
         status.sttSecondsLimit > 0 &&
         status.sttSecondsUsed / status.sttSecondsLimit >= 0.9 &&
         !sttWarningShown

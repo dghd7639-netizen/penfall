@@ -1,6 +1,23 @@
 use crate::api_base_url;
 use crate::SessionTokenStore;
 
+fn has_managed_cloud_access(body: &serde_json::Value) -> bool {
+    if matches!(
+        body["licenseStatus"].as_str(),
+        Some("refunded") | Some("deactivated")
+    ) {
+        return false;
+    }
+
+    let source = body["source"].as_str().unwrap_or_default();
+    let cloud_words_limit = body["cloudWordsLimit"].as_i64().unwrap_or_default();
+    if matches!(source, "creem" | "appsumo") && cloud_words_limit > 0 {
+        return true;
+    }
+
+    body["plan"].as_str() == Some("pro")
+}
+
 #[tauri::command]
 pub async fn test_llm_connection(
     api_key: String,
@@ -14,7 +31,7 @@ pub async fn test_llm_connection(
         return Ok(false);
     }
 
-    // Cloud provider: verify session token + Pro status via API
+    // Cloud provider: verify session token + managed cloud entitlement via API.
     if provider == "cloud" {
         let token = token_store
             .0
@@ -36,7 +53,7 @@ pub async fn test_llm_connection(
             return Ok(false);
         }
         let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-        return Ok(body["plan"].as_str() == Some("pro"));
+        return Ok(has_managed_cloud_access(&body));
     }
 
     if api_key.is_empty() || base_url.is_empty() {

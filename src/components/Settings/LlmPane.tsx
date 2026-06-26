@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
-import { useAuthStore } from '../../stores/authStore'
+import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { LLM_PROVIDERS, LLM_DEFAULT_CONFIG, TARGET_LANGUAGES } from '../../lib/constants'
 import { benchLlmConnection, fetchLlmModels } from '../../lib/tauri'
 import { FormField } from './shared/FormField'
@@ -15,7 +15,8 @@ export function LlmPane() {
   const setLlmTestStatus = useAppStore((s) => s.setLlmTestStatus)
   const llmLatencyMs = useAppStore((s) => s.llmLatencyMs)
   const setLlmLatencyMs = useAppStore((s) => s.setLlmLatencyMs)
-  const { user, plan } = useAuthStore()
+  const { user } = useAuthStore()
+  const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
   const { t } = useTranslation()
 
   const isCloud = config.llm_provider === 'cloud'
@@ -113,7 +114,7 @@ export function LlmPane() {
           </div>
           {!user ? (
             <p className="text-[12px] text-text-secondary">{t('settings.llmSignInHint')}</p>
-          ) : plan !== 'pro' ? (
+          ) : !hasCloudAccess ? (
             <p className="text-[12px] text-text-secondary">{t('settings.llmUpgradeHint')}</p>
           ) : (
             <p className="text-[12px] text-green-500">{t('settings.llmProActive')}</p>

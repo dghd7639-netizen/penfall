@@ -32,6 +32,7 @@ vi.mock('react-i18next', () => ({
         'settings.llmSignInHint': 'Sign in to use cloud LLM',
         'settings.llmUpgradeHint': 'Upgrade to Pro to use cloud LLM',
         'settings.llmProActive': 'Cloud LLM active',
+        'providers.llm.doubao': 'Doubao (Volcengine)',
       }
       return translations[key] || key
     },
@@ -62,6 +63,9 @@ const mockAppStore = {
 const mockAuthStore = {
   user: null as any,
   plan: null as any,
+  source: 'free',
+  cloudWordsLimit: 0,
+  licenseStatus: null as any,
 }
 
 vi.mock('../../../stores/appStore', () => ({
@@ -74,6 +78,11 @@ vi.mock('../../../stores/appStore', () => ({
 }))
 
 vi.mock('../../../stores/authStore', () => ({
+  hasManagedCloudAccess: (state: typeof mockAuthStore) =>
+    state.licenseStatus !== 'refunded' &&
+    state.licenseStatus !== 'deactivated' &&
+    (((state.source === 'creem' || state.source === 'appsumo') && state.cloudWordsLimit > 0) ||
+      state.plan === 'pro'),
   useAuthStore: (selector: any) => {
     if (typeof selector === 'function') {
       return selector(mockAuthStore)
@@ -100,6 +109,9 @@ describe('LlmPane', () => {
     mockAppStore.llmModels = []
     mockAuthStore.user = null
     mockAuthStore.plan = null
+    mockAuthStore.source = 'free'
+    mockAuthStore.cloudWordsLimit = 0
+    mockAuthStore.licenseStatus = null
   })
 
   afterEach(() => {
@@ -123,6 +135,23 @@ describe('LlmPane', () => {
       fireEvent.change(providerSelect, { target: { value: 'anthropic' } })
 
       expect(mockAppStore.updateConfig).toHaveBeenCalled()
+      expect(mockAppStore.setLlmTestStatus).toHaveBeenCalledWith('idle')
+      expect(mockAppStore.setLlmLatencyMs).toHaveBeenCalledWith(null)
+      expect(mockAppStore.setLlmModels).toHaveBeenCalledWith([])
+    })
+
+    it('applies Doubao defaults when provider changes to Doubao', () => {
+      render(<LlmPane />)
+      const selects = screen.getAllByRole('combobox')
+      const providerSelect = selects[0]
+
+      fireEvent.change(providerSelect, { target: { value: 'doubao' } })
+
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        llm_provider: 'doubao',
+        llm_base_url: 'https://ark.cn-beijing.volces.com/api/v3',
+        llm_model: 'doubao-seed-1-6-flash-250615',
+      })
       expect(mockAppStore.setLlmTestStatus).toHaveBeenCalledWith('idle')
       expect(mockAppStore.setLlmLatencyMs).toHaveBeenCalledWith(null)
       expect(mockAppStore.setLlmModels).toHaveBeenCalledWith([])

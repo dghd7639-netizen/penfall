@@ -33,12 +33,14 @@ export async function testSttConnection(
   provider: string,
   customBaseUrl?: string,
   customModel?: string,
+  volcengineResourceId?: string,
 ): Promise<boolean> {
   return invoke('test_stt_connection', {
     apiKey,
     provider,
     customBaseUrl,
     customModel,
+    volcengineResourceId,
   })
 }
 
@@ -57,12 +59,14 @@ export async function benchSttConnection(
   provider: string,
   customBaseUrl?: string,
   customModel?: string,
+  volcengineResourceId?: string,
 ): Promise<number> {
   return invoke('bench_stt_connection', {
     apiKey,
     provider,
     customBaseUrl,
     customModel,
+    volcengineResourceId,
   })
 }
 
