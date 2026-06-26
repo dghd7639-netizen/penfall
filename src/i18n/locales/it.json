@@ -283,12 +283,10 @@
     "waylandHotkeyLimited": "Global hotkeys are limited on Wayland. Use the tray or app button if this shortcut does not respond.",
     "hotkeyRegistrationFailed": "Shortcut could not be registered in this session.",
     "waylandClipboardCopyOnly": "On Wayland, clipboard mode copies text only. Paste manually to avoid system permission prompts.",
-    "chineseOutput": "Chinese output",
-    "chineseOutputPreserve": "Preserve original",
-    "chineseOutputSimplified": "Simplified Chinese",
-    "chineseOutputTraditional": "Traditional Chinese",
+    "advancedPolishSettings": "Advanced polish settings",
+    "advancedPolishSettingsDesc": "Optional writing rules for AI polish",
     "customPolishInstructions": "Custom polish instructions",
-    "customPolishInstructionsPlaceholder": "Example: Use Traditional Chinese. Keep the tone concise and professional.",
+    "customPolishInstructionsPlaceholder": "Optional: keep a concise tone, preserve domain terms, or follow your team style.",
     "customPolishInstructionsCount": "{{count}} / 2000 characters"
   },
   "dictionary": {

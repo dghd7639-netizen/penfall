@@ -11,7 +11,11 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
-import { checkAccessibilityPermission, requestAccessibilityPermission } from '../../lib/tauri'
+import {
+  checkAccessibilityPermission,
+  requestAccessibilityPermission,
+  waitForAccessibilityPermission,
+} from '../../lib/tauri'
 
 export function DoneStep() {
   const { t } = useTranslation()
@@ -32,7 +36,7 @@ export function DoneStep() {
 
   const handleGrant = async () => {
     await requestAccessibilityPermission()
-    const trusted = await checkAccessibilityPermission()
+    const trusted = await waitForAccessibilityPermission()
     setA11yTrusted(trusted)
   }
 

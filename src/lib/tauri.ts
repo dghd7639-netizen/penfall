@@ -149,6 +149,22 @@ export async function requestAccessibilityPermission(): Promise<boolean> {
   return invoke('request_accessibility_permission')
 }
 
+export async function waitForAccessibilityPermission({
+  timeoutMs = 60_000,
+  intervalMs = 1_000,
+}: {
+  timeoutMs?: number
+  intervalMs?: number
+} = {}): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+
+  while (true) {
+    const trusted = await checkAccessibilityPermission()
+    if (trusted || Date.now() >= deadline) return trusted
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
 // Onboarding persistence via tauri-plugin-store
 export async function loadOnboardingCompleted(): Promise<boolean> {
   try {

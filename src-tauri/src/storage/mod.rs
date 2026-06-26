@@ -94,7 +94,7 @@ impl AppConfig {
 
     fn normalize_values(&mut self) {
         self.polish_custom_prompt = sanitize_polish_custom_prompt(&self.polish_custom_prompt);
-        self.polish_chinese_script = normalize_polish_chinese_script(&self.polish_chinese_script);
+        self.polish_chinese_script = "preserve".to_string();
         self.normalize_platform_hotkey();
     }
 
@@ -120,14 +120,6 @@ fn sanitize_polish_custom_prompt(value: &str) -> String {
         .chars()
         .take(POLISH_CUSTOM_PROMPT_MAX_CHARS)
         .collect()
-}
-
-fn normalize_polish_chinese_script(value: &str) -> String {
-    match value.trim() {
-        "simplified" => "simplified".to_string(),
-        "traditional" => "traditional".to_string(),
-        _ => "preserve".to_string(),
-    }
 }
 
 // ─── ConfigManager (tauri-plugin-store backed) ───
@@ -411,10 +403,10 @@ mod tests {
     }
 
     #[test]
-    fn app_config_sanitizes_polish_preferences() {
+    fn app_config_sanitizes_custom_polish_prompt_and_clears_chinese_script() {
         let mut value = serde_json::to_value(AppConfig::default()).unwrap();
         value["polish_custom_prompt"] = serde_json::json!("  use formal tone\0  ");
-        value["polish_chinese_script"] = serde_json::json!("invalid");
+        value["polish_chinese_script"] = serde_json::json!("traditional");
 
         let config = AppConfig::from_stored_value(value).unwrap();
 

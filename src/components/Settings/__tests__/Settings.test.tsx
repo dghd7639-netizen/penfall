@@ -84,6 +84,7 @@ vi.mock('../../../lib/tauri', () => ({
   resumeHotkey: vi.fn().mockResolvedValue(undefined),
   checkAccessibilityPermission: vi.fn().mockResolvedValue(true),
   requestAccessibilityPermission: vi.fn().mockResolvedValue(true),
+  waitForAccessibilityPermission: vi.fn().mockResolvedValue(true),
   getPlatformCapabilities: vi.fn().mockResolvedValue({
     os: 'macos',
     sessionType: 'unknown',

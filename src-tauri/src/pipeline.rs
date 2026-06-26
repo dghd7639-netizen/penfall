@@ -36,7 +36,7 @@ pub fn is_accessibility_trusted() -> bool {
     }
 }
 
-/// On macOS, request Accessibility permission by opening the system Privacy pane.
+/// On macOS, request Accessibility permission and open the system Privacy pane.
 /// Returns true if permission is already granted or on non-macOS platforms.
 pub fn request_accessibility_permission() -> bool {
     #[cfg(target_os = "macos")]
@@ -45,6 +45,8 @@ pub fn request_accessibility_permission() -> bool {
             return true;
         }
 
+        let trusted_after_prompt = request_accessibility_permission_prompt();
+
         if let Err(e) = std::process::Command::new("/usr/bin/open")
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
             .spawn()
@@ -52,11 +54,63 @@ pub fn request_accessibility_permission() -> bool {
             tracing::warn!("Failed to open macOS Accessibility settings: {}", e);
         }
 
-        false
+        trusted_after_prompt
     }
     #[cfg(not(target_os = "macos"))]
     {
         true
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn request_accessibility_permission_prompt() -> bool {
+    use std::ffi::c_void;
+    use std::ptr;
+
+    type Boolean = u8;
+    type CFDictionaryRef = *const c_void;
+    type CFStringRef = *const c_void;
+    type CFBooleanRef = *const c_void;
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> Boolean;
+        static kAXTrustedCheckOptionPrompt: CFStringRef;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        static kCFBooleanTrue: CFBooleanRef;
+        fn CFDictionaryCreate(
+            allocator: *const c_void,
+            keys: *const *const c_void,
+            values: *const *const c_void,
+            num_values: isize,
+            key_callbacks: *const c_void,
+            value_callbacks: *const c_void,
+        ) -> CFDictionaryRef;
+        fn CFRelease(cf: *const c_void);
+    }
+
+    unsafe {
+        let keys = [kAXTrustedCheckOptionPrompt];
+        let values = [kCFBooleanTrue];
+        let options = CFDictionaryCreate(
+            ptr::null(),
+            keys.as_ptr(),
+            values.as_ptr(),
+            1,
+            ptr::null(),
+            ptr::null(),
+        );
+
+        if options.is_null() {
+            return false;
+        }
+
+        let trusted = AXIsProcessTrustedWithOptions(options) != 0;
+        CFRelease(options);
+        trusted
     }
 }
 

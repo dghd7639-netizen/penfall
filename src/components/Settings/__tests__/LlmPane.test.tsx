@@ -24,10 +24,8 @@ vi.mock('react-i18next', () => ({
         'settings.modelsAvailable': `${params?.count || 0} models available`,
         'settings.llmModelPlaceholder': 'e.g. gpt-4o-mini',
         'settings.enableAiPolish': 'Enable AI Polish',
-        'settings.chineseOutput': 'Chinese output',
-        'settings.chineseOutputPreserve': 'Preserve original',
-        'settings.chineseOutputSimplified': 'Simplified Chinese',
-        'settings.chineseOutputTraditional': 'Traditional Chinese',
+        'settings.advancedPolishSettings': 'Advanced polish settings',
+        'settings.advancedPolishSettingsDesc': 'Optional writing rules',
         'settings.customPolishInstructions': 'Custom polish instructions',
         'settings.customPolishInstructionsPlaceholder': 'Example prompt',
         'settings.customPolishInstructionsCount': `${params?.count || 0} / 2000 characters`,
@@ -294,26 +292,38 @@ describe('LlmPane', () => {
   })
 
   describe('AI polish behavior settings', () => {
-    it('updates Chinese script preference', () => {
+    it('keeps custom instruction controls inside advanced settings', () => {
       render(<LlmPane />)
 
-      const select = screen.getByDisplayValue('Preserve original')
-      fireEvent.change(select, { target: { value: 'traditional' } })
+      expect(screen.getByText('Advanced polish settings')).toBeInTheDocument()
+      expect(screen.queryByText('Chinese output')).not.toBeInTheDocument()
+      expect(screen.queryByText('Custom polish instructions')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /advanced polish settings/i }))
+
+      expect(screen.getByText('Custom polish instructions')).toBeInTheDocument()
+      expect(screen.queryByText('Chinese output')).not.toBeInTheDocument()
+    })
+
+    it('updates custom polish instructions from advanced settings', () => {
+      render(<LlmPane />)
+
+      fireEvent.click(screen.getByRole('button', { name: /advanced polish settings/i }))
+      const textarea = screen.getByPlaceholderText('Example prompt')
+      fireEvent.change(textarea, { target: { value: 'Keep a concise professional tone.' } })
 
       expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
-        polish_chinese_script: 'traditional',
+        polish_custom_prompt: 'Keep a concise professional tone.',
       })
     })
 
-    it('updates custom polish instructions', () => {
+    it('opens advanced settings automatically when custom instructions exist', () => {
+      mockAppStore.config.polish_custom_prompt = 'Keep it concise.'
+
       render(<LlmPane />)
 
-      const textarea = screen.getByPlaceholderText('Example prompt')
-      fireEvent.change(textarea, { target: { value: 'Use Traditional Chinese.' } })
-
-      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
-        polish_custom_prompt: 'Use Traditional Chinese.',
-      })
+      expect(screen.getByText('Custom polish instructions')).toBeInTheDocument()
+      expect(screen.queryByText('Chinese output')).not.toBeInTheDocument()
     })
   })
 

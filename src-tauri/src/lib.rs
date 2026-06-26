@@ -47,6 +47,33 @@ pub struct HotkeyRegistrationError(pub Arc<Mutex<Option<String>>>);
 /// The Rust pipeline reads this when creating cloud STT/LLM providers.
 pub struct SessionTokenStore(pub Arc<Mutex<String>>);
 
+fn should_restore_main_window_on_reopen(_has_visible_windows: bool) -> bool {
+    true
+}
+
+fn restore_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dock_reopen_restores_main_window_when_no_windows_are_visible() {
+        assert!(should_restore_main_window_on_reopen(false));
+    }
+
+    #[test]
+    fn dock_reopen_restores_main_window_even_when_capsule_is_visible() {
+        assert!(should_restore_main_window_on_reopen(true));
+    }
+}
+
 /// Persisted window position and size.
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct WindowState {
@@ -132,10 +159,7 @@ pub fn run() {
             // Deep-link URL forwarding is handled automatically by the
             // "deep-link" feature of single-instance plugin.
             // Just focus the main window so the user sees the result.
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            restore_main_window(app);
         }))
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
@@ -463,6 +487,19 @@ pub fn run() {
             commands::config::set_capsule_auto_hide,
             commands::config::set_session_token,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = event
+            {
+                if should_restore_main_window_on_reopen(has_visible_windows) {
+                    restore_main_window(app);
+                    refresh_tray(app);
+                }
+            }
+        });
 }

@@ -2,12 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
 import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
-import type { PolishChineseScript } from '../../stores/appStore'
 import { LLM_PROVIDERS, LLM_DEFAULT_CONFIG, TARGET_LANGUAGES } from '../../lib/constants'
 import { benchLlmConnection, fetchLlmModels } from '../../lib/tauri'
 import { FormField } from './shared/FormField'
 import { Toggle } from './shared/Toggle'
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Crown } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Crown, ChevronDown } from 'lucide-react'
 
 export function LlmPane() {
   const config = useAppStore((s) => s.config)
@@ -22,11 +21,17 @@ export function LlmPane() {
 
   const isCloud = config.llm_provider === 'cloud'
   const polishPromptLength = config.polish_custom_prompt.length
+  const hasCustomPolishConfig = config.polish_custom_prompt.trim().length > 0
 
   const models = useAppStore((s) => s.llmModels)
   const setModels = useAppStore((s) => s.setLlmModels)
   const [fetchingModels, setFetchingModels] = useState(false)
+  const [polishAdvancedOpen, setPolishAdvancedOpen] = useState(hasCustomPolishConfig)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (hasCustomPolishConfig) setPolishAdvancedOpen(true)
+  }, [hasCustomPolishConfig])
 
   const doFetchModels = useCallback(
     async (apiKey: string, baseUrl: string) => {
@@ -233,35 +238,44 @@ export function LlmPane() {
 
       {config.polish_enabled && (
         <div className="space-y-3">
-          <FormField label={t('settings.chineseOutput')}>
-            <select
-              value={config.polish_chinese_script}
-              onChange={(e) =>
-                updateConfig({
-                  polish_chinese_script: e.target.value as PolishChineseScript,
-                })
-              }
-              className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
-            >
-              <option value="preserve">{t('settings.chineseOutputPreserve')}</option>
-              <option value="simplified">{t('settings.chineseOutputSimplified')}</option>
-              <option value="traditional">{t('settings.chineseOutputTraditional')}</option>
-            </select>
-          </FormField>
-
-          <FormField label={t('settings.customPolishInstructions')}>
-            <textarea
-              value={config.polish_custom_prompt}
-              onChange={(e) => updateConfig({ polish_custom_prompt: e.target.value })}
-              maxLength={2000}
-              rows={4}
-              placeholder={t('settings.customPolishInstructionsPlaceholder')}
-              className="w-full resize-y px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+          <button
+            type="button"
+            onClick={() => setPolishAdvancedOpen((open) => !open)}
+            className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] cursor-pointer hover:border-border-focus transition-colors flex items-center justify-between text-left"
+          >
+            <span>
+              <span className="block text-[13px] font-medium text-text-primary">
+                {t('settings.advancedPolishSettings')}
+              </span>
+              <span className="block text-[11px] text-text-tertiary mt-0.5">
+                {t('settings.advancedPolishSettingsDesc')}
+              </span>
+            </span>
+            <ChevronDown
+              size={16}
+              className={`text-text-tertiary transition-transform ${
+                polishAdvancedOpen ? 'rotate-180' : ''
+              }`}
             />
-            <p className="text-[11px] text-text-tertiary mt-1.5">
-              {t('settings.customPolishInstructionsCount', { count: polishPromptLength })}
-            </p>
-          </FormField>
+          </button>
+
+          {polishAdvancedOpen && (
+            <div className="space-y-3">
+              <FormField label={t('settings.customPolishInstructions')}>
+                <textarea
+                  value={config.polish_custom_prompt}
+                  onChange={(e) => updateConfig({ polish_custom_prompt: e.target.value })}
+                  maxLength={2000}
+                  rows={4}
+                  placeholder={t('settings.customPolishInstructionsPlaceholder')}
+                  className="w-full resize-y px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+                />
+                <p className="text-[11px] text-text-tertiary mt-1.5">
+                  {t('settings.customPolishInstructionsCount', { count: polishPromptLength })}
+                </p>
+              </FormField>
+            </div>
+          )}
         </div>
       )}
 

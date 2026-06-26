@@ -283,12 +283,10 @@
     "waylandHotkeyLimited": "Wayland 下全局热键受系统限制。如果快捷键无响应，请用托盘或应用内按钮开始录音。",
     "hotkeyRegistrationFailed": "当前会话无法注册这个快捷键。",
     "waylandClipboardCopyOnly": "Wayland 下剪贴板模式只会复制文本，需要手动粘贴，以避免系统权限弹窗。",
-    "chineseOutput": "中文输出",
-    "chineseOutputPreserve": "保留原文习惯",
-    "chineseOutputSimplified": "简体中文",
-    "chineseOutputTraditional": "繁體中文",
+    "advancedPolishSettings": "高级润色设置",
+    "advancedPolishSettingsDesc": "可选的个人写作偏好",
     "customPolishInstructions": "自定义润色指令",
-    "customPolishInstructionsPlaceholder": "示例：使用繁體中文，语气简洁专业。",
+    "customPolishInstructionsPlaceholder": "可选：例如保持语气简洁专业、保留专有名词、不改写代码片段。",
     "customPolishInstructionsCount": "{{count}} / 2000 字符"
   },
   "dictionary": {

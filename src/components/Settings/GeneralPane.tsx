@@ -8,6 +8,7 @@ import {
   resumeHotkey,
   checkAccessibilityPermission,
   requestAccessibilityPermission,
+  waitForAccessibilityPermission,
   getPlatformCapabilities,
 } from '../../lib/tauri'
 import { SegmentedControl } from './shared/SegmentedControl'
@@ -217,7 +218,7 @@ export function GeneralPane() {
 
   const handleGrantPermission = useCallback(async () => {
     await requestAccessibilityPermission()
-    const trusted = await checkAccessibilityPermission()
+    const trusted = await waitForAccessibilityPermission()
     setA11yTrusted(trusted)
   }, [])
 

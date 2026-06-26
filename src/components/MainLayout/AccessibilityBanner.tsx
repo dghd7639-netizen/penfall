@@ -3,7 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
-import { checkAccessibilityPermission, requestAccessibilityPermission } from '../../lib/tauri'
+import {
+  checkAccessibilityPermission,
+  requestAccessibilityPermission,
+  waitForAccessibilityPermission,
+} from '../../lib/tauri'
 
 export function AccessibilityBanner() {
   const { t } = useTranslation()
@@ -31,7 +35,7 @@ export function AccessibilityBanner() {
 
   const handleGrant = useCallback(async () => {
     await requestAccessibilityPermission()
-    const trusted = await checkAccessibilityPermission()
+    const trusted = await waitForAccessibilityPermission()
     setAccessibilityTrusted(trusted)
   }, [setAccessibilityTrusted])
 
