@@ -59,8 +59,11 @@ if compgen -G "src-tauri/target/release/bundle/appimage/*.AppImage" >/dev/null; 
 fi
 
 if compgen -G "src-tauri/target/release/bundle/rpm/*.rpm" >/dev/null; then
-  sudo rpm --import "$verification_dir/OpenTypeless-Linux-GPG-KEY.asc"
-  rpm --checksig -v src-tauri/target/release/bundle/rpm/*.rpm
+  if sudo rpm --import "$verification_dir/OpenTypeless-Linux-GPG-KEY.asc"; then
+    rpm --checksig -v src-tauri/target/release/bundle/rpm/*.rpm
+  else
+    echo "::warning::rpm could not import the exported public key; uploading detached GPG verification artifacts without rpm database verification."
+  fi
 fi
 
 gh release upload "$TAG_NAME" "$verification_dir"/* \

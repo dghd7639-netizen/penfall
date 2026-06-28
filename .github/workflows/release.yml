@@ -155,4 +155,5 @@ jobs:
           TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
           LINUX_GPG_KEY_ID: ${{ secrets.LINUX_GPG_KEY_ID }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          TAURI_SIGNING_RPM_KEY: ''
         run: ./.github/scripts/upload-linux-verification-artifacts.sh

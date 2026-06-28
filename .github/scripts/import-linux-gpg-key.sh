@@ -19,6 +19,12 @@ if ! printf '%s' "$LINUX_GPG_PRIVATE_KEY" | base64 --decode > "$key_path" 2>/dev
 fi
 chmod 600 "$key_path"
 
+while IFS= read -r line || [[ -n "$line" ]]; do
+  if [[ -n "$line" ]]; then
+    echo "::add-mask::$line"
+  fi
+done < "$key_path"
+
 gpg --batch --yes --import "$key_path"
 gpg --batch --list-secret-keys "$LINUX_GPG_KEY_ID" >/dev/null
 
