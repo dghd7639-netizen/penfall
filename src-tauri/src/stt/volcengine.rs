@@ -577,6 +577,7 @@ mod tests {
             smart_format: true,
             sample_rate: 16000,
             resource_id: None,
+            operation_id: None,
         }
     }
 

@@ -23,6 +23,7 @@ import { MainLayout } from './components/MainLayout'
 import { HomePage } from './components/HomePage'
 import { UpgradePage } from './components/UpgradePage'
 import { AccountPage } from './components/AccountPage'
+import { AskPanel } from './components/AskPanel'
 import { ToastContainer } from './components/Toast'
 import { UpdatePrompt } from './components/UpdatePrompt'
 
@@ -52,6 +53,21 @@ function CapsuleApp() {
   // which works on both Windows and macOS. The previous rAF-based show approach
   // failed on macOS because WKWebView pauses requestAnimationFrame in hidden windows.
   return <Capsule />
+}
+
+function AskApp() {
+  useTheme()
+
+  useEffect(() => {
+    useAuthStore.getState().initialize()
+  }, [])
+
+  return (
+    <>
+      <AskPanel />
+      <ToastContainer />
+    </>
+  )
 }
 
 function MainApp() {
@@ -193,6 +209,7 @@ function MainApp() {
 function App() {
   // Capsule window loads with #capsule hash — detect synchronously, no race condition
   if (window.location.hash === '#capsule') return <CapsuleApp />
+  if (window.location.hash === '#ask') return <AskApp />
   return <MainApp />
 }
 

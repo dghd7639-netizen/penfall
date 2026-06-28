@@ -75,6 +75,7 @@ export interface AppConfig {
   translate_enabled: boolean
   target_lang: string
   hotkey: string
+  ask_hotkey: string
   hotkey_mode: HotkeyMode
   output_mode: OutputMode
   selected_text_enabled: boolean
@@ -200,6 +201,7 @@ const defaultConfig: AppConfig = {
   translate_enabled: false,
   target_lang: 'en',
   hotkey: isMacPlatform() ? 'Option+/' : 'Ctrl+/',
+  ask_hotkey: isMacPlatform() ? 'Option+Shift+/' : 'Ctrl+Shift+/',
   hotkey_mode: 'hold',
   output_mode: 'keyboard',
   selected_text_enabled: false,

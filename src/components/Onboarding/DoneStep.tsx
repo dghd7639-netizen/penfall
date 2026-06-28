@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Check,
   Keyboard,
+  MessageCircleQuestion,
   MousePointerClick,
   GripHorizontal,
   MousePointer,
@@ -73,6 +74,11 @@ export function DoneStep() {
           icon={Keyboard}
           title={`${t('onboarding.done.holdPress')} ${config.hotkey}`}
           desc={t('onboarding.done.holdPressSub')}
+        />
+        <Tip
+          icon={MessageCircleQuestion}
+          title={`${t('onboarding.done.askAnything')} ${config.ask_hotkey}`}
+          desc={t('onboarding.done.askAnythingSub')}
         />
         <Tip
           icon={MousePointerClick}

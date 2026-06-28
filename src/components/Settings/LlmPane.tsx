@@ -4,9 +4,18 @@ import { useAppStore } from '../../stores/appStore'
 import { hasManagedCloudAccess, useAuthStore } from '../../stores/authStore'
 import { LLM_PROVIDERS, LLM_DEFAULT_CONFIG, TARGET_LANGUAGES } from '../../lib/constants'
 import { benchLlmConnection, fetchLlmModels } from '../../lib/tauri'
+import { AskPanel } from '../AskPanel'
 import { FormField } from './shared/FormField'
 import { Toggle } from './shared/Toggle'
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Crown, ChevronDown } from 'lucide-react'
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  RefreshCw,
+  Crown,
+  ChevronDown,
+  MessageCircleQuestion,
+} from 'lucide-react'
 
 export function LlmPane() {
   const config = useAppStore((s) => s.config)
@@ -88,6 +97,23 @@ export function LlmPane() {
 
   return (
     <div className="space-y-5">
+      <div className="border border-border rounded-[10px] overflow-hidden bg-bg-primary">
+        <div className="px-3 py-3 border-b border-border bg-bg-secondary/40 flex items-start gap-2.5">
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-accent/10 text-accent">
+            <MessageCircleQuestion size={15} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-text-primary">
+              {t('settings.askAnything')}
+            </p>
+            <p className="text-[11px] text-text-tertiary mt-0.5">
+              {t('settings.askAnythingDesc')}
+            </p>
+          </div>
+        </div>
+        <AskPanel embedded showHeader={false} />
+      </div>
+
       <FormField label={t('settings.provider')}>
         <select
           value={config.llm_provider}

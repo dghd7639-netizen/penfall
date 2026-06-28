@@ -24,6 +24,10 @@ describe('request() via getSubscriptionStatus', () => {
           Promise.resolve({
             plan: 'pro',
             subscriptionEnd: '2025-12-31',
+            quotaModel: 'legacy_dual_meter',
+            displayWordsUsedEstimate: 2500,
+            displayWordsLimit: 100000,
+            displayWordsResetAt: '2026-07-01T00:00:00.000Z',
             sttSecondsUsed: 100,
             sttSecondsLimit: 36000,
             llmTokensUsed: 5000,
@@ -57,6 +61,8 @@ describe('request() via getSubscriptionStatus', () => {
     const { getSubscriptionStatus } = await import('../api')
     const result = await getSubscriptionStatus()
     expect(result.plan).toBe('pro')
+    expect(result.quotaModel).toBe('legacy_dual_meter')
+    expect(result.displayWordsLimit).toBe(100000)
     expect(result.sttSecondsLimit).toBe(36000)
   })
 })
@@ -141,7 +147,12 @@ describe('proxyStt', () => {
     )
 
     const { proxyStt } = await import('../api')
-    const result = await proxyStt(new Blob(['audio'], { type: 'audio/wav' }), 'en')
+    const result = await proxyStt(new Blob(['audio'], { type: 'audio/wav' }), 'en', {
+      operationId: '11111111-1111-1111-1111-111111111111',
+      stageKey: '11111111-1111-1111-1111-111111111111:stt',
+      requestType: 'voice_pipeline',
+      clientVersion: APP_VERSION_HEADER_VALUE,
+    })
 
     expect(fetch).toHaveBeenCalledWith(
       `${API_BASE}/api/proxy/stt`,
@@ -154,6 +165,9 @@ describe('proxyStt', () => {
     )
     const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>
     expect(headers['Content-Type']).toBeUndefined()
+    const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData
+    expect(body.get('operationId')).toBe('11111111-1111-1111-1111-111111111111')
+    expect(body.get('stageKey')).toBe('11111111-1111-1111-1111-111111111111:stt')
     expect(result.text).toBe('transcribed text')
   })
 })
@@ -174,7 +188,13 @@ describe('proxyLlm', () => {
 
     const { proxyLlm } = await import('../api')
     const messages = [{ role: 'user', content: 'hello' }]
-    const result = await proxyLlm(messages)
+    const context = {
+      operationId: '22222222-2222-2222-2222-222222222222',
+      stageKey: '22222222-2222-2222-2222-222222222222:llm',
+      requestType: 'voice_pipeline',
+      clientVersion: APP_VERSION_HEADER_VALUE,
+    }
+    const result = await proxyLlm(messages, context)
 
     expect(fetch).toHaveBeenCalledWith(
       `${API_BASE}/api/proxy/llm`,
@@ -183,7 +203,7 @@ describe('proxyLlm', () => {
         headers: expect.objectContaining({
           [CLIENT_VERSION_HEADER]: APP_VERSION_HEADER_VALUE,
         }),
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, context }),
       }),
     )
     expect(result.text).toBe('polished text')

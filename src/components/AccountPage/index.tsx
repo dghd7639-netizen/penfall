@@ -366,6 +366,10 @@ function AccountDetails() {
     source,
     displayName,
     subscriptionEnd,
+    quotaModel,
+    displayWordsUsedEstimate,
+    displayWordsLimit,
+    displayWordsResetAt,
     cloudWordsUsed,
     cloudWordsLimit,
     cloudWordsResetAt,
@@ -390,6 +394,18 @@ function AccountDetails() {
   const isAppSumo = source === 'appsumo'
   const isDirectLifetime = source === 'lifetime' || plan === 'lifetime_starter'
   const canManageSubscription = source === 'creem' || plan === 'pro'
+  const wordsUsed =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsUsedEstimate
+      : cloudWordsUsed
+  const wordsLimit =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsLimit
+      : cloudWordsLimit
+  const wordsResetAt =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsResetAt
+      : cloudWordsResetAt
 
   const handleBackup = async () => {
     setBackupLoading(true)
@@ -461,16 +477,16 @@ function AccountDetails() {
             value={new Date(subscriptionEnd).toLocaleDateString()}
           />
         )}
-        {cloudWordsResetAt && (
+        {wordsResetAt && (
           <InfoRow
             label={t('account.resets', 'Resets')}
-            value={new Date(cloudWordsResetAt).toLocaleDateString()}
+            value={new Date(wordsResetAt).toLocaleDateString()}
           />
         )}
       </div>
 
       {/* Quota */}
-      {cloudWordsLimit > 0 ? (
+      {wordsLimit > 0 ? (
         <div className="border border-border rounded-[10px] overflow-hidden">
           <div className="px-3 py-2.5 bg-bg-secondary/50 border-b border-border">
             <h3 className="text-[13px] font-medium text-text-primary">
@@ -480,8 +496,8 @@ function AccountDetails() {
           <div className="px-3 py-3 space-y-3">
             <QuotaBar
               label={t('account.cloudWords', 'Cloud words')}
-              used={cloudWordsUsed}
-              limit={cloudWordsLimit}
+              used={wordsUsed}
+              limit={wordsLimit}
               unit={t('account.quotaKWords', 'k words')}
               divisor={1000}
             />

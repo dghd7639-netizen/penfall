@@ -14,6 +14,7 @@ async fn check_volcengine_doubao_connection(
         smart_format: true,
         sample_rate: 16000,
         resource_id,
+        operation_id: None,
     };
     provider.connect(&config).await.map_err(|e| e.to_string())?;
     let _ = provider.disconnect().await;
@@ -31,13 +32,14 @@ fn has_managed_cloud_access(body: &serde_json::Value) -> bool {
     let source = body["source"].as_str().unwrap_or_default();
     let plan = body["plan"].as_str().unwrap_or_default();
     let cloud_words_limit = body["cloudWordsLimit"].as_i64().unwrap_or_default();
+    let display_words_limit = body["displayWordsLimit"].as_i64().unwrap_or_default();
     if source == "appsumo" {
         return cloud_words_limit > 0 && body["licenseStatus"].as_str() == Some("active");
     }
     if source == "lifetime" {
-        return cloud_words_limit > 0 || plan == "lifetime_starter";
+        return cloud_words_limit > 0 || display_words_limit > 0 || plan == "lifetime_starter";
     }
-    if source == "creem" && cloud_words_limit > 0 {
+    if source == "creem" && (cloud_words_limit > 0 || display_words_limit > 0) {
         return true;
     }
 

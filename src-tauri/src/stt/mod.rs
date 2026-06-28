@@ -19,6 +19,7 @@ pub struct SttConfig {
     pub smart_format: bool,
     pub sample_rate: u32,
     pub resource_id: Option<String>,
+    pub operation_id: Option<String>,
 }
 
 impl Default for SttConfig {
@@ -29,6 +30,7 @@ impl Default for SttConfig {
             smart_format: true,
             sample_rate: 16000,
             resource_id: None,
+            operation_id: None,
         }
     }
 }

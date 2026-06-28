@@ -123,6 +123,25 @@ const VOLUME_POLL_INTERVAL_MS: u64 = 50;
 /// Timeout for STT finalization after recording stops.
 const STT_FINALIZE_TIMEOUT_SECS: u64 = 120;
 
+fn generate_cloud_operation_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed) as u128;
+    let mixed = now ^ (counter << 64);
+
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        (mixed >> 96) as u32,
+        (mixed >> 80) as u16,
+        (mixed >> 64) as u16,
+        (mixed >> 48) as u16,
+        mixed & 0x0000_ffff_ffff_ffff_ffffu128
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PipelineState {
@@ -296,6 +315,7 @@ pub struct PipelineHandle {
     preloaded_app_ctx: Arc<Mutex<Option<app_detector::AppContext>>>,
     preloaded_dictionary: Arc<Mutex<Option<Vec<String>>>>,
     preloaded_selected_text: Arc<Mutex<Option<String>>>,
+    cloud_operation_id: Arc<Mutex<Option<String>>>,
     recording_start: Arc<Mutex<Option<std::time::Instant>>>,
     shared_client: reqwest::Client,
     /// Serializes start()/stop() so that stop() waits for start() to finish
@@ -321,6 +341,7 @@ impl PipelineHandle {
             preloaded_app_ctx: Arc::new(Mutex::new(None)),
             preloaded_dictionary: Arc::new(Mutex::new(None)),
             preloaded_selected_text: Arc::new(Mutex::new(None)),
+            cloud_operation_id: Arc::new(Mutex::new(None)),
             recording_start: Arc::new(Mutex::new(None)),
             shared_client,
             pipeline_lock: tokio::sync::Mutex::new(()),
@@ -388,6 +409,10 @@ impl PipelineHandle {
             .unwrap_or_else(|e| e.into_inner())
             .clear();
         *self.stt_error.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *self
+            .cloud_operation_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
 
         // Force state to Idle — emits pipeline:state event to sync frontend
         self.set_state(PipelineState::Idle);
@@ -579,6 +604,11 @@ impl PipelineHandle {
         } else {
             config_data.stt_api_key.clone()
         };
+        let cloud_operation_id = generate_cloud_operation_id();
+        *self
+            .cloud_operation_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(cloud_operation_id.clone());
 
         let stt_config = SttConfig {
             api_key: stt_api_key,
@@ -595,6 +625,7 @@ impl PipelineHandle {
             } else {
                 None
             },
+            operation_id: Some(cloud_operation_id),
         };
 
         let mut provider = match stt::create_provider(
@@ -1006,6 +1037,11 @@ impl PipelineHandle {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take();
+        let operation_id = self
+            .cloud_operation_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
 
         // Extract session token before releasing guard (for cloud LLM)
         let session_token = if config.llm_provider == "cloud" {
@@ -1057,6 +1093,7 @@ impl PipelineHandle {
                 dictionary_words,
                 selected_text,
                 session_token,
+                operation_id,
             )
             .await;
 
@@ -1164,6 +1201,7 @@ impl PipelineHandle {
         dictionary_words: Vec<String>,
         selected_text: Option<String>,
         session_token: String,
+        operation_id: Option<String>,
     ) -> (String, std::time::Duration) {
         // Check if polish is enabled and API key / token is available
         if !config.polish_enabled
@@ -1213,6 +1251,7 @@ impl PipelineHandle {
             translate_enabled: config.translate_enabled,
             target_lang: config.target_lang.clone(),
             selected_text,
+            operation_id,
         };
 
         let (final_text, llm_elapsed) =

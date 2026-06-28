@@ -70,6 +70,7 @@ export type SubscriptionPlan =
 
 export type SubscriptionSource = 'free' | 'creem' | 'lifetime' | 'appsumo'
 export type LicenseStatus = 'pending' | 'active' | 'refunded' | 'deactivated'
+export type QuotaModel = 'legacy_dual_meter' | 'cloud_words'
 
 export interface SubscriptionStatus {
   plan: SubscriptionPlan
@@ -78,6 +79,10 @@ export interface SubscriptionStatus {
   subscriptionEnd: string | null
   subscriptionStatus: string | null
   licenseStatus?: LicenseStatus | null
+  quotaModel: QuotaModel
+  displayWordsUsedEstimate: number
+  displayWordsLimit: number
+  displayWordsResetAt: string | null
   sttSecondsUsed: number
   sttSecondsLimit: number
   llmTokensUsed: number
@@ -101,6 +106,12 @@ export function getSubscriptionStatus(): Promise<SubscriptionStatus> {
             ? 'appsumo'
             : 'free')
 
+    const quotaModel =
+      status.quotaModel ?? (source === 'appsumo' ? 'cloud_words' : 'legacy_dual_meter')
+    const displayWordsUsedEstimate = status.displayWordsUsedEstimate ?? 0
+    const displayWordsLimit = status.displayWordsLimit ?? 0
+    const displayWordsResetAt = status.displayWordsResetAt ?? null
+
     return {
       plan,
       source: source as SubscriptionSource,
@@ -116,6 +127,10 @@ export function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       subscriptionEnd: status.subscriptionEnd ?? null,
       subscriptionStatus: status.subscriptionStatus ?? null,
       licenseStatus: status.licenseStatus ?? null,
+      quotaModel,
+      displayWordsUsedEstimate,
+      displayWordsLimit,
+      displayWordsResetAt,
       sttSecondsUsed: status.sttSecondsUsed ?? 0,
       sttSecondsLimit: status.sttSecondsLimit ?? 0,
       llmTokensUsed: status.llmTokensUsed ?? 0,
@@ -143,11 +158,30 @@ export function createCheckout(
   })
 }
 
+export interface CloudOperationContext {
+  operationId?: string
+  stageKey?: string
+  requestType?: string
+  clientVersion?: string
+  hasSelectedText?: boolean
+  translateEnabled?: boolean
+  rawTextChars?: number
+  selectedTextChars?: number
+}
+
 // Proxy STT
-export async function proxyStt(audioBlob: Blob, language: string): Promise<{ text: string }> {
+export async function proxyStt(
+  audioBlob: Blob,
+  language: string,
+  context?: CloudOperationContext,
+): Promise<{ text: string }> {
   const formData = new FormData()
   formData.append('audio', audioBlob)
   formData.append('language', language)
+  if (context?.operationId) formData.append('operationId', context.operationId)
+  if (context?.stageKey) formData.append('stageKey', context.stageKey)
+  if (context?.requestType) formData.append('requestType', context.requestType)
+  if (context?.clientVersion) formData.append('clientVersion', context.clientVersion)
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 60_000)
@@ -178,10 +212,11 @@ export async function proxyStt(audioBlob: Blob, language: string): Promise<{ tex
 // Proxy LLM
 export function proxyLlm(
   messages: Array<{ role: string; content: string }>,
+  context?: CloudOperationContext,
 ): Promise<{ text: string }> {
   return request('/api/proxy/llm', {
     method: 'POST',
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, ...(context ? { context } : {}) }),
   })
 }
 

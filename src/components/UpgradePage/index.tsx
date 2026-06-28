@@ -14,6 +14,9 @@ export function UpgradePage() {
     plan,
     source,
     displayName,
+    quotaModel,
+    displayWordsUsedEstimate,
+    displayWordsLimit,
     cloudWordsUsed,
     cloudWordsLimit,
     sttSecondsUsed,
@@ -26,12 +29,23 @@ export function UpgradePage() {
   const [error, setError] = useState<string | null>(null)
 
   const hasCloudAccess = useAuthStore(hasManagedCloudAccess)
-  const hasLifetimeAccess = plan === 'lifetime_starter' || source === 'lifetime' || source === 'appsumo'
+  const hasLifetimeAccess =
+    plan === 'lifetime_starter' || source === 'lifetime' || source === 'appsumo'
   const hasMonthlyAccess = !hasLifetimeAccess && (plan === 'pro' || source === 'creem')
-  const hasLifetimeCheckoutPlan = CHECKOUT_PLANS.some((checkoutPlan) => checkoutPlan.product === 'lifetime_starter')
+  const hasLifetimeCheckoutPlan = CHECKOUT_PLANS.some(
+    (checkoutPlan) => checkoutPlan.product === 'lifetime_starter',
+  )
   const visiblePlans = hasMonthlyAccess
     ? CHECKOUT_PLANS.filter((checkoutPlan) => checkoutPlan.product === 'lifetime_starter')
     : CHECKOUT_PLANS
+  const wordsUsed =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsUsedEstimate
+      : cloudWordsUsed
+  const wordsLimit =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsLimit
+      : cloudWordsLimit
   const canStartCheckout = (product: CheckoutProduct) => {
     if (hasLifetimeAccess) return false
     if (product === 'lifetime_starter') return true
@@ -82,12 +96,14 @@ export function UpgradePage() {
           {visiblePlans.map((checkoutPlan) => {
             const isLoading = loadingProduct === checkoutPlan.product
             const isLifetime = checkoutPlan.product === 'lifetime_starter'
-            const price = hasMonthlyAccess && isLifetime && checkoutPlan.upgradePrice
-              ? checkoutPlan.upgradePrice
-              : checkoutPlan.price
-            const sublineKey = hasMonthlyAccess && isLifetime && checkoutPlan.upgradeSublineKey
-              ? checkoutPlan.upgradeSublineKey
-              : checkoutPlan.sublineKey
+            const price =
+              hasMonthlyAccess && isLifetime && checkoutPlan.upgradePrice
+                ? checkoutPlan.upgradePrice
+                : checkoutPlan.price
+            const sublineKey =
+              hasMonthlyAccess && isLifetime && checkoutPlan.upgradeSublineKey
+                ? checkoutPlan.upgradeSublineKey
+                : checkoutPlan.sublineKey
             return (
               <section
                 key={checkoutPlan.product}
@@ -105,7 +121,9 @@ export function UpgradePage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <h2 className="text-[14px] font-semibold text-text-primary">{t(checkoutPlan.nameKey)}</h2>
+                    <h2 className="text-[14px] font-semibold text-text-primary">
+                      {t(checkoutPlan.nameKey)}
+                    </h2>
                     {checkoutPlan.badgeKey && (
                       <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-white">
                         {t(checkoutPlan.badgeKey)}
@@ -186,11 +204,11 @@ export function UpgradePage() {
             </h3>
           </div>
           <div className="px-4 py-3 space-y-3">
-            {cloudWordsLimit > 0 ? (
+            {wordsLimit > 0 ? (
               <QuotaBar
                 label={t('account.cloudWords', 'Cloud words')}
-                used={cloudWordsUsed}
-                limit={cloudWordsLimit}
+                used={wordsUsed}
+                limit={wordsLimit}
                 unit={t('account.quotaKWords', 'k words')}
                 divisor={1000}
               />
@@ -229,7 +247,10 @@ export function UpgradePage() {
           <p className="text-text-secondary flex items-center justify-center gap-1.5">
             <Crown size={14} className="text-amber-500" />
             {hasLifetimeCheckoutPlan
-              ? t('upgrade.monthlyActiveLifetimeHint', 'Pro is active. Lifetime is available as a one-time upgrade.')
+              ? t(
+                  'upgrade.monthlyActiveLifetimeHint',
+                  'Pro is active. Lifetime is available as a one-time upgrade.',
+                )
               : t('upgrade.monthlyActive', 'Pro is active.')}
           </p>
           {error && <p className="text-red-500 text-[12px] mt-2 text-center">{error}</p>}

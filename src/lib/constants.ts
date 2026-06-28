@@ -13,7 +13,7 @@ export const UI_LANGUAGES = [
 ] as const
 
 export const APP_NAME = 'OpenTypeless'
-export const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? 'v0.1.41'
+export const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? 'v0.1.42'
 export const CLIENT_VERSION_HEADER = 'X-OpenTypeless-Version'
 export const APP_VERSION_HEADER_VALUE = APP_VERSION.replace(/^v/i, '')
 export const APP_REPO_URL = 'https://github.com/tover0314-w/opentypeless'
@@ -75,7 +75,7 @@ export const LIFETIME_PLAN = {
   benefits: CLOUD_PLAN_BENEFITS,
 } satisfies CheckoutPlan
 
-export const CHECKOUT_PLANS: CheckoutPlan[] = [PRO_PLAN]
+export const CHECKOUT_PLANS: CheckoutPlan[] = [PRO_PLAN, LIFETIME_PLAN]
 
 export const DEFAULT_CHECKOUT_PRODUCT: CheckoutProduct = 'pro_monthly'
 

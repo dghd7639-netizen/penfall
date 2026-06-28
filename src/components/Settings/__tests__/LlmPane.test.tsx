@@ -37,6 +37,20 @@ vi.mock('react-i18next', () => ({
         'settings.llmSignInHint': 'Sign in to use cloud LLM',
         'settings.llmUpgradeHint': 'Upgrade to Pro to use cloud LLM',
         'settings.llmProActive': 'Cloud LLM active',
+        'settings.askAnything': 'Ask Anything',
+        'settings.askAnythingDesc': 'Voice question, one-shot answer. No chat history.',
+        'ask.ready': 'Ready to ask',
+        'ask.listening': 'Listening',
+        'ask.thinking': 'Thinking',
+        'ask.voiceQuestion': 'Voice question',
+        'ask.voiceQuestionDesc': 'Speak your question. Stop recording to answer.',
+        'ask.transcriptLabel': 'Question transcript',
+        'ask.answerLabel': 'Answer',
+        'ask.manualFallback': 'Type instead',
+        'ask.placeholder': 'Type a question, or use the capsule above.',
+        'ask.recordQuestion': 'Record question',
+        'ask.stopAndAsk': 'Stop and ask',
+        'ask.send': 'Ask',
         'providers.llm.doubao': 'Doubao (Volcengine)',
       }
       return translations[key] || key
@@ -171,6 +185,15 @@ describe('LlmPane', () => {
   })
 
   describe('Cloud provider UI', () => {
+    it('renders Ask Anything as a voice-first one-shot panel', () => {
+      render(<LlmPane />)
+
+      expect(screen.getByText('Ask Anything')).toBeInTheDocument()
+      expect(screen.getByText('Voice question, one-shot answer. No chat history.')).toBeInTheDocument()
+      expect(screen.getByText('Voice question')).toBeInTheDocument()
+      expect(screen.getByText('Ready to ask')).toBeInTheDocument()
+    })
+
     it('shows cloud info when provider is cloud and user not signed in', () => {
       mockAppStore.config.llm_provider = 'cloud'
       render(<LlmPane />)

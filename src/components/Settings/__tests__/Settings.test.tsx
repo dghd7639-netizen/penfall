@@ -80,6 +80,14 @@ vi.mock('react-i18next', async (importOriginal) => {
 // ─── Mock Tauri plugins / lib/tauri ──────────────────────────────────────────
 vi.mock('../../../lib/tauri', () => ({
   updateHotkey: vi.fn().mockResolvedValue(undefined),
+  updateAskHotkey: vi.fn().mockResolvedValue(undefined),
+  askAnything: vi.fn().mockResolvedValue('A concise answer.'),
+  startAskDictation: vi.fn().mockResolvedValue(undefined),
+  stopAskDictation: vi.fn().mockResolvedValue({
+    question: 'What is OpenTypeless?',
+    answer: 'A concise answer.',
+  }),
+  abortAskDictation: vi.fn().mockResolvedValue(undefined),
   pauseHotkey: vi.fn().mockResolvedValue(undefined),
   resumeHotkey: vi.fn().mockResolvedValue(undefined),
   checkAccessibilityPermission: vi.fn().mockResolvedValue(true),
@@ -176,6 +184,8 @@ describe('Settings tab 切换', () => {
     renderSettings()
     // General pane 包含 "settings.hotkey" section 标题
     expect(screen.getByText('settings.hotkey')).toBeDefined()
+    expect(screen.getByText('settings.askHotkey')).toBeDefined()
+    expect(screen.getByText('Ctrl+Shift+/')).toBeDefined()
   })
 
   it('点击 Speech Recognition 后显示 STT provider 字段', () => {
@@ -191,6 +201,7 @@ describe('Settings tab 切换', () => {
     clickSidebarItem('settings.aiPolish')
     // LLM pane 也含 provider，但还含 enableAiPolish toggle
     expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
+    expect(screen.getByText('settings.askAnything')).toBeDefined()
   })
 
   it('点击 Dictionary 后显示词典输入框 placeholder', () => {

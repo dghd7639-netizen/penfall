@@ -1,6 +1,22 @@
 use crate::SessionTokenStore;
 use crate::{api_base_url, with_desktop_client_version};
 
+fn synthetic_operation_id() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        (now >> 96) as u32,
+        (now >> 80) as u16,
+        (now >> 64) as u16,
+        (now >> 48) as u16,
+        now & 0x0000_ffff_ffff_ffff_ffffu128
+    )
+}
+
 fn has_managed_cloud_access(body: &serde_json::Value) -> bool {
     if matches!(
         body["licenseStatus"].as_str(),
@@ -12,13 +28,14 @@ fn has_managed_cloud_access(body: &serde_json::Value) -> bool {
     let source = body["source"].as_str().unwrap_or_default();
     let plan = body["plan"].as_str().unwrap_or_default();
     let cloud_words_limit = body["cloudWordsLimit"].as_i64().unwrap_or_default();
+    let display_words_limit = body["displayWordsLimit"].as_i64().unwrap_or_default();
     if source == "appsumo" {
         return cloud_words_limit > 0 && body["licenseStatus"].as_str() == Some("active");
     }
     if source == "lifetime" {
-        return cloud_words_limit > 0 || plan == "lifetime_starter";
+        return cloud_words_limit > 0 || display_words_limit > 0 || plan == "lifetime_starter";
     }
-    if source == "creem" && cloud_words_limit > 0 {
+    if source == "creem" && (cloud_words_limit > 0 || display_words_limit > 0) {
         return true;
     }
 
@@ -216,9 +233,20 @@ pub async fn bench_llm_connection(
             return Err("Not signed in".to_string());
         }
         let api_base = api_base_url();
+        let operation_id = synthetic_operation_id();
         let body = serde_json::json!({
             "messages": [{"role": "user", "content": "hi"}],
-            "stream": false
+            "stream": false,
+            "context": {
+                "operationId": operation_id.clone(),
+                "stageKey": format!("{operation_id}:llm"),
+                "requestType": "connection_benchmark",
+                "clientVersion": crate::desktop_client_version(),
+                "rawTextChars": 2,
+                "selectedTextChars": 0,
+                "hasSelectedText": false,
+                "translateEnabled": false
+            }
         });
         let t0 = std::time::Instant::now();
         let resp = with_desktop_client_version(client.post(format!("{}/api/proxy/llm", api_base)))

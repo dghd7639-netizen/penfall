@@ -4,6 +4,7 @@ import { authClient } from '../lib/auth-client'
 import {
   getSubscriptionStatus,
   type LicenseStatus,
+  type QuotaModel,
   type SubscriptionPlan,
   type SubscriptionSource,
 } from '../lib/api'
@@ -30,8 +31,12 @@ interface AuthState {
   subscriptionEnd: string | null
   subscriptionStatus: string | null
   licenseStatus: LicenseStatus | null
+  quotaModel: QuotaModel
 
   // Quotas
+  displayWordsUsedEstimate: number
+  displayWordsLimit: number
+  displayWordsResetAt: string | null
   sttSecondsUsed: number
   sttSecondsLimit: number
   llmTokensUsed: number
@@ -84,6 +89,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   subscriptionEnd: null,
   subscriptionStatus: null,
   licenseStatus: null,
+  quotaModel: 'legacy_dual_meter',
+  displayWordsUsedEstimate: 0,
+  displayWordsLimit: 0,
+  displayWordsResetAt: null,
   sttSecondsUsed: 0,
   sttSecondsLimit: 0,
   llmTokensUsed: 0,
@@ -230,6 +239,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         subscriptionEnd: null,
         subscriptionStatus: null,
         licenseStatus: null,
+        quotaModel: 'legacy_dual_meter',
+        displayWordsUsedEstimate: 0,
+        displayWordsLimit: 0,
+        displayWordsResetAt: null,
         sttSecondsUsed: 0,
         sttSecondsLimit: 0,
         llmTokensUsed: 0,
@@ -259,6 +272,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         subscriptionEnd: status.subscriptionEnd,
         subscriptionStatus: status.subscriptionStatus,
         licenseStatus: status.licenseStatus ?? null,
+        quotaModel: status.quotaModel,
+        displayWordsUsedEstimate: status.displayWordsUsedEstimate,
+        displayWordsLimit: status.displayWordsLimit,
+        displayWordsResetAt: status.displayWordsResetAt,
         sttSecondsUsed: status.sttSecondsUsed,
         sttSecondsLimit: status.sttSecondsLimit,
         llmTokensUsed: status.llmTokensUsed,
@@ -272,7 +289,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (get().checkoutPending) {
         set({ checkoutPending: false })
       }
-      if (status.cloudWordsLimit > 0 && status.cloudWordsUsed / status.cloudWordsLimit >= 0.9) {
+      const wordsUsed =
+        status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
+          ? status.displayWordsUsedEstimate
+          : status.cloudWordsUsed
+      const wordsLimit =
+        status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
+          ? status.displayWordsLimit
+          : status.cloudWordsLimit
+      if (wordsLimit > 0 && wordsUsed / wordsLimit >= 0.9) {
         if (!cloudWordsWarningShown) {
           toast(i18n.t('account.cloudQuotaWarning', 'Cloud words are almost used up.'), 'error')
           cloudWordsWarningShown = true

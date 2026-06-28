@@ -4,6 +4,7 @@ import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode } from '../../stores/appStore'
 import {
   updateHotkey,
+  updateAskHotkey,
   pauseHotkey,
   resumeHotkey,
   checkAccessibilityPermission,
@@ -45,9 +46,13 @@ const STANDALONE_KEYS = new Set([
   'F12',
 ])
 
-function HotkeyRecorder() {
-  const config = useAppStore((s) => s.config)
-  const updateConfig = useAppStore((s) => s.updateConfig)
+interface HotkeyRecorderProps {
+  value: string
+  onSave: (hotkey: string) => Promise<void>
+  onSaved: (hotkey: string) => void
+}
+
+function HotkeyRecorder({ value, onSave, onSaved }: HotkeyRecorderProps) {
   const { t } = useTranslation()
   const isMac = isMacPlatform()
   const [recording, setRecording] = useState(false)
@@ -61,9 +66,9 @@ function HotkeyRecorder() {
       setRecording(false)
       setError(null)
       setModifierHint(null)
-      updateHotkey(hotkey)
+      onSave(hotkey)
         .then(() => {
-          updateConfig({ hotkey })
+          onSaved(hotkey)
           setPending(null)
         })
         .catch((e) => {
@@ -72,7 +77,7 @@ function HotkeyRecorder() {
           resumeHotkey().catch(() => {})
         })
     },
-    [updateConfig],
+    [onSave, onSaved],
   )
 
   const handleKeyDown = useCallback(
@@ -178,7 +183,7 @@ function HotkeyRecorder() {
             : 'bg-bg-secondary border-transparent text-text-primary hover:border-border'
         }`}
       >
-        {recording ? pending || modifierHint || t('settings.pressKeyCombination') : config.hotkey}
+        {recording ? pending || modifierHint || t('settings.pressKeyCombination') : value}
       </button>
       {recording && pending && (
         <p className="text-[11px] text-text-tertiary mt-1.5">{t('settings.clickToConfirm')}</p>
@@ -225,7 +230,28 @@ export function GeneralPane() {
   return (
     <div className="space-y-6">
       <Section title={t('settings.hotkey')}>
-        <HotkeyRecorder />
+        <div className="space-y-3">
+          <div>
+            <p className="mb-1.5 text-[12px] font-medium text-text-secondary">
+              {t('settings.dictationHotkey')}
+            </p>
+            <HotkeyRecorder
+              value={config.hotkey}
+              onSave={updateHotkey}
+              onSaved={(hotkey) => updateConfig({ hotkey })}
+            />
+          </div>
+          <div>
+            <p className="mb-1.5 text-[12px] font-medium text-text-secondary">
+              {t('settings.askHotkey')}
+            </p>
+            <HotkeyRecorder
+              value={config.ask_hotkey}
+              onSave={updateAskHotkey}
+              onSaved={(ask_hotkey) => updateConfig({ ask_hotkey })}
+            />
+          </div>
+        </div>
         {!platformCapabilities?.globalHotkeyReliable && (
           <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
             {t('settings.waylandHotkeyLimited')}

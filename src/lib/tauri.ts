@@ -102,12 +102,38 @@ export async function updateHotkey(hotkey: string): Promise<void> {
   return invoke('update_hotkey', { hotkey })
 }
 
+export async function updateAskHotkey(hotkey: string): Promise<void> {
+  return invoke('update_ask_hotkey', { hotkey })
+}
+
 export async function pauseHotkey(): Promise<void> {
   return invoke('pause_hotkey')
 }
 
 export async function resumeHotkey(): Promise<void> {
   return invoke('resume_hotkey')
+}
+
+// Ask Anything
+export async function askAnything(question: string): Promise<string> {
+  return invoke('ask_anything', { question: question.trim() })
+}
+
+export interface AskDictationResult {
+  question: string
+  answer: string
+}
+
+export async function startAskDictation(): Promise<void> {
+  return invoke('start_ask_dictation')
+}
+
+export async function stopAskDictation(): Promise<AskDictationResult> {
+  return invoke('stop_ask_dictation')
+}
+
+export async function abortAskDictation(): Promise<void> {
+  return invoke('abort_ask_dictation')
 }
 
 // History

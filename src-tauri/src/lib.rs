@@ -13,7 +13,7 @@ pub mod storage;
 pub mod stt;
 pub mod tray;
 
-pub use hotkey::{default_shortcut, parse_hotkey};
+pub use hotkey::{default_ask_shortcut, default_shortcut, parse_hotkey};
 pub use tray::{refresh_tray, TrayHandle};
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -45,6 +45,9 @@ pub fn with_desktop_client_version(request: reqwest::RequestBuilder) -> reqwest:
 /// Cached hotkey mode to avoid loading config from disk on every keypress.
 /// Updated whenever config is saved.
 pub struct HotkeyModeCache(pub Arc<Mutex<String>>);
+
+/// Cached Ask Anything hotkey to route global-shortcut events without disk I/O.
+pub struct AskHotkeyCache(pub Arc<Mutex<String>>);
 
 /// Cached close_to_tray setting to avoid blocking I/O in the window close handler.
 pub struct CloseToTrayCache(pub Arc<Mutex<bool>>);
@@ -189,6 +192,9 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("capsule") {
                     window.open_devtools();
                 }
+                if let Some(window) = app.get_webview_window("ask") {
+                    window.open_devtools();
+                }
             }
 
             let app_handle = app.handle().clone();
@@ -220,14 +226,20 @@ pub fn run() {
                 tauri::async_runtime::block_on(config_manager.load()).unwrap_or_default();
             let shortcut =
                 parse_hotkey(&initial_config.hotkey).unwrap_or_else(hotkey::default_shortcut);
+            let ask_shortcut = parse_hotkey(&initial_config.ask_hotkey)
+                .unwrap_or_else(hotkey::default_ask_shortcut);
 
             app.manage(config_manager);
             app.manage(history_store);
             app.manage(dictionary_store);
             app.manage(shared_client);
             app.manage(pipeline_handle);
+            app.manage(commands::ask::AskDictationState::default());
             app.manage(HotkeyModeCache(Arc::new(Mutex::new(
                 initial_config.hotkey_mode.clone(),
+            ))));
+            app.manage(AskHotkeyCache(Arc::new(Mutex::new(
+                initial_config.ask_hotkey.clone(),
             ))));
             let hotkey_registration_error = Arc::new(Mutex::new(None));
             app.manage(HotkeyRegistrationError(hotkey_registration_error.clone()));
@@ -268,6 +280,22 @@ pub fn run() {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner()) = Some(message.clone());
                 let _ = app_handle.emit("hotkey:registration-failed", message);
+            }
+            if shortcut.key != ask_shortcut.key || shortcut.mods != ask_shortcut.mods {
+                if let Err(e) = app.global_shortcut().register(ask_shortcut) {
+                    let message = format!(
+                        "Failed to register Ask shortcut '{}' (may be occupied): {e}",
+                        initial_config.ask_hotkey
+                    );
+                    tracing::warn!(
+                        "Failed to register Ask shortcut '{}' (may be occupied): {e}",
+                        initial_config.ask_hotkey
+                    );
+                    *hotkey_registration_error
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner()) = Some(message.clone());
+                    let _ = app_handle.emit("hotkey:registration-failed", message);
+                }
             }
 
             // System tray
@@ -480,6 +508,10 @@ pub fn run() {
             start_recording,
             stop_recording,
             abort_recording,
+            commands::ask::ask_anything,
+            commands::ask::start_ask_dictation,
+            commands::ask::stop_ask_dictation,
+            commands::ask::abort_ask_dictation,
             commands::misc::check_accessibility_permission,
             commands::misc::request_accessibility_permission,
             commands::config::get_config,
@@ -495,6 +527,7 @@ pub fn run() {
             commands::dictionary::add_dictionary_entry,
             commands::dictionary::remove_dictionary_entry,
             commands::misc::update_hotkey,
+            commands::misc::update_ask_hotkey,
             commands::misc::pause_hotkey,
             commands::misc::resume_hotkey,
             commands::misc::refresh_tray_labels,

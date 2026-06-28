@@ -13,6 +13,10 @@ export function HomePage() {
   const {
     user,
     displayName,
+    quotaModel,
+    displayWordsUsedEstimate,
+    displayWordsLimit,
+    displayWordsResetAt,
     cloudWordsUsed,
     cloudWordsLimit,
     cloudWordsResetAt,
@@ -27,6 +31,18 @@ export function HomePage() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayCount = history.filter((h) => h.created_at.startsWith(today)).length
+  const wordsUsed =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsUsedEstimate
+      : cloudWordsUsed
+  const wordsLimit =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsLimit
+      : cloudWordsLimit
+  const wordsResetAt =
+    quotaModel === 'legacy_dual_meter' && displayWordsLimit > 0
+      ? displayWordsResetAt
+      : cloudWordsResetAt
 
   return (
     <div className="p-6 space-y-6">
@@ -74,17 +90,13 @@ export function HomePage() {
                 <h3 className="text-[13px] font-medium">{displayName}</h3>
               </div>
               <div className="space-y-3">
-                {cloudWordsLimit > 0 ? (
+                {wordsLimit > 0 ? (
                   <>
-                    <RemainingWords
-                      used={cloudWordsUsed}
-                      limit={cloudWordsLimit}
-                      resetAt={cloudWordsResetAt}
-                    />
+                    <RemainingWords used={wordsUsed} limit={wordsLimit} resetAt={wordsResetAt} />
                     <QuotaBar
                       label={t('account.cloudWords', 'Cloud words')}
-                      used={cloudWordsUsed}
-                      limit={cloudWordsLimit}
+                      used={wordsUsed}
+                      limit={wordsLimit}
                       unit={t('account.quotaKWords', 'k words')}
                       divisor={1000}
                     />

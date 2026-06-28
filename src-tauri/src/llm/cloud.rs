@@ -137,9 +137,27 @@ impl LlmProvider for CloudLlmProvider {
 
         let api_base_url = crate::api_base_url();
 
+        let mut context = serde_json::json!({
+            "hasSelectedText": has_selected_text,
+            "translateEnabled": req.translate_enabled,
+            "rawTextChars": req.raw_text.chars().count(),
+            "selectedTextChars": req
+                .selected_text
+                .as_ref()
+                .map(|s| s.chars().count())
+                .unwrap_or(0)
+        });
+        if let Some(operation_id) = req.operation_id.as_deref() {
+            context["operationId"] = serde_json::json!(operation_id);
+            context["stageKey"] = serde_json::json!(format!("{operation_id}:llm"));
+            context["requestType"] = serde_json::json!("voice_pipeline");
+            context["clientVersion"] = serde_json::json!(crate::desktop_client_version());
+        }
+
         let body = serde_json::json!({
             "messages": messages,
-            "stream": on_chunk.is_some()
+            "stream": on_chunk.is_some(),
+            "context": context
         });
 
         // Retry the initial connection (not once streaming starts)

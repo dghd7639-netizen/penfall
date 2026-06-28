@@ -26,6 +26,7 @@ pub struct AppConfig {
     pub translate_enabled: bool,
     pub target_lang: String,
     pub hotkey: String,
+    pub ask_hotkey: String,
     pub hotkey_mode: String,
     pub output_mode: String,
     pub selected_text_enabled: bool,
@@ -63,6 +64,10 @@ impl Default for AppConfig {
             hotkey: "Option+/".to_string(),
             #[cfg(not(target_os = "macos"))]
             hotkey: "Ctrl+/".to_string(),
+            #[cfg(target_os = "macos")]
+            ask_hotkey: "Option+Shift+/".to_string(),
+            #[cfg(not(target_os = "macos"))]
+            ask_hotkey: "Ctrl+Shift+/".to_string(),
             hotkey_mode: "hold".to_string(),
             output_mode: "keyboard".to_string(),
             selected_text_enabled: false,
@@ -89,6 +94,10 @@ impl AppConfig {
         #[cfg(target_os = "macos")]
         if self.hotkey == "Alt+/" {
             self.hotkey = "Option+/".to_string();
+        }
+        #[cfg(target_os = "macos")]
+        if self.ask_hotkey == "Alt+Shift+/" {
+            self.ask_hotkey = "Option+Shift+/".to_string();
         }
     }
 

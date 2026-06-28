@@ -110,13 +110,13 @@ afterEach(() => {
 })
 
 describe('UpgradePage', () => {
-  it('shows the monthly plan before subscribing', () => {
+  it('shows monthly and lifetime plans before subscribing', () => {
     render(<UpgradePage />)
 
     expect(screen.getByText('Pro Monthly')).toBeInTheDocument()
     expect(screen.getByText('$4.99')).toBeInTheDocument()
-    expect(screen.queryByText('Lifetime Starter')).not.toBeInTheDocument()
-    expect(screen.queryByText('$89.99')).not.toBeInTheDocument()
+    expect(screen.getByText('Lifetime Starter')).toBeInTheDocument()
+    expect(screen.getByText('$89.99')).toBeInTheDocument()
   })
 
   it('keeps the post-plan benefits short and focused', () => {
@@ -145,7 +145,7 @@ describe('UpgradePage', () => {
     })
   })
 
-  it('does not show checkout actions for active monthly users while lifetime is disabled', () => {
+  it('shows lifetime upgrade for active monthly users', () => {
     Object.assign(mockAuthState, {
       user: { id: 'user-1', email: 'user@example.com', name: null },
       plan: 'pro' as MockPlan,
@@ -156,7 +156,7 @@ describe('UpgradePage', () => {
 
     render(<UpgradePage />)
     expect(screen.queryByText('Pro Monthly')).not.toBeInTheDocument()
-    expect(screen.queryByText('Buy lifetime')).not.toBeInTheDocument()
-    expect(screen.getByText('Pro is active.')).toBeInTheDocument()
+    expect(screen.getByText('Lifetime Starter')).toBeInTheDocument()
+    expect(screen.getByText('Buy lifetime')).toBeInTheDocument()
   })
 })

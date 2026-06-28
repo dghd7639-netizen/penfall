@@ -1,6 +1,9 @@
+use crate::commands;
 use crate::pipeline;
 use crate::storage;
+use crate::AskHotkeyCache;
 use crate::HotkeyModeCache;
+use crate::SessionTokenStore;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
@@ -20,14 +23,111 @@ pub fn default_shortcut() -> Shortcut {
     parse_hotkey(&default_hotkey).unwrap_or(fallback)
 }
 
+pub fn default_ask_shortcut() -> Shortcut {
+    let default_hotkey = storage::AppConfig::default().ask_hotkey;
+    let fallback = {
+        #[cfg(target_os = "macos")]
+        {
+            Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::Slash)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Slash)
+        }
+    };
+    parse_hotkey(&default_hotkey).unwrap_or(fallback)
+}
+
+fn shortcuts_match(a: &Shortcut, b: &Shortcut) -> bool {
+    a.mods == b.mods && a.key == b.key
+}
+
+fn is_ask_shortcut(handle: &tauri::AppHandle, shortcut: &Shortcut) -> bool {
+    let ask_hotkey = handle
+        .state::<AskHotkeyCache>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    parse_hotkey(&ask_hotkey)
+        .map(|configured| shortcuts_match(&configured, shortcut))
+        .unwrap_or(false)
+}
+
+fn show_ask_result_window(
+    handle: &tauri::AppHandle,
+    result: &commands::ask::AskDictationResult,
+) {
+    if let Some(window) = handle.get_webview_window("ask") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("ask:result", result);
+    }
+}
+
+fn show_ask_error_window(handle: &tauri::AppHandle, message: String) {
+    if let Some(window) = handle.get_webview_window("ask") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("ask:error", message);
+    }
+}
+
+fn handle_ask_shortcut(handle: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let ask_state = handle.state::<commands::ask::AskDictationState>();
+        if ask_state.is_busy() && !ask_state.is_recording() {
+            return;
+        }
+
+        let config_state = handle.state::<storage::ConfigManager>();
+        let token_store = handle.state::<SessionTokenStore>();
+        let client = handle.state::<reqwest::Client>();
+
+        if ask_state.is_recording() {
+            match commands::ask::stop_ask_dictation(
+                handle.clone(),
+                ask_state,
+                config_state,
+                token_store,
+                client,
+            )
+            .await
+            {
+                Ok(result) => show_ask_result_window(&handle, &result),
+                Err(message) => show_ask_error_window(&handle, message),
+            }
+        } else if let Err(message) = commands::ask::start_ask_dictation(
+            handle.clone(),
+            ask_state,
+            config_state,
+            token_store,
+            client,
+        )
+        .await
+        {
+            show_ask_error_window(&handle, message);
+        }
+    });
+}
+
 pub fn build_shortcut_handler(
     app_handle: tauri::AppHandle,
 ) -> impl Fn(&tauri::AppHandle, &Shortcut, tauri_plugin_global_shortcut::ShortcutEvent)
        + Send
        + Sync
        + 'static {
-    move |_app, _shortcut, event| {
+    move |_app, shortcut, event| {
         let handle = app_handle.clone();
+        if is_ask_shortcut(&handle, shortcut) {
+            if matches!(event.state, ShortcutState::Pressed) {
+                handle_ask_shortcut(handle);
+            }
+            return;
+        }
+
         match event.state {
             ShortcutState::Pressed => {
                 let hotkey_mode = handle
@@ -37,6 +137,13 @@ pub fn build_shortcut_handler(
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
                 tauri::async_runtime::spawn(async move {
+                    if handle
+                        .state::<commands::ask::AskDictationState>()
+                        .is_busy()
+                    {
+                        return;
+                    }
+
                     let pipeline = handle.state::<pipeline::PipelineHandle>();
 
                     if hotkey_mode == "toggle" {
@@ -64,6 +171,13 @@ pub fn build_shortcut_handler(
                     .clone();
                 if hotkey_mode != "toggle" {
                     tauri::async_runtime::spawn(async move {
+                        if handle
+                            .state::<commands::ask::AskDictationState>()
+                            .is_busy()
+                        {
+                            return;
+                        }
+
                         let pipeline = handle.state::<pipeline::PipelineHandle>();
                         if let Err(e) = pipeline.stop().await {
                             tracing::error!("Failed to stop recording: {}", e);

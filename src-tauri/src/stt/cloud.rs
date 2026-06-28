@@ -163,6 +163,13 @@ impl SttProvider for CloudSttProvider {
             if let Some(ref lang) = config.language {
                 form = form.text("language", lang.clone());
             }
+            if let Some(operation_id) = config.operation_id.as_deref() {
+                form = form
+                    .text("operationId", operation_id.to_string())
+                    .text("stageKey", format!("{operation_id}:stt"))
+                    .text("requestType", "voice_pipeline")
+                    .text("clientVersion", crate::desktop_client_version());
+            }
 
             let resp_result = with_desktop_client_version(
                 self.client
