@@ -62,6 +62,22 @@ fn resolve_whisper_test_config(
         .ok_or_else(|| format!("Unknown STT provider: {}", provider))
 }
 
+async fn check_openai_whisper_model(client: &reqwest::Client, api_key: &str) -> Result<(), String> {
+    let resp = client
+        .get("https://api.openai.com/v1/models/whisper-1")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn test_stt_connection(
     api_key: String,
@@ -133,6 +149,7 @@ pub async fn test_stt_connection(
         )
         .await
         .is_ok()),
+        "openai-whisper" => Ok(check_openai_whisper_model(&client, &api_key).await.is_ok()),
         _ => {
             let cfg = resolve_whisper_test_config(&provider, custom_base_url, custom_model)?;
 
@@ -321,6 +338,11 @@ pub async fn bench_stt_connection(
         stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER => {
             let t0 = std::time::Instant::now();
             check_volcengine_doubao_connection(&api_key, volcengine_resource_id).await?;
+            Ok(t0.elapsed().as_millis() as u32)
+        }
+        "openai-whisper" => {
+            let t0 = std::time::Instant::now();
+            check_openai_whisper_model(&client, &api_key).await?;
             Ok(t0.elapsed().as_millis() as u32)
         }
         _ => {
