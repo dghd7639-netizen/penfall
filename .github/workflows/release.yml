@@ -9,6 +9,24 @@ on:
         description: 'Release tag (e.g. v0.1.14)'
         required: true
         default: 'v0.1.14'
+      platform:
+        description: 'Platform group to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - macos
+          - linux
+          - windows
+      skip_stapling:
+        description: 'macOS only: skip notarization stapling wait (testing only)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: write
@@ -20,23 +38,34 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
+            platform_group: macos
             target: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
+            timeout_minutes: 60
           - platform: macos-latest
+            platform_group: macos
             target: x86_64-apple-darwin
             args: '--target x86_64-apple-darwin'
+            timeout_minutes: 60
           - platform: ubuntu-22.04
+            platform_group: linux
             target: x86_64-unknown-linux-gnu
             args: ''
+            timeout_minutes: 45
           - platform: windows-latest
+            platform_group: windows
             target: x86_64-pc-windows-msvc
             args: '--target x86_64-pc-windows-msvc'
+            timeout_minutes: 45
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
 
       - name: Sync version from tag
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         shell: bash
         run: |
           TAG_VERSION="${{ github.event.inputs.tag || github.ref_name }}"
@@ -51,12 +80,13 @@ jobs:
           node -e "const fs=require('fs');let c=fs.readFileSync('src-tauri/Cargo.toml','utf8');c=c.replace(/^version = \".*\"/m,'version = \"$VERSION\"');fs.writeFileSync('src-tauri/Cargo.toml',c);"
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: ${{ matrix.platform == 'ubuntu-22.04' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev libfuse2 gnupg rpm
 
       - name: Verify release publishing token
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -69,21 +99,26 @@ jobs:
           gh api repos/tover0314-w/opentypeless >/dev/null
 
       - uses: actions/setup-node@v4
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         with:
           node-version: 20
           cache: 'npm'
 
       - uses: dtolnay/rust-toolchain@stable
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         with:
           targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         with:
           workspaces: src-tauri -> target
 
       - run: npm ci
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
 
       - name: Verify updater signing key
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -99,7 +134,7 @@ jobs:
           fi
 
       - name: Verify Apple signing secrets
-        if: matrix.platform == 'macos-latest'
+        if: ${{ matrix.platform == 'macos-latest' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -117,7 +152,7 @@ jobs:
           done
 
       - name: Import Linux GPG signing key
-        if: matrix.platform == 'ubuntu-22.04'
+        if: ${{ matrix.platform == 'ubuntu-22.04' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         shell: bash
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
@@ -126,7 +161,7 @@ jobs:
         run: ./.github/scripts/import-linux-gpg-key.sh
 
       - name: Import Windows signing certificate
-        if: matrix.platform == 'windows-latest'
+        if: ${{ matrix.platform == 'windows-latest' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -135,6 +170,7 @@ jobs:
         run: ./.github/scripts/import-windows-certificate.ps1
 
       - uses: tauri-apps/tauri-action@v0
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -159,10 +195,10 @@ jobs:
           releaseBody: 'See the assets below to download and install.'
           releaseDraft: false
           prerelease: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ matrix.platform == 'macos-latest' && github.event.inputs.skip_stapling == 'true' && '--skip-stapling' || '' }}
 
       - name: Upload Linux verification artifacts
-        if: matrix.platform == 'ubuntu-22.04'
+        if: ${{ matrix.platform == 'ubuntu-22.04' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
