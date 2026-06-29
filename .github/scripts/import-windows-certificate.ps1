@@ -1,9 +1,15 @@
 $ErrorActionPreference = "Stop"
 
-foreach ($name in @("WINDOWS_CERTIFICATE", "WINDOWS_CERTIFICATE_PASSWORD")) {
-  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-    Write-Error "$name is required to sign Windows release artifacts."
-  }
+$hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)
+$hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+
+if (-not $hasCertificate -and -not $hasPassword) {
+  Write-Host "Windows signing certificate not configured; building unsigned Windows artifacts."
+  exit 0
+}
+
+if (-not $hasCertificate -or -not $hasPassword) {
+  Write-Error "WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD must be configured together."
 }
 
 $certificateDir = Join-Path $env:RUNNER_TEMP "opentypeless-windows-certificate"
