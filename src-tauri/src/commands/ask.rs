@@ -10,7 +10,7 @@ use tokio::sync::Notify;
 
 pub const ASK_MAX_QUESTION_CHARS: usize = 500;
 pub const ASK_OUTPUT_TOKEN_LIMIT: u32 = 80;
-const ASK_STT_FINALIZE_TIMEOUT_SECS: u64 = 120;
+const ASK_STT_FINALIZE_TIMEOUT_SECS: u64 = 12;
 
 #[derive(Default)]
 pub struct AskDictationState(Arc<Mutex<AskDictationStateInner>>);
@@ -19,6 +19,7 @@ pub struct AskDictationState(Arc<Mutex<AskDictationStateInner>>);
 struct AskDictationStateInner {
     session: Option<AskDictationSession>,
     processing: bool,
+    pending_message: Option<PendingAskMessage>,
 }
 
 impl AskDictationState {
@@ -36,10 +37,29 @@ impl AskDictationState {
     }
 
     fn set_processing(&self, processing: bool) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).processing = processing;
+    }
+
+    pub fn set_pending_result(&self, result: AskDictationResult) {
         self.0
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .processing = processing;
+            .pending_message = Some(PendingAskMessage::Result(result));
+    }
+
+    pub fn set_pending_error(&self, message: String) {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pending_message = Some(PendingAskMessage::Error(message));
+    }
+
+    fn take_pending_message(&self) -> Option<PendingAskMessage> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pending_message
+            .take()
     }
 }
 
@@ -51,11 +71,18 @@ pub struct AskDictationSession {
     done: Arc<Notify>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AskDictationResult {
     question: String,
     answer: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(tag = "kind", content = "payload", rename_all = "camelCase")]
+pub enum PendingAskMessage {
+    Result(AskDictationResult),
+    Error(String),
 }
 
 fn emit_capsule_state(app: &tauri::AppHandle, state: PipelineState) {
@@ -164,6 +191,29 @@ fn ask_stt_api_key(config: &storage::AppConfig, token_store: &SessionTokenStore)
     config.stt_api_key.clone()
 }
 
+fn cloud_auth_required_message() -> String {
+    "Sign in to use Cloud Ask, or switch to BYOK.".to_string()
+}
+
+fn map_audio_capture_error(message: &str) -> String {
+    let normalized = message.to_ascii_lowercase();
+    if normalized.contains("permission")
+        || normalized.contains("access denied")
+        || normalized.contains("not authorized")
+    {
+        return "Microphone permission is required.".to_string();
+    }
+
+    if normalized.contains("no input device")
+        || normalized.contains("default input")
+        || normalized.contains("device")
+    {
+        return "Microphone unavailable. Check your input device.".to_string();
+    }
+
+    "Microphone unavailable. Check your input device.".to_string()
+}
+
 fn append_final_transcript(transcript: &Arc<Mutex<String>>, text: &str) -> String {
     let text = text.trim();
     if text.is_empty() {
@@ -199,6 +249,65 @@ async fn answer_question(
 fn response_error(status: reqwest::StatusCode, text: String) -> String {
     let sanitized: String = text.chars().take(200).collect();
     format!("Ask request failed ({}): {}", status.as_u16(), sanitized)
+}
+
+fn cloud_response_error(status: reqwest::StatusCode, text: String) -> String {
+    let parsed = serde_json::from_str::<serde_json::Value>(&text).ok();
+    let message = parsed
+        .as_ref()
+        .and_then(extract_cloud_error_message)
+        .or_else(|| {
+            let trimmed = text.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        });
+
+    if status.as_u16() == 401 {
+        return cloud_auth_required_message();
+    }
+
+    if status.as_u16() == 403 {
+        let quota_message = message
+            .as_deref()
+            .filter(|value| contains_quota_marker(value))
+            .map(ToString::to_string);
+        return quota_message.unwrap_or_else(cloud_auth_required_message);
+    }
+
+    if status.as_u16() >= 500 {
+        return "Ask service error. Please try again.".to_string();
+    }
+
+    let sanitized: String = message
+        .unwrap_or_else(|| "Ask request failed. Please try again.".to_string())
+        .chars()
+        .take(160)
+        .collect();
+    format!("Ask request failed ({}): {}", status.as_u16(), sanitized)
+}
+
+fn contains_quota_marker(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    value.contains("quota")
+        || value.contains("limit exceeded")
+        || value.contains("usage exceeded")
+        || value.contains("cloud words")
+        || value.contains("byok")
+}
+
+fn extract_cloud_error_message(value: &serde_json::Value) -> Option<String> {
+    for field in ["error", "message"] {
+        match value.get(field) {
+            Some(serde_json::Value::String(message)) => return Some(message.clone()),
+            Some(nested) => {
+                if let Some(message) = extract_cloud_error_message(nested) {
+                    return Some(message);
+                }
+            }
+            None => {}
+        }
+    }
+
+    None
 }
 
 async fn ask_via_byok(
@@ -253,7 +362,7 @@ async fn ask_via_cloud(
         .unwrap_or_else(|e| e.into_inner())
         .clone();
     if token.trim().is_empty() {
-        return Err("Configure a BYOK LLM provider or choose Cloud LLM to use Ask.".to_string());
+        return Err(cloud_auth_required_message());
     }
 
     let operation_id = operation_id
@@ -283,7 +392,7 @@ async fn ask_via_cloud(
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
-        return Err(response_error(status, text));
+        return Err(cloud_response_error(status, text));
     }
 
     let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -345,8 +454,8 @@ pub async fn start_ask_dictation(
         .await
         .map_err(|e| e.to_string())?;
 
-    let (mut handle, mut audio_rx) =
-        AudioCaptureHandle::start(AudioConfig::default()).map_err(|e| e.to_string())?;
+    let (mut handle, mut audio_rx) = AudioCaptureHandle::start(AudioConfig::default())
+        .map_err(|e| map_audio_capture_error(&e.to_string()))?;
     let transcript = Arc::new(Mutex::new(String::new()));
     let error = Arc::new(Mutex::new(None::<String>));
     let done = Arc::new(Notify::new());
@@ -455,11 +564,33 @@ pub async fn stop_ask_dictation(
         session.handle.stop();
         emit_capsule_state(&app, PipelineState::Polishing);
 
-        tokio::select! {
-            _ = session.done.notified() => {}
+        let finalize_timed_out = tokio::select! {
+            _ = session.done.notified() => false,
             _ = tokio::time::sleep(std::time::Duration::from_secs(ASK_STT_FINALIZE_TIMEOUT_SECS)) => {
-                return Err("Ask dictation timed out".to_string());
+                true
             }
+        };
+
+        if finalize_timed_out {
+            let transcript = session
+                .transcript
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(message) = session
+                .error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+            {
+                return Err(message);
+            }
+            if transcript.trim().is_empty() {
+                return Err("No speech detected. Please try again.".to_string());
+            }
+            tracing::warn!(
+                "Ask STT finalize timed out; continuing with collected transcript"
+            );
         }
 
         if let Some(message) = session
@@ -515,6 +646,13 @@ pub fn abort_ask_dictation(state: tauri::State<'_, AskDictationState>) -> Result
     Ok(())
 }
 
+#[tauri::command]
+pub fn take_pending_ask_message(
+    state: tauri::State<'_, AskDictationState>,
+) -> Result<Option<PendingAskMessage>, String> {
+    Ok(state.take_pending_message())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,5 +696,69 @@ mod tests {
         assert_eq!(stt_config.api_key, "session-token");
         assert_eq!(stt_config.language, None);
         assert_eq!(stt_config.operation_id.as_deref(), Some("operation-1"));
+    }
+
+    #[test]
+    fn cloud_ask_errors_are_short_and_actionable() {
+        let quota = cloud_response_error(
+            reqwest::StatusCode::FORBIDDEN,
+            r#"{"code":"cloud_quota_exceeded","error":"Cloud words used up. Please switch to BYOK mode or wait until reset."}"#.to_string(),
+        );
+        assert_eq!(
+            quota,
+            "Cloud words used up. Please switch to BYOK mode or wait until reset."
+        );
+
+        let auth = cloud_response_error(reqwest::StatusCode::UNAUTHORIZED, String::new());
+        assert_eq!(auth, "Sign in to use Cloud Ask, or switch to BYOK.");
+
+        let service = cloud_response_error(
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            "upstream failed".to_string(),
+        );
+        assert_eq!(service, "Ask service error. Please try again.");
+    }
+
+    #[test]
+    fn byok_ask_errors_do_not_use_cloud_auth_copy() {
+        let message = response_error(reqwest::StatusCode::UNAUTHORIZED, "bad key".to_string());
+        assert_eq!(message, "Ask request failed (401): bad key");
+    }
+
+    #[test]
+    fn audio_capture_errors_are_user_readable() {
+        assert_eq!(
+            map_audio_capture_error("No input device available"),
+            "Microphone unavailable. Check your input device."
+        );
+        assert_eq!(
+            map_audio_capture_error("permission denied"),
+            "Microphone permission is required."
+        );
+    }
+
+    #[test]
+    fn pending_ask_message_is_consumed_once() {
+        let state = AskDictationState::default();
+        state.set_pending_result(AskDictationResult {
+            question: "What is OpenTypeless?".to_string(),
+            answer: "A voice app.".to_string(),
+        });
+
+        match state.take_pending_message().unwrap() {
+            PendingAskMessage::Result(result) => {
+                assert_eq!(result.answer, "A voice app.");
+            }
+            PendingAskMessage::Error(_) => panic!("expected result"),
+        }
+        assert!(state.take_pending_message().is_none());
+
+        state.set_pending_error("No speech detected. Please try again.".to_string());
+        match state.take_pending_message().unwrap() {
+            PendingAskMessage::Error(message) => {
+                assert_eq!(message, "No speech detected. Please try again.");
+            }
+            PendingAskMessage::Result(_) => panic!("expected error"),
+        }
     }
 }

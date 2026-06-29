@@ -54,10 +54,10 @@ fn is_ask_shortcut(handle: &tauri::AppHandle, shortcut: &Shortcut) -> bool {
         .unwrap_or(false)
 }
 
-fn show_ask_result_window(
-    handle: &tauri::AppHandle,
-    result: &commands::ask::AskDictationResult,
-) {
+fn show_ask_result_window(handle: &tauri::AppHandle, result: &commands::ask::AskDictationResult) {
+    handle
+        .state::<commands::ask::AskDictationState>()
+        .set_pending_result(result.clone());
     if let Some(window) = handle.get_webview_window("ask") {
         let _ = window.unminimize();
         let _ = window.show();
@@ -67,6 +67,9 @@ fn show_ask_result_window(
 }
 
 fn show_ask_error_window(handle: &tauri::AppHandle, message: String) {
+    handle
+        .state::<commands::ask::AskDictationState>()
+        .set_pending_error(message.clone());
     if let Some(window) = handle.get_webview_window("ask") {
         let _ = window.unminimize();
         let _ = window.show();
@@ -137,10 +140,7 @@ pub fn build_shortcut_handler(
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
                 tauri::async_runtime::spawn(async move {
-                    if handle
-                        .state::<commands::ask::AskDictationState>()
-                        .is_busy()
-                    {
+                    if handle.state::<commands::ask::AskDictationState>().is_busy() {
                         return;
                     }
 
@@ -171,10 +171,7 @@ pub fn build_shortcut_handler(
                     .clone();
                 if hotkey_mode != "toggle" {
                     tauri::async_runtime::spawn(async move {
-                        if handle
-                            .state::<commands::ask::AskDictationState>()
-                            .is_busy()
-                        {
+                        if handle.state::<commands::ask::AskDictationState>().is_busy() {
                             return;
                         }
 

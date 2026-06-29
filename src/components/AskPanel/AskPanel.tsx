@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Mic, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { abortAskDictation, startAskDictation, stopAskDictation } from '../../lib/tauri'
+import {
+  abortAskDictation,
+  startAskDictation,
+  stopAskDictation,
+  takePendingAskMessage,
+} from '../../lib/tauri'
 
 interface AskPanelProps {
   embedded?: boolean
@@ -38,6 +43,26 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
     setDictationState(next)
   }, [])
 
+  const applyResult = useCallback(
+    (payload: AskResultPayload) => {
+      setAnswer(payload.answer)
+      setError('')
+      setAskDictationState('idle')
+      setBusy(false)
+    },
+    [setAskDictationState, setBusy],
+  )
+
+  const applyError = useCallback(
+    (message: string) => {
+      setError(message)
+      setAnswer('')
+      setAskDictationState('idle')
+      setBusy(false)
+    },
+    [setAskDictationState, setBusy],
+  )
+
   const beginDictation = useCallback(async () => {
     if (loadingRef.current || dictationStateRef.current !== 'idle') return
 
@@ -72,23 +97,29 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
   useEffect(() => {
     let cancelled = false
     const unlisteners: Array<() => void> = []
+    const applyPendingMessage = async () => {
+      const pending = await takePendingAskMessage()
+      if (cancelled || !pending) return
+      if (pending.kind === 'result') {
+        applyResult(pending.payload)
+      } else {
+        applyError(pending.payload)
+      }
+    }
 
     import('@tauri-apps/api/event')
       .then(({ listen }) =>
         Promise.all([
           listen<AskResultPayload>('ask:result', (event) => {
             if (!cancelled) {
-              setAnswer(event.payload.answer)
-              setError('')
-              setAskDictationState('idle')
-              setBusy(false)
+              applyResult(event.payload)
+              void takePendingAskMessage().catch(() => {})
             }
           }),
           listen<string>('ask:error', (event) => {
             if (!cancelled) {
-              setError(event.payload)
-              setAskDictationState('idle')
-              setBusy(false)
+              applyError(event.payload)
+              void takePendingAskMessage().catch(() => {})
             }
           }),
         ]),
@@ -98,6 +129,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
           listeners.forEach((unlisten) => unlisten())
         } else {
           unlisteners.push(...listeners)
+          void applyPendingMessage().catch(() => {})
         }
       })
       .catch(() => {})
@@ -107,7 +139,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
       unlisteners.forEach((unlisten) => unlisten())
       Promise.resolve(abortAskDictation()).catch(() => {})
     }
-  }, [beginDictation, setAskDictationState, setBusy])
+  }, [applyError, applyResult])
 
   const toggleDictation = useCallback(() => {
     if (dictationState === 'recording') {

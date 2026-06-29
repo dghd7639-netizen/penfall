@@ -124,6 +124,10 @@ export interface AskDictationResult {
   answer: string
 }
 
+export type PendingAskMessage =
+  | { kind: 'result'; payload: AskDictationResult }
+  | { kind: 'error'; payload: string }
+
 export async function startAskDictation(): Promise<void> {
   return invoke('start_ask_dictation')
 }
@@ -134,6 +138,10 @@ export async function stopAskDictation(): Promise<AskDictationResult> {
 
 export async function abortAskDictation(): Promise<void> {
   return invoke('abort_ask_dictation')
+}
+
+export async function takePendingAskMessage(): Promise<PendingAskMessage | null> {
+  return invoke('take_pending_ask_message')
 }
 
 // History

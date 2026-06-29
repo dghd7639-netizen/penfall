@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
-import { askAnything, updateAskHotkey } from '../tauri'
+import { askAnything, takePendingAskMessage, updateAskHotkey } from '../tauri'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -26,5 +26,20 @@ describe('Ask Anything Tauri wrappers', () => {
     await updateAskHotkey('Ctrl+Shift+/')
 
     expect(invoke).toHaveBeenCalledWith('update_ask_hotkey', { hotkey: 'Ctrl+Shift+/' })
+  })
+
+  it('reads and clears pending Ask popup messages from Tauri', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      kind: 'result',
+      payload: { question: 'Q', answer: 'A' },
+    })
+
+    const pending = await takePendingAskMessage()
+
+    expect(pending).toEqual({
+      kind: 'result',
+      payload: { question: 'Q', answer: 'A' },
+    })
+    expect(invoke).toHaveBeenCalledWith('take_pending_ask_message')
   })
 })

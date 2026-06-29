@@ -512,6 +512,7 @@ pub fn run() {
             commands::ask::start_ask_dictation,
             commands::ask::stop_ask_dictation,
             commands::ask::abort_ask_dictation,
+            commands::ask::take_pending_ask_message,
             commands::misc::check_accessibility_permission,
             commands::misc::request_accessibility_permission,
             commands::config::get_config,

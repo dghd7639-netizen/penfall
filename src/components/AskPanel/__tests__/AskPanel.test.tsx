@@ -2,7 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../../i18n'
 import { AskPanel } from '../AskPanel'
-import { abortAskDictation, startAskDictation, stopAskDictation } from '../../../lib/tauri'
+import {
+  abortAskDictation,
+  startAskDictation,
+  stopAskDictation,
+  takePendingAskMessage,
+} from '../../../lib/tauri'
 
 const tauriEventMock = vi.hoisted(() => {
   type Listener = (event: { payload: unknown }) => void
@@ -32,6 +37,7 @@ vi.mock('../../../lib/tauri', () => ({
   startAskDictation: vi.fn(),
   stopAskDictation: vi.fn(),
   abortAskDictation: vi.fn(),
+  takePendingAskMessage: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -53,6 +59,7 @@ describe('AskPanel', () => {
       answer: 'It turns speech into useful text.',
     })
     vi.mocked(abortAskDictation).mockResolvedValue(undefined)
+    vi.mocked(takePendingAskMessage).mockResolvedValue(null)
   })
 
   it('renders the hotkey result as answer-only popup content', async () => {
@@ -75,6 +82,25 @@ describe('AskPanel', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.queryByText('Answer')).toBeNull()
+    expect(startAskDictation).not.toHaveBeenCalled()
+  })
+
+  it('renders a pending hotkey result when the native event was missed', async () => {
+    vi.mocked(takePendingAskMessage).mockResolvedValueOnce({
+      kind: 'result',
+      payload: {
+        question: 'What is OpenTypeless?',
+        answer: 'It turns speech into useful text.',
+      },
+    })
+
+    render(<AskPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByText('It turns speech into useful text.')).toBeDefined()
+    })
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
     expect(startAskDictation).not.toHaveBeenCalled()
   })
 
