@@ -39,22 +39,17 @@ jobs:
         include:
           - platform: macos-latest
             platform_group: macos
-            target: aarch64-apple-darwin
-            args: '--target aarch64-apple-darwin'
-            timeout_minutes: 60
-          - platform: macos-latest
-            platform_group: macos
-            target: x86_64-apple-darwin
-            args: '--target x86_64-apple-darwin'
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: '--target universal-apple-darwin'
             timeout_minutes: 60
           - platform: ubuntu-22.04
             platform_group: linux
-            target: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
             args: ''
             timeout_minutes: 45
           - platform: windows-latest
             platform_group: windows
-            target: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
             args: '--target x86_64-pc-windows-msvc'
             timeout_minutes: 45
 
@@ -107,7 +102,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets }}
 
       - uses: swatinem/rust-cache@v2
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
