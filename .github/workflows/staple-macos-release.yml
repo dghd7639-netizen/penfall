@@ -83,6 +83,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           TAG: ${{ github.event.inputs.tag }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -137,6 +140,18 @@ jobs:
             "$WORK_DIR/$DMG_NAME"
           codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$WORK_DIR/$DMG_NAME"
           codesign --verify --verbose=2 "$WORK_DIR/$DMG_NAME"
+          xcrun notarytool submit "$WORK_DIR/$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait | tee "$WORK_DIR/dmg-notary-info.txt"
+          if ! grep -q "status: Accepted" "$WORK_DIR/dmg-notary-info.txt"; then
+            echo "::error::DMG notarization did not finish Accepted."
+            exit 1
+          fi
+          xcrun stapler staple "$WORK_DIR/$DMG_NAME"
+          xcrun stapler validate "$WORK_DIR/$DMG_NAME"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$WORK_DIR/$DMG_NAME"
 
           jq --arg sig "$SIGNATURE" '
             .platforms |= with_entries(
