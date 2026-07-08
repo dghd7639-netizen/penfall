@@ -1388,7 +1388,7 @@ mod tests {
             "stt_provider": "glm-asr",
             "llm_provider": "openrouter",
             "hotkey": "Ctrl+Shift+;",
-            "ask_hotkey": "Ctrl+.",
+            "ask_hotkey": "Ctrl+Alt+.",
             "hotkey_mode": "toggle"
         });
 
@@ -1405,12 +1405,12 @@ mod tests {
             config.hotkeys.ask,
             Some(ShortcutBinding {
                 primary: ".".to_string(),
-                modifiers: vec!["Ctrl".to_string()],
+                modifiers: vec!["Ctrl".to_string(), "Alt".to_string()],
             })
         );
         assert_eq!(config.hotkeys.dictation_mode, "toggle");
         assert_eq!(config.hotkey, "Ctrl+Shift+;");
-        assert_eq!(config.ask_hotkey, "Ctrl+.");
+        assert_eq!(config.ask_hotkey, "Ctrl+Alt+.");
         assert_eq!(config.hotkey_mode, "toggle");
     }
 
