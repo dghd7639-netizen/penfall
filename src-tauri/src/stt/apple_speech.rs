@@ -557,6 +557,12 @@ mod platform {
 
     pub struct AppleSpeechProvider;
 
+    impl Default for AppleSpeechProvider {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl AppleSpeechProvider {
         pub fn new() -> Self {
             Self

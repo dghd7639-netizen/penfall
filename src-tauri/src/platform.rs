@@ -33,7 +33,7 @@ pub fn current_session_type() -> String {
     #[cfg(target_os = "linux")]
     {
         let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-        return normalize_session_type(&session).to_string();
+        normalize_session_type(&session).to_string()
     }
 
     #[cfg(not(target_os = "linux"))]

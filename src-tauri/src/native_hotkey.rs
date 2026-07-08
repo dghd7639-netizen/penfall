@@ -24,6 +24,7 @@ impl NativeHotkeyTrigger {
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows", test))]
     fn base(self) -> NativeHotkeyTrigger {
         match self {
             Self::Fn | Self::FnSpace | Self::FnLeftShift => Self::Fn,
@@ -31,6 +32,7 @@ impl NativeHotkeyTrigger {
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows", test))]
     fn combo_key(self) -> Option<NativeComboKey> {
         match self {
             Self::FnSpace | Self::RightAltSpace => Some(NativeComboKey::Space),
@@ -39,6 +41,7 @@ impl NativeHotkeyTrigger {
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows", test))]
     fn from_base_combo(base: NativeHotkeyTrigger, combo: NativeComboKey) -> Option<Self> {
         match (base, combo) {
             (Self::Fn, NativeComboKey::Space) => Some(Self::FnSpace),
@@ -50,6 +53,7 @@ impl NativeHotkeyTrigger {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum NativeComboKey {
     Space,
@@ -68,6 +72,7 @@ pub struct NativeHotkeyEvent {
     pub state: ShortcutState,
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[derive(Default)]
 struct NativeHeldState {
     held: AtomicBool,
@@ -100,7 +105,7 @@ impl NativeHotkeyRuntime {
         handler: Arc<dyn Fn(NativeHotkeyEvent) + Send + Sync>,
     ) -> Result<(), String> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        drop(inner.monitor.take());
+        let _ = inner.monitor.take();
 
         if bindings.is_empty() {
             return Ok(());
@@ -112,17 +117,19 @@ impl NativeHotkeyRuntime {
 
     pub fn pause(&self) {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        drop(inner.monitor.take());
+        let _ = inner.monitor.take();
     }
 }
 
 type NativeHotkeyHandler = Arc<dyn Fn(NativeHotkeyEvent) + Send + Sync + 'static>;
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 struct NativeMonitoredBinding {
     binding: NativeHotkeyBinding,
     held: NativeHeldState,
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 impl NativeMonitoredBinding {
     fn new(binding: NativeHotkeyBinding) -> Self {
         Self {
@@ -132,6 +139,7 @@ impl NativeMonitoredBinding {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn monitored_bindings_for_base(
     bindings: Vec<NativeHotkeyBinding>,
     base: NativeHotkeyTrigger,
@@ -143,12 +151,14 @@ fn monitored_bindings_for_base(
         .collect()
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn has_combo_bindings(bindings: &[NativeMonitoredBinding], base: NativeHotkeyTrigger) -> bool {
     bindings.iter().any(|binding| {
         binding.binding.trigger.base() == base && binding.binding.trigger.combo_key().is_some()
     })
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn has_binding_for_trigger(
     bindings: &[NativeMonitoredBinding],
     trigger: NativeHotkeyTrigger,
@@ -158,6 +168,7 @@ fn has_binding_for_trigger(
         .any(|binding| binding.binding.trigger == trigger)
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn dispatch_matching_bindings(
     bindings: &[NativeMonitoredBinding],
     trigger: NativeHotkeyTrigger,
@@ -180,6 +191,7 @@ fn dispatch_matching_bindings(
     matched
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[derive(Default)]
 struct NativeComboState {
     base_pressed: bool,
@@ -187,6 +199,7 @@ struct NativeComboState {
     combo_used: bool,
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn dispatch_native_base_edge(
     state: &mut NativeComboState,
     bindings: &[NativeMonitoredBinding],
@@ -228,6 +241,7 @@ fn dispatch_native_base_edge(
     dispatch_matching_bindings(bindings, base, false, handler)
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn dispatch_native_combo_edge(
     state: &mut NativeComboState,
     bindings: &[NativeMonitoredBinding],
@@ -731,12 +745,8 @@ mod platform {
                 );
             }
             if let Some(thread) = self.thread.take() {
-                if thread.thread().id() != thread::current().id() {
-                    if thread.join().is_err() {
-                        tracing::warn!(
-                            "Windows native hotkey hook thread panicked during shutdown"
-                        );
-                    }
+                if thread.thread().id() != thread::current().id() && thread.join().is_err() {
+                    tracing::warn!("Windows native hotkey hook thread panicked during shutdown");
                 }
             }
         }

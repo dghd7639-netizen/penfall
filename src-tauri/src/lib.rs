@@ -140,6 +140,7 @@ fn sync_auto_start_preference(
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn should_restore_main_window_on_reopen(_has_visible_windows: bool) -> bool {
     true
 }
@@ -880,16 +881,16 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
+        .run(|_app, _event| {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen {
                 has_visible_windows,
                 ..
-            } = event
+            } = _event
             {
                 if should_restore_main_window_on_reopen(has_visible_windows) {
-                    restore_main_window(app);
-                    refresh_tray(app);
+                    restore_main_window(_app);
+                    refresh_tray(_app);
                 }
             }
         });
