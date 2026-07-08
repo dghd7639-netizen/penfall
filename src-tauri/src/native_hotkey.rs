@@ -1,3 +1,4 @@
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri_plugin_global_shortcut::ShortcutState;
@@ -78,6 +79,7 @@ struct NativeHeldState {
     held: AtomicBool,
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 impl NativeHeldState {
     fn edge(&self, pressed: bool) -> Option<ShortcutState> {
         match (pressed, self.held.swap(pressed, Ordering::SeqCst)) {

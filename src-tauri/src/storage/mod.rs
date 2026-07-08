@@ -261,7 +261,7 @@ impl AppConfig {
         }
     }
 
-    fn normalize_platform_hotkey(&mut self) {
+    fn migrate_legacy_platform_hotkeys(&mut self) {
         #[cfg(target_os = "macos")]
         if self.hotkey == "Alt+/" {
             self.hotkey = "Option+/".to_string();
@@ -299,7 +299,6 @@ impl AppConfig {
     }
 
     fn normalize_hotkey_settings(&mut self) {
-        self.normalize_platform_hotkey();
         self.hotkey_mode = normalize_hotkey_mode(&self.hotkey_mode).to_string();
         let translate = self.hotkeys.translate.clone();
         let edit_selection = self.hotkeys.edit_selection.clone();
@@ -407,6 +406,9 @@ impl AppConfig {
         if !has_insertion_strategy {
             config.insertion_strategy =
                 insertion_strategy_from_legacy_output_mode(&config.output_mode).to_string();
+        }
+        if !has_hotkeys {
+            config.migrate_legacy_platform_hotkeys();
         }
         config.normalize_values();
         Ok(config)
