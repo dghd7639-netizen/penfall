@@ -42,7 +42,7 @@ jelly-reference*.png
 .playwright-mcp/
 .playwright-cli/
 .codex-target-clippy/
-output/
+/output/
 
 # Local release artifacts
 .release-assets/
