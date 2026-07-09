@@ -41,6 +41,20 @@ Windows:
 The release workflow publishes Windows artifacts even when Windows signing
 secrets are not configured. In that case, the Windows installers are unsigned.
 
+Windows SignPath:
+
+- `SIGNPATH_API_TOKEN`: token for a SignPath user that is a submitter for the
+  selected signing policy
+- `SIGNPATH_ORGANIZATION_ID`: SignPath organization ID
+- `SIGNPATH_PROJECT_SLUG`: SignPath project slug
+- `SIGNPATH_SIGNING_POLICY_SLUG`: SignPath signing policy slug
+- `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`: SignPath artifact configuration slug
+
+The SignPath project and GitHub trusted build system must point to
+`toverwu-qaq/opentypeless`, because that repository runs the GitHub Actions
+workflow and owns the GitHub artifact submitted to SignPath. Signed Windows
+artifacts are still published to `tover0314-w/opentypeless`.
+
 ## Windows Certificate Notes
 
 Use a real code signing certificate. SSL/TLS certificates do not sign Windows
