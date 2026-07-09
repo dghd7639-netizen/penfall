@@ -23,6 +23,10 @@
 </p>
 
 <p align="center">
+  <strong>任意应用听写</strong> · <strong>改写选中文本</strong> · <strong>语音 Ask 一次性问答</strong> · <strong>自备密钥或使用托管 cloud words</strong>
+</p>
+
+<p align="center">
   <a href="https://github.com/tover0314-w/opentypeless/actions/workflows/ci.yml"><img src="https://github.com/tover0314-w/opentypeless/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/tover0314-w/opentypeless/releases"><img src="https://img.shields.io/github/v/release/tover0314-w/opentypeless?color=2ABBA7" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/tover0314-w/opentypeless" alt="License" /></a>
@@ -49,14 +53,32 @@
 
 ---
 
+## Ask Anything
+
+Ask Anything 不是聊天页，也不是另一个输入框。它是一个快捷键优先的语音问答流程：按下 Ask 热键，说出问题，停止录音后，OpenTypeless 会先转写问题，再调用 LLM，最后只把答案显示在一个小便签里。
+
+它适合临时问一句、快速查一句、让 AI 根据当前选中文本解释/总结/改写一句。默认没有聊天历史、没有输入框、没有额外发送按钮，结果可以直接复制。
+
+默认热键对齐 Typeless 风格：
+
+| 平台 | 听写 | Ask Anything | 翻译选中文本 |
+|---|---|---|---|
+| macOS | `Fn` | `Fn+Space` | `Fn+LeftShift` |
+| Windows | `Right Alt` | `Right Alt+Space` | `Right Alt+LeftShift` |
+| Linux | `Ctrl+/` | `Ctrl+.` | 可配置 |
+
+Linux 暂时保持 `Ctrl+/` 和 `Ctrl+.` 作为默认热键，因为不同桌面环境，尤其是 Wayland 下，全局 `Right Alt` 监听不如 Windows 稳定。
+
 ## 为什么选择 OpenTypeless？
 
 | | OpenTypeless | macOS 听写 | Windows 语音输入 | Whisper Desktop |
 |---|---|---|---|---|
 | AI 文本润色 | ✅ 多种 LLM | ❌ | ❌ | ❌ |
-| STT 服务商选择 | ✅ 6+ 服务商 | ❌ 仅 Apple | ❌ 仅 Microsoft | ❌ 仅 Whisper |
+| Ask Anything 语音问答 | ✅ | ❌ | ❌ | ❌ |
+| STT 服务商选择 | ✅ Cloud、Deepgram、AssemblyAI、Whisper 兼容、Doubao 等 | ❌ 仅 Apple | ❌ 仅 Microsoft | ❌ 仅 Whisper |
 | 适用于任意应用 | ✅ | ✅ | ✅ | ❌ 需复制粘贴 |
 | 翻译模式 | ✅ | ❌ | ❌ | ❌ |
+| 选中文本改写 | ✅ | ❌ | ❌ | ❌ |
 | 开源 | ✅ MIT | ❌ | ❌ | ✅ |
 | 跨平台 | ✅ Win/Mac/Linux | ❌ 仅 Mac | ❌ 仅 Windows | ✅ |
 | 自定义词典 | ✅ | ❌ | ❌ | ❌ |
@@ -82,8 +104,6 @@
 - 🌗 深色 / 浅色 / 跟随系统主题
 - 🚀 开机自启
 
-> Linux 暂时保持 `Ctrl+/` 和 `Ctrl+.` 作为默认热键，因为不同桌面环境，尤其是 Wayland 下，全局 `Right Alt` 监听不如 Windows 稳定。
->
 > 界面本地化目前以英文和中文最完整；其他语言包已覆盖 key，但部分新功能和高级设置仍可能回退显示英文。
 
 > [!TIP]
@@ -104,10 +124,59 @@
 
 | 平台 | 文件 |
 |------|------|
-| Windows | `.msi` 安装包 |
-| macOS (Apple Silicon) | `.dmg` |
-| macOS (Intel) | `.dmg` |
-| Linux | `.AppImage` / `.deb` |
+| Windows | `.msi` 安装包或 `.exe` 安装程序 |
+| macOS | Apple Silicon 和 Intel 通用 `.dmg` |
+| Linux | `.AppImage` / `.deb` / `.rpm` |
+
+## 安装说明
+
+各平台签名和分发方式还在持续完善。请始终从官方 [GitHub Releases](https://github.com/tover0314-w/opentypeless/releases) 下载。
+
+### Windows
+
+如果 Windows SmartScreen 提示“Windows 已保护你的电脑”：
+
+1. 点击 **更多信息**
+2. 点击 **仍要运行**
+
+如果安装包出现发布者验证提示：
+
+1. 右键 `.msi` 文件，选择 **属性**
+2. 勾选底部的 **解除锁定**，点击 **应用**
+3. 重新运行安装包
+
+### macOS
+
+macOS 构建使用 Developer ID 签名。如果首次启动仍被 Gatekeeper 拦截，可以执行：
+
+```bash
+xattr -cr /Applications/OpenTypeless.app
+```
+
+然后正常打开应用。
+
+### Linux
+
+**Ubuntu/Debian** 安装 `.deb`：
+
+```bash
+sudo apt install ./OpenTypeless_x.x.x_amd64.deb
+```
+
+**AppImage** 直接运行：
+
+```bash
+chmod +x OpenTypeless_x.x.x_amd64.AppImage
+./OpenTypeless_x.x.x_amd64.AppImage
+```
+
+**NVIDIA + Wayland 用户：**应用会自动识别并应用兼容处理。如果仍然启动崩溃，可以尝试：
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./OpenTypeless
+```
+
+**Wayland 用户：**全局热键和自动粘贴会受到桌面环境限制。OpenTypeless 会在设置中提示，并可退回到托盘/应用内控制或仅复制输出。
 
 ## 前置要求
 
@@ -135,27 +204,28 @@ npm run tauri build
 所有设置均可在应用内的设置面板中访问：
 
 - **语音识别** — 选择 STT 服务商并输入 API 密钥
-- **AI 润色** — 选择 LLM 服务商、模型、API 密钥、润色风格、翻译和选中文本上下文
+- **AI 润色** — 选择 LLM 服务商、模型、API 密钥、润色风格、自定义提示词、翻译和选中文本上下文
 - **通用** — 听写热键、Ask 热键、输出模式、开机自启和胶囊空闲隐藏
 - **词典** — 添加自定义术语和本地纠错规则
 - **场景** — 内置/本地提示词模板，支持导入导出
+- **账户 / Upgrade** — 登录、查看 cloud words、管理 Pro 或 Lifetime Starter 权益
 
 API 密钥会优先存入系统密钥库，不支持时使用本地 fallback。BYOK 密钥不会发送到 OpenTypeless 服务器 — 所有 STT/LLM 请求直接发送到你配置的服务商。
 
-### Cloud（Pro）选项
+### Cloud 选项
 
-OpenTypeless 还提供可选的 Pro 订阅，提供托管的 STT 和 LLM 配额，无需自备 API 密钥。这完全是可选的 — 使用自己的密钥即可完整使用所有功能。
+OpenTypeless 还提供可选的托管云端能力，这样你不需要自己配置 STT/LLM API key。Pro 和 Lifetime Starter 包含共享的 cloud words，可用于语音识别、AI 润色和 Ask Anything。BYOK 仍然完整支持。
 
 [了解更多关于 Pro 的信息](https://www.opentypeless.com)
 
 ### BYOK（自备密钥）vs Cloud
 
-| | BYOK 模式 | Cloud（Pro）模式 |
+| | BYOK 模式 | Cloud 模式 |
 |---|---|---|
-| STT | 自己的 API 密钥（Deepgram、AssemblyAI 等） | 托管配额（10小时/月） |
-| LLM | 自己的 API 密钥（OpenAI、DeepSeek 等） | 托管配额（约500万 tokens/月） |
+| STT | 自己的 API 密钥或本地端点 | 托管 cloud words |
+| LLM | 自己的 API 密钥或本地端点 | 托管 cloud words |
 | 云依赖 | 无 — 所有请求直接发送到你的服务商 | 需要连接 www.opentypeless.com |
-| 费用 | 直接向服务商付费 | $4.99/月订阅 |
+| 费用 | 直接向服务商付费 | 可选 Pro 或 Lifetime Starter |
 
 所有核心功能 — 录音、转录、AI 润色、键盘/剪贴板输出、词典、历史记录 — 在 BYOK 模式下完全不依赖 OpenTypeless 服务器。
 
@@ -181,10 +251,20 @@ VITE_API_BASE_URL=https://my-server.example.com API_BASE_URL=https://my-server.e
 
 ## 架构
 
-**数据流 Pipeline：**
+**桌面端 Pipeline：**
 
-```
-麦克风 → 音频采集 → STT 服务商 → 原始转录文本 → LLM 润色 → 键盘/剪贴板输出
+```mermaid
+flowchart TB
+  UI["React + TypeScript UI"] --> Tauri["Tauri commands"]
+  Hotkeys["全局热键"] --> Tauri
+  Tauri --> Audio["Rust 音频采集"]
+  Audio --> Providers["STT 服务商"]
+  Providers --> Pipeline["Pipeline 编排"]
+  Pipeline --> LLMs["LLM 服务商"]
+  Pipeline --> Storage["SQLite 历史记录 + 词典"]
+  Pipeline --> Output["键盘 / 剪贴板输出"]
+  Account["账户 + 更新 + 云端额度"] --> UI
+  Account --> Tauri
 ```
 
 ```
@@ -207,17 +287,16 @@ src-tauri/src/        # Rust 后端
 
 ## 路线图
 
-- [ ] 插件系统，支持自定义 STT/LLM 集成
-- [ ] 提升多语言 STT 准确率和方言支持
-- [ ] 语音命令（如"删除上一句"）
-- [ ] 可自定义热键组合
-- [ ] 改进新手引导体验
-- [ ] 移动端伴侣应用
+- [ ] 用量统计 UI：汇总音频时长和字数消耗
+- [ ] 更细的服务商配置诊断
+- [ ] 更清晰的 Linux 桌面环境兼容说明
+- [ ] 更多工作流预设：写作、代码、客服回复等
+- [ ] 插件式服务商扩展
 
 ## 常见问题
 
 **我的音频会上传到云端吗？**
-在 BYOK 模式下，音频直接发送到你选择的 STT 服务商（如 Groq、Deepgram），不经过 OpenTypeless 服务器。在 Cloud（Pro）模式下，音频会发送到我们的托管代理进行转录。
+在 BYOK 模式下，音频直接发送到你选择的 STT 服务商或本地端点，不经过 OpenTypeless 服务器。在 Cloud 模式下，音频会发送到托管代理，用于转录和额度统计。
 
 **可以离线使用吗？**
 使用本地 STT 服务商（通过 Ollama 运行 Whisper）和本地 LLM（Ollama），应用可以完全离线工作，无需网络连接。
@@ -226,7 +305,7 @@ src-tauri/src/        # Rust 后端
 STT 根据服务商不同支持 99+ 种语言。AI 润色和翻译支持 20+ 种目标语言。
 
 **应用免费吗？**
-是的。使用自己的 API 密钥（BYOK）即可完整使用所有功能。Cloud Pro 订阅（$4.99/月）是可选的。
+是的。使用自己的 API 密钥（BYOK）即可完整使用所有功能。Cloud 计划是可选的。
 
 ## 社区
 
