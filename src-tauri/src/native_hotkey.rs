@@ -633,6 +633,7 @@ mod platform {
     use std::thread;
     use std::time::Duration;
     use windows_sys::Win32::Foundation::{GetLastError, LPARAM, LRESULT, WPARAM};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, DispatchMessageW, GetMessageW, PeekMessageW, PostThreadMessageW,
@@ -792,12 +793,24 @@ mod platform {
             }));
             HOOK_CONTEXT.store(context, AtomicOrdering::SeqCst);
 
-            let hook = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(low_level_keyboard_proc),
-                ptr::null_mut(),
-                0,
-            );
+            // Global low-level hooks should be installed with the current module handle.
+            let module = GetModuleHandleW(ptr::null());
+            if module.is_null() {
+                let error = GetLastError();
+                let _ = HOOK_CONTEXT.compare_exchange(
+                    context,
+                    ptr::null_mut(),
+                    AtomicOrdering::SeqCst,
+                    AtomicOrdering::SeqCst,
+                );
+                drop(Box::from_raw(context));
+                let _ = status_tx.send(Err(format!(
+                    "Failed to resolve Windows module handle for native hotkey hook: Win32 error {error}"
+                )));
+                return;
+            }
+
+            let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(low_level_keyboard_proc), module, 0);
             if hook.is_null() {
                 let _ = HOOK_CONTEXT.compare_exchange(
                     context,
