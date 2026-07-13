@@ -32,14 +32,17 @@ Linux:
 - `LINUX_GPG_KEY_ID`: GPG key ID or fingerprint
 - `LINUX_GPG_PASSPHRASE`: GPG key passphrase
 
-Windows:
+Windows PFX fallback:
 
-- `WINDOWS_CERTIFICATE`: optional base64-encoded PFX code signing certificate
+- `WINDOWS_CERTIFICATE`: base64-encoded PFX code signing certificate
 - `WINDOWS_CERTIFICATE_PASSWORD`: required when `WINDOWS_CERTIFICATE` is set
 - `WINDOWS_TIMESTAMP_URL`: optional timestamp server URL; defaults to DigiCert
 
-The release workflow publishes Windows artifacts even when Windows signing
-secrets are not configured. In that case, the Windows installers are unsigned.
+The general `Release` workflow refuses to build or publish Windows artifacts
+when the PFX signing secrets are absent. Use that workflow for Windows only when
+a trusted PFX certificate is configured. Otherwise, publish Windows through the
+dedicated `Release Windows SignPath` workflow below. Unsigned and test-signed
+installers must never be attached to a public release.
 
 Windows SignPath:
 
@@ -63,6 +66,12 @@ Signing policies whose slug starts with `test-` or `test_` are dry-run only.
 They may verify the build-to-SignPath integration, but the workflow refuses to
 publish those installers to a production GitHub Release. Publishing requires a
 production SignPath policy whose Authenticode result is `Valid`.
+
+For a complete release without a PFX certificate, dispatch the general
+`Release` workflow separately for `macos` and `linux`, then dispatch
+`Release Windows SignPath` with `publish_release` set to `true`. Do not use the
+general workflow's `all` option until a trusted Windows PFX certificate is
+configured, because its Windows job will intentionally fail closed.
 
 ## Windows Certificate Notes
 
