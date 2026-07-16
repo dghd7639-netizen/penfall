@@ -125,6 +125,8 @@ impl TextOutput for KeyboardOutput {
 }
 
 fn type_text_sync(text: &str) -> Result<(), AppError> {
+    super::windows_modifier_guard::wait_for_modifier_release()?;
+
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| AppError::Output(format!("Failed to create Enigo: {:?}", e)))?;
 
