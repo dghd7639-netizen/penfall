@@ -70,6 +70,10 @@ jobs:
       - name: Verify bundled Opus build tool
         run: cmake --version
 
+      - name: Test Linux AppImage packaging guards
+        if: matrix.platform_group == 'linux'
+        run: ./.github/scripts/test-linux-appimage-packaging.sh
+
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --target ${{ matrix.target }} --manifest-path src-tauri/Cargo.toml -- -D warnings
       - name: Run Rust tests

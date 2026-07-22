@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import ciWorkflowSource from '../../../.github/workflows/ci.yml?raw'
+import appImageVerificationScriptSource from '../../../.github/scripts/verify-appimage-runtime-libraries.sh?raw'
+import linuxdeployPrepareScriptSource from '../../../.github/scripts/prepare-linuxdeploy-wrapper.sh?raw'
+import linuxdeployWrapperSource from '../../../.github/scripts/linuxdeploy-exclude-wrapper.rs?raw'
 import constantsSource from '../constants.ts?raw'
 import linuxVerificationScriptSource from '../../../.github/scripts/upload-linux-verification-artifacts.sh?raw'
 import windowsCertificateScriptSource from '../../../.github/scripts/import-windows-certificate.ps1?raw'
@@ -48,5 +51,21 @@ describe('release version wiring', () => {
     expect(linuxVerificationScriptSource).toContain(
       'public_key_path="$verification_dir/OpenTypeless-Linux-${LINUX_ARCH}-GPG-KEY.asc"',
     )
+  })
+
+  it('excludes the bundled Wayland client from Linux AppImages', () => {
+    expect(releaseWorkflowSource).toContain('Prepare Linux AppImage library exclusions')
+    expect(releaseWorkflowSource).toContain('./.github/scripts/prepare-linuxdeploy-wrapper.sh')
+    expect(ciWorkflowSource).toContain('Test Linux AppImage packaging guards')
+    expect(ciWorkflowSource).toContain('./.github/scripts/test-linux-appimage-packaging.sh')
+    expect(linuxdeployPrepareScriptSource).toContain('linuxdeploy-exclude-wrapper.rs')
+    expect(linuxdeployWrapperSource).toContain('--exclude-library')
+    expect(linuxdeployWrapperSource).toContain('libwayland-client.so.0')
+    expect(linuxVerificationScriptSource).toContain('verify-appimage-runtime-libraries.sh')
+  })
+
+  it('rejects a release AppImage that still contains the Wayland client', () => {
+    expect(appImageVerificationScriptSource).toContain('--appimage-extract')
+    expect(appImageVerificationScriptSource).toContain("-name 'libwayland-client.so*'")
   })
 })

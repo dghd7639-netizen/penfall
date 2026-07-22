@@ -63,6 +63,10 @@ gpg --armor --export "$LINUX_GPG_KEY_ID" > "$public_key_path"
 if compgen -G "$bundle_dir/appimage/*.AppImage" >/dev/null; then
   for appimage in "$bundle_dir"/appimage/*.AppImage; do
     chmod +x "$appimage"
+    if ! ./.github/scripts/verify-appimage-runtime-libraries.sh "$appimage"; then
+      echo "::error::Linux AppImage runtime-library verification failed."
+      exit 1
+    fi
     "$appimage" --appimage-signature >/dev/null
   done
 fi
