@@ -1248,7 +1248,16 @@ impl PipelineHandle {
                 None
             },
             operation_id: Some(cloud_operation_id),
+            managed_audio: stt::capabilities::managed_audio_encoding_config(
+                &config_data,
+                chrono::Utc::now().timestamp(),
+            ),
         };
+        let managed_cloud_session_token =
+            (config_data.stt_provider == "cloud").then(|| stt_config.api_key.clone());
+        if let Some(session_token) = managed_cloud_session_token.clone() {
+            stt::cloud::warm_managed_cloud_on_intent(self.shared_client.clone(), session_token);
+        }
 
         let mut provider = match stt::create_provider(
             &config_data.stt_provider,
@@ -1419,14 +1428,46 @@ impl PipelineHandle {
             None,
             chrono::Utc::now().timestamp(),
         );
+        let effective_max_seconds = provider
+            .recording_limit_override_seconds()
+            .map_or(resolved_limit.effective_max_seconds, |override_seconds| {
+                resolved_limit.effective_max_seconds.min(override_seconds)
+            });
+        let deadline_explanation_key = provider
+            .recording_limit_override_explanation_key()
+            .unwrap_or(&resolved_limit.capability.explanation_key)
+            .to_string();
         let recording_deadline = crate::recording_deadline::RecordingDeadline::new(
             session_id,
             crate::recording_deadline::RecordingKind::Dictation,
             capture_ready_at,
-            resolved_limit.effective_max_seconds,
+            effective_max_seconds,
         );
         self.active_deadline_session_id
             .store(session_id, Ordering::SeqCst);
+        if let Some(session_token) = managed_cloud_session_token {
+            let warmup_client = self.shared_client.clone();
+            let warmup_active_session_id = self.active_deadline_session_id.clone();
+            tokio::spawn(async move {
+                for elapsed_seconds in [240u64, 480] {
+                    if elapsed_seconds >= u64::from(effective_max_seconds) {
+                        break;
+                    }
+                    tokio::time::sleep_until(tokio::time::Instant::from_std(
+                        capture_ready_at.monotonic
+                            + std::time::Duration::from_secs(elapsed_seconds),
+                    ))
+                    .await;
+                    if warmup_active_session_id.load(Ordering::SeqCst) != session_id {
+                        break;
+                    }
+                    stt::cloud::warm_managed_cloud_on_intent(
+                        warmup_client.clone(),
+                        session_token.clone(),
+                    );
+                }
+            });
+        }
         *self
             .recording_start
             .lock()
@@ -1629,6 +1670,7 @@ impl PipelineHandle {
         let deadline_pipeline = self.clone();
         let deadline_app = self.app_handle.clone();
         let active_deadline_session_id = self.active_deadline_session_id.clone();
+        let deadline_provider_id = resolved_limit.capability.provider_id;
         tokio::spawn(async move {
             let reached = crate::recording_deadline::drive_recording_deadline(
                 recording_deadline,
@@ -1643,6 +1685,9 @@ impl PipelineHandle {
                                 "sessionId": session_id,
                                 "recordingKind": "dictation",
                                 "secondsRemaining": seconds_remaining,
+                                "effectiveMaxSeconds": effective_max_seconds,
+                                "providerId": deadline_provider_id.as_str(),
+                                "explanationKey": deadline_explanation_key.as_str(),
                             }),
                         );
                     }
@@ -1652,6 +1697,9 @@ impl PipelineHandle {
                             serde_json::json!({
                                 "sessionId": session_id,
                                 "recordingKind": "dictation",
+                                "effectiveMaxSeconds": effective_max_seconds,
+                                "providerId": deadline_provider_id.as_str(),
+                                "explanationKey": deadline_explanation_key.as_str(),
                             }),
                         );
                     }

@@ -218,10 +218,16 @@ fn static_provider_capability(provider_id: &str) -> SttRecordingCapability {
     }
 }
 
+struct CompatibleManagedLimits {
+    hard_max_seconds: u32,
+    max_audio_bytes: u64,
+    preferred_wav_max_bytes: u64,
+}
+
 fn compatible_managed_limits(
     state: &ManagedSttCapabilityState,
     now_unix_seconds: i64,
-) -> Option<(u32, u64)> {
+) -> Option<CompatibleManagedLimits> {
     if state.capability.version != 2 || !state.is_fresh(now_unix_seconds) {
         return None;
     }
@@ -260,7 +266,33 @@ fn compatible_managed_limits(
         .max_recording_seconds
         .min(MANAGED_LOCAL_CEILING_SECONDS)
         .min(byte_limited_seconds);
-    (hard_max_seconds > 0).then_some((hard_max_seconds, max_audio_bytes))
+    let preferred_wav_max_bytes = wav
+        .preferred_client_switch_bytes?
+        .min(wav.max_audio_bytes)
+        .min(max_audio_bytes);
+    (hard_max_seconds > 0 && preferred_wav_max_bytes > 44).then_some(CompatibleManagedLimits {
+        hard_max_seconds,
+        max_audio_bytes,
+        preferred_wav_max_bytes,
+    })
+}
+
+pub fn managed_audio_encoding_config(
+    config: &AppConfig,
+    now_unix_seconds: i64,
+) -> Option<super::managed_audio::ManagedAudioEncodingConfig> {
+    if config.stt_provider != "cloud" {
+        return None;
+    }
+    let limits = compatible_managed_limits(
+        config.managed_stt_capability_state.as_ref()?,
+        now_unix_seconds,
+    )?;
+    Some(super::managed_audio::ManagedAudioEncodingConfig {
+        preferred_wav_max_bytes: limits.preferred_wav_max_bytes,
+        max_audio_bytes: limits.max_audio_bytes,
+        bitrate_bits_per_second: 48_000,
+    })
 }
 
 fn managed_capability(
@@ -268,12 +300,12 @@ fn managed_capability(
     now_unix_seconds: i64,
 ) -> SttRecordingCapability {
     match state.and_then(|state| compatible_managed_limits(state, now_unix_seconds)) {
-        Some((hard_max_seconds, max_audio_bytes)) => capability(
+        Some(limits) => capability(
             "cloud",
             SttTransport::ManagedUpload,
-            hard_max_seconds,
-            hard_max_seconds,
-            Some(max_audio_bytes),
+            limits.hard_max_seconds,
+            limits.hard_max_seconds,
+            Some(limits.max_audio_bytes),
             RecordingLimitSource::ManagedProduct,
             "recordingLimits.reasons.managedCapability",
         ),
@@ -542,6 +574,29 @@ mod tests {
             resolve_recording_limit(&cloud, Some(&wider), NOW).effective_max_seconds,
             600
         );
+    }
+
+    #[test]
+    fn managed_encoder_config_is_available_only_for_fresh_cloud_v2() {
+        let state = managed_state(2, 600, NOW);
+        let mut cloud = config("cloud", RecordingLimitMode::Auto, 600);
+        cloud.managed_stt_capability_state = Some(state.clone());
+
+        let encoding = managed_audio_encoding_config(&cloud, NOW).unwrap();
+        assert_eq!(encoding.preferred_wav_max_bytes, 3_500_000);
+        assert_eq!(encoding.max_audio_bytes, 4_000_000);
+        assert_eq!(encoding.bitrate_bits_per_second, 48_000);
+
+        cloud.stt_provider = "groq-whisper".to_string();
+        assert_eq!(managed_audio_encoding_config(&cloud, NOW), None);
+
+        cloud.stt_provider = "cloud".to_string();
+        cloud.managed_stt_capability_state = Some(managed_state(
+            2,
+            600,
+            NOW - MANAGED_CAPABILITY_TTL_SECONDS - 1,
+        ));
+        assert_eq!(managed_audio_encoding_config(&cloud, NOW), None);
     }
 
     #[test]

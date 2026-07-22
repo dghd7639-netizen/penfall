@@ -4,6 +4,7 @@ pub mod capabilities;
 pub mod cloud;
 pub mod config;
 pub mod deepgram;
+pub mod managed_audio;
 pub mod volcengine;
 pub mod whisper_compat;
 
@@ -22,6 +23,7 @@ pub struct SttConfig {
     pub sample_rate: u32,
     pub resource_id: Option<String>,
     pub operation_id: Option<String>,
+    pub managed_audio: Option<managed_audio::ManagedAudioEncodingConfig>,
 }
 
 impl Default for SttConfig {
@@ -33,6 +35,7 @@ impl Default for SttConfig {
             sample_rate: 16000,
             resource_id: None,
             operation_id: None,
+            managed_audio: None,
         }
     }
 }
@@ -53,6 +56,12 @@ pub trait SttProvider: Send + Sync {
     async fn recv_transcript(&mut self) -> Result<Option<TranscriptEvent>, AppError>;
     /// Disconnect and optionally return a final transcript (for file-based providers).
     async fn disconnect(&mut self) -> Result<Option<String>, AppError>;
+    fn recording_limit_override_seconds(&self) -> Option<u32> {
+        None
+    }
+    fn recording_limit_override_explanation_key(&self) -> Option<&'static str> {
+        None
+    }
     fn name(&self) -> &str;
 }
 

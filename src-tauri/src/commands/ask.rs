@@ -639,6 +639,10 @@ fn build_ask_stt_config(
             None
         },
         operation_id: Some(operation_id),
+        managed_audio: stt::capabilities::managed_audio_encoding_config(
+            config,
+            chrono::Utc::now().timestamp(),
+        ),
     }
 }
 
@@ -1029,6 +1033,11 @@ pub(crate) async fn start_reserved_ask_dictation(
         };
         let operation_id = synthetic_operation_id();
         let stt_config = build_ask_stt_config(&config, stt_api_key, operation_id.clone());
+        let managed_cloud_session_token =
+            (config.stt_provider == "cloud").then(|| stt_config.api_key.clone());
+        if let Some(session_token) = managed_cloud_session_token.clone() {
+            stt::cloud::warm_managed_cloud_on_intent(client.inner().clone(), session_token);
+        }
         let mut provider = stt::create_provider(
             &config.stt_provider,
             custom_whisper_config,
@@ -1063,11 +1072,21 @@ pub(crate) async fn start_reserved_ask_dictation(
             None,
             chrono::Utc::now().timestamp(),
         );
+        let effective_max_seconds = provider
+            .recording_limit_override_seconds()
+            .map_or(resolved_limit.effective_max_seconds, |override_seconds| {
+                resolved_limit.effective_max_seconds.min(override_seconds)
+            });
+        let deadline_explanation_key = provider
+            .recording_limit_override_explanation_key()
+            .unwrap_or(&resolved_limit.capability.explanation_key)
+            .to_string();
+        let deadline_provider_id = resolved_limit.capability.provider_id;
         let recording_deadline = crate::recording_deadline::RecordingDeadline::new(
             recording_session_id,
             crate::recording_deadline::RecordingKind::Ask,
             capture_ready_at,
-            resolved_limit.effective_max_seconds,
+            effective_max_seconds,
         );
         let mut handle = Some(handle);
         let transcript = Arc::new(Mutex::new(String::new()));
@@ -1110,6 +1129,37 @@ pub(crate) async fn start_reserved_ask_dictation(
         let state_inner = state.0.clone();
         let deadline_state_inner = state.0.clone();
         let deadline_app = app.clone();
+        if let Some(session_token) = managed_cloud_session_token {
+            let warmup_client = client.inner().clone();
+            let warmup_state_inner = state.0.clone();
+            tauri::async_runtime::spawn(async move {
+                for elapsed_seconds in [240u64, 480] {
+                    if elapsed_seconds >= u64::from(effective_max_seconds) {
+                        break;
+                    }
+                    tokio::time::sleep_until(tokio::time::Instant::from_std(
+                        capture_ready_at.monotonic
+                            + std::time::Duration::from_secs(elapsed_seconds),
+                    ))
+                    .await;
+                    let is_active = warmup_state_inner
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .session
+                        .as_ref()
+                        .is_some_and(|session| {
+                            session.recording_session_id == recording_session_id
+                        });
+                    if !is_active {
+                        break;
+                    }
+                    stt::cloud::warm_managed_cloud_on_intent(
+                        warmup_client.clone(),
+                        session_token.clone(),
+                    );
+                }
+            });
+        }
 
         tauri::async_runtime::spawn(async move {
             loop {
@@ -1216,6 +1266,9 @@ pub(crate) async fn start_reserved_ask_dictation(
                                 "sessionId": recording_session_id,
                                 "recordingKind": "ask",
                                 "secondsRemaining": seconds_remaining,
+                                "effectiveMaxSeconds": effective_max_seconds,
+                                "providerId": deadline_provider_id.as_str(),
+                                "explanationKey": deadline_explanation_key.as_str(),
                             }),
                         );
                     }
@@ -1225,6 +1278,9 @@ pub(crate) async fn start_reserved_ask_dictation(
                             json!({
                                 "sessionId": recording_session_id,
                                 "recordingKind": "ask",
+                                "effectiveMaxSeconds": effective_max_seconds,
+                                "providerId": deadline_provider_id.as_str(),
+                                "explanationKey": deadline_explanation_key.as_str(),
                             }),
                         );
                     }

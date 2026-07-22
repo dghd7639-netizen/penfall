@@ -59,7 +59,10 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev
+          sudo apt-get install -y cmake libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev
+
+      - name: Verify bundled Opus build tool
+        run: cmake --version
 
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --target ${{ matrix.target }} --manifest-path src-tauri/Cargo.toml -- -D warnings

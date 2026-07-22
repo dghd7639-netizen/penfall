@@ -9,8 +9,14 @@ use tauri::Emitter;
 #[tauri::command]
 pub async fn get_stt_recording_capability(
     state: tauri::State<'_, storage::ConfigManager>,
+    provider: String,
+    mode: stt::capabilities::RecordingLimitMode,
+    custom_seconds: u32,
 ) -> Result<stt::capabilities::ResolvedRecordingLimit, String> {
-    let config = state.load().await.map_err(|error| error.to_string())?;
+    let mut config = state.load().await.map_err(|error| error.to_string())?;
+    config.stt_provider = provider;
+    config.recording_limit_mode = mode;
+    config.custom_recording_limit_seconds = custom_seconds;
     Ok(stt::capabilities::resolve_recording_limit(
         &config,
         None,
@@ -87,6 +93,7 @@ async fn check_volcengine_doubao_connection(
         sample_rate: 16000,
         resource_id,
         operation_id: None,
+        managed_audio: None,
     };
     provider.connect(&config).await.map_err(|e| e.to_string())?;
     let _ = provider.disconnect().await;

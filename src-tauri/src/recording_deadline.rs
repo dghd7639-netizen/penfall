@@ -86,7 +86,12 @@ where
     IsActive: Fn() -> bool,
     Emit: FnMut(RecordingDeadlineSignal),
 {
-    for seconds_remaining in [60, 10] {
+    let warnings: &[u32] = if deadline.event.effective_max_seconds >= 300 {
+        &[60, 10]
+    } else {
+        &[10]
+    };
+    for &seconds_remaining in warnings {
         if deadline.event.effective_max_seconds <= seconds_remaining {
             continue;
         }
@@ -149,7 +154,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn emits_sixty_and_ten_second_warnings_before_one_stop() {
-        let deadline = RecordingDeadline::new(8, RecordingKind::Ask, capture_ready(0), 70);
+        let deadline = RecordingDeadline::new(8, RecordingKind::Ask, capture_ready(0), 300);
         let signals = Arc::new(Mutex::new(Vec::new()));
         let task_signals = signals.clone();
         let task = tokio::spawn(drive_recording_deadline(
@@ -158,7 +163,7 @@ mod tests {
             move |signal| task_signals.lock().unwrap().push(signal),
         ));
 
-        tokio::time::advance(Duration::from_millis(9_750)).await;
+        tokio::time::advance(Duration::from_millis(239_750)).await;
         tokio::task::yield_now().await;
         assert_eq!(
             *signals.lock().unwrap(),
@@ -176,6 +181,29 @@ mod tests {
             signals.lock().unwrap().last(),
             Some(&RecordingDeadlineSignal::Reached)
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_limit_below_five_minutes_only_warns_at_ten_seconds() {
+        let deadline = RecordingDeadline::new(11, RecordingKind::Dictation, capture_ready(0), 120);
+        let signals = Arc::new(Mutex::new(Vec::new()));
+        let task_signals = signals.clone();
+        let task = tokio::spawn(drive_recording_deadline(
+            deadline,
+            || true,
+            move |signal| task_signals.lock().unwrap().push(signal),
+        ));
+
+        tokio::time::advance(Duration::from_millis(109_750)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(
+            *signals.lock().unwrap(),
+            vec![RecordingDeadlineSignal::Warning {
+                seconds_remaining: 10
+            }]
+        );
+        tokio::time::advance(Duration::from_secs(10)).await;
+        assert!(task.await.unwrap());
     }
 
     #[tokio::test(start_paused = true)]
