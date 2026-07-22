@@ -60,7 +60,7 @@ describe('release version wiring', () => {
     expect(ciWorkflowSource).toContain('./.github/scripts/test-linux-appimage-packaging.sh')
     expect(linuxdeployPrepareScriptSource).toContain('linuxdeploy-exclude-wrapper.rs')
     expect(linuxdeployWrapperSource).toContain('--exclude-library')
-    expect(linuxdeployWrapperSource).toContain('libwayland-client.so.0')
+    expect(linuxdeployWrapperSource).toContain('libwayland-client.so*')
     expect(linuxVerificationScriptSource).toContain('verify-appimage-runtime-libraries.sh')
   })
 

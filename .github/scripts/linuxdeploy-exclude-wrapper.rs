@@ -4,7 +4,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
-const WAYLAND_CLIENT_SONAME: &str = "libwayland-client.so.0";
+const WAYLAND_CLIENT_GLOB: &str = "libwayland-client.so*";
 
 fn real_linuxdeploy_path(wrapper_path: &Path) -> Result<PathBuf, String> {
     let wrapper_name = wrapper_path
@@ -22,7 +22,7 @@ fn real_linuxdeploy_path(wrapper_path: &Path) -> Result<PathBuf, String> {
 fn forwarded_arguments(arguments: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
     let mut forwarded: Vec<OsString> = arguments.into_iter().collect();
     forwarded.push(OsString::from("--exclude-library"));
-    forwarded.push(OsString::from(WAYLAND_CLIENT_SONAME));
+    forwarded.push(OsString::from(WAYLAND_CLIENT_GLOB));
     forwarded
 }
 
@@ -70,7 +70,7 @@ mod tests {
                 "--appdir",
                 "OpenTypeless.AppDir",
                 "--exclude-library",
-                WAYLAND_CLIENT_SONAME,
+                WAYLAND_CLIENT_GLOB,
             ]
             .map(OsString::from)
         );

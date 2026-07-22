@@ -39,7 +39,7 @@ chmod 0755 "$real_path" "$wrapper_path"
 OPENTYPELESS_LINUXDEPLOY_TEST_OUTPUT="$forwarded_arguments" \
   "$wrapper_path" --appdir OpenTypeless.AppDir --plugin gtk
 
-expected_arguments=$'--appdir\nOpenTypeless.AppDir\n--plugin\ngtk\n--exclude-library\nlibwayland-client.so.0'
+expected_arguments=$'--appdir\nOpenTypeless.AppDir\n--plugin\ngtk\n--exclude-library\nlibwayland-client.so*'
 if [[ "$(cat "$forwarded_arguments")" != "$expected_arguments" ]]; then
   echo "linuxdeploy wrapper did not preserve arguments and append the exclusion." >&2
   exit 1
