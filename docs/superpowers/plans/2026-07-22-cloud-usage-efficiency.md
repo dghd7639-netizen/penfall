@@ -496,3 +496,5 @@ For 24–48 hours confirm:
 - [ ] **Step 5: Release desktop gradually**
 
 Ship to a small cohort first, then expand. Keep the server's legacy fields and old schema columns through at least one full desktop rollback window.
+
+Desktop checkpoint: the Apple Silicon macOS debug `.app` compiles, bundles, launches, and renders the Cloud recording-limit fallback UI. Updater signing is blocked by the unavailable `TAURI_SIGNING_PRIVATE_KEY`, and the debug bundle still needs user-approved Accessibility permission before first-recording QA. A macOS-hosted Windows `cargo check` stopped at the missing Windows MSVC C sysroot and is not a Windows result. Native Windows/Linux validation and all signed release/cohort steps remain open.

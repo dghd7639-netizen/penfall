@@ -94,6 +94,15 @@ The implementation has passed its automated, Preview, and compatibility-only Pro
 
 The remaining release gates are an authenticated end-to-end managed WAV/Ogg session in a controlled environment, the 20-trial latency/quality measurements, real Windows/macOS/Linux desktop validation, desktop rollout, and 24–48 hour post-rollout Neon/latency observation. Server deployment alone does not close either issue.
 
+### 2.5 Desktop Runtime Checkpoint (2026-07-22)
+
+- Apple Silicon macOS successfully compiled and bundled the debug Tauri app at `src-tauri/target/debug/bundle/macos/OpenTypeless.app`; the generated bundle is arm64, ad-hoc signed, and includes the microphone usage description.
+- The debug app launched as a real macOS process and rendered Home and Settings without a crash. Speech Recognition displayed `Auto (recommended) — 30 seconds` for OpenTypeless Cloud and the explicit stale/unavailable-capability warning, proving that Production's disabled capability does not expose the 10-minute path.
+- The packaging command subsequently failed only when signing the updater archive because `TAURI_SIGNING_PRIVATE_KEY` is unavailable. The local debug `.app` is usable for QA, but it is not a releasable signed updater artifact.
+- The debug bundle does not currently have macOS Accessibility permission. No permission was granted and no real recording/cloud charge was triggered, so first-audio runtime validation remains open.
+- A Windows MSVC-target `cargo check` was attempted from macOS but stopped in `ring`'s C build because the Windows MSVC headers/sysroot are unavailable (`assert.h` not found). This is a cross-toolchain limitation and is not counted as a Windows pass or an application-code failure.
+- Linux was not run in this macOS environment. Windows and Linux still require their native build/runtime jobs, and macOS still requires the permission-enabled first-recording matrix.
+
 ## 3. Goals
 
 ### 3.1 Recording and Provider Goals
