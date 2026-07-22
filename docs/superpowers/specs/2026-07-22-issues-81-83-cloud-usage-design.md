@@ -1,7 +1,7 @@
 # Issues #81/#83, STT Recording Limits, and Cloud Usage Efficiency Design
 
 - Date: 2026-07-22
-- Status: Reviewed and approved for phased implementation; atomic quota cutover deferred
+- Status: Implemented in feature branches and Vercel Preview verified; production/cross-platform rollout pending; atomic quota cutover deferred
 - Repositories: `opentypeless` desktop and `talkmore` cloud service
 - Issues: [OpenTypeless #81](https://github.com/tover0314-w/opentypeless/issues/81), [OpenTypeless #83](https://github.com/tover0314-w/opentypeless/issues/83)
 
@@ -76,6 +76,21 @@ Read-only production inspection found a small database but very high cumulative 
 Current cloud quota flows also issue several statements for reserve, settle, or release. Legacy quota code uses in-memory entries but explicitly flushes them after requests, removing most batching benefit.
 
 No audio payload is stored in Neon. The dominant optimization target is compute activity and database round trips, not storage volume.
+
+### 2.4 Implementation and Preview Checkpoint (2026-07-22)
+
+The implementation has passed its automated and server-preview gates without changing production:
+
+- the desktop implementation is committed on `codex/issues-83-startup` and the TalkMore compatibility implementation is committed on `codex/issues-81-cloud-usage`;
+- the TalkMore suite passes 121 test files and 717 tests, `tsc --noEmit`, a local Webpack production build, and Vercel's clean-install default Turbopack production build;
+- Vercel Preview `talkmore-cnamdik2u-tovers-projects.vercel.app` is `READY`, generated all 5,517 static pages, and produced all Serverless Functions without build or runtime error logs during the verification window;
+- the deployed `/api/proxy/stt` Lambda is Node.js 24.x in `iad1`, has 2,048 MB memory, and has an effective 210-second timeout; project Fluid Compute is enabled;
+- authenticated Vercel protection-bypass smoke checks returned 200 for `/en` and `/robots.txt`; the warmed `/en` check reported approximately 1.75 seconds TTFB and 2.09 seconds total, which is a protected-preview smoke measurement rather than an STT latency release metric;
+- unauthenticated application requests returned 401 from `/api/subscription/status` and from `/api/proxy/stt` before media parsing or database-backed quota work;
+- Preview does not define `MANAGED_STT_V2_ENABLED`, so capability version 2 remains disabled and current cloud users retain the existing compatible recording path;
+- no production alias, production environment variable, database schema, or production billing path was changed.
+
+The remaining release gates are an authenticated end-to-end managed WAV/Ogg session in a controlled environment, the 20-trial latency/quality measurements, real Windows/macOS/Linux desktop validation, production server-first rollout, and post-rollout Neon/latency observation. Preview success alone does not close either issue.
 
 ## 3. Goals
 

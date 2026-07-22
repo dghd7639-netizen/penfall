@@ -427,21 +427,23 @@ git commit -m "refactor: synchronize account usage without polling"
 **Interfaces:**
 - Produces: `warm_managed_account_path(intent, session_id)`
 
-- [ ] **Step 1: Write failing warming-policy tests**
+- [x] **Step 1: Write failing warming-policy tests**
 
 Prove warming starts only for authenticated managed Cloud intent, is deduplicated per session, never blocks audio readiness, and repeats only at minute 4 and minute 8 while a long managed recording is active. BYOK/local recordings trigger no TalkMore traffic.
 
-- [ ] **Step 2: Start warming concurrently with recording preparation**
+- [x] **Step 2: Start warming concurrently with recording preparation**
 
 At Cloud dictation/Ask start, fire one bounded authenticated status read on a separate async task. Do not await it in the microphone-ready UI path. The current release discards the body after warming; the real operation remains authoritative.
 
-- [ ] **Step 3: Add long-recording refresh points**
+- [x] **Step 3: Add long-recording refresh points**
 
 For active Cloud recordings only, refresh at 4 and 8 minutes so Neon's usual five-minute idle window does not expire immediately before final upload. Cancel timers on stop/error. Do not create a process-global periodic task.
 
 - [ ] **Step 4: Verify latency and commit**
 
 Measure cold and warm `recording stop -> first transcript byte` across at least 20 trials. Acceptance: common short-recording warm p95 does not regress by more than 100 ms; cold Neon wake is normally absorbed by speaking time; local/BYOK paths show no added request or latency.
+
+Implementation and automated tests are committed. The 20-trial measurement and real-device matrix remain release gates, so this step stays open.
 
 ```bash
 git add src-tauri/src/pipeline.rs src-tauri/src/commands/ask.rs src-tauri/src/stt/cloud.rs
@@ -453,7 +455,7 @@ git commit -m "perf: warm cloud account checks during recording"
 **Files:**
 - Modify only if needed: observability/deployment documentation
 
-- [ ] **Step 1: Run TalkMore verification**
+- [x] **Step 1: Run TalkMore verification**
 
 Run: `npm test -- --run`
 
@@ -463,7 +465,7 @@ Run: `npm run build`
 
 Do not run production-destructive concurrency tests. Confirm instead that the deferred atomic service is not wired into production routes.
 
-- [ ] **Step 2: Run desktop verification**
+- [x] **Step 2: Run desktop verification**
 
 Run: `cd src-tauri && cargo test --lib`
 
@@ -476,6 +478,8 @@ Run: `npm run build`
 - [ ] **Step 3: Deploy TalkMore compatibility before desktop**
 
 Deploy the compatible server route and status-read changes, then verify Vercel Pro logs/Neon metrics. The additive migration may remain unapplied or unused; no current production route may depend on it. Old desktop clients must continue to receive flat fields and use their existing flows.
+
+Preview checkpoint: `talkmore-cnamdik2u-tovers-projects.vercel.app` is `READY` after Vercel's default Turbopack build. The deployed STT function reports a 210-second timeout with Fluid Compute enabled, and the verification window has no error logs. `MANAGED_STT_V2_ENABLED` remains absent/disabled. Production deployment is intentionally still pending, so this step stays open.
 
 - [ ] **Step 4: Observe cost and UX gates**
 
