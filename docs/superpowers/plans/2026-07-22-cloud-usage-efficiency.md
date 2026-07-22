@@ -2,21 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make managed-cloud usage accounting atomic and idempotent while removing idle subscription polling, so Neon compute can scale to zero without making active STT/LLM/Ask interactions feel slower.
+**Goal:** Remove idle subscription polling and reduce account-status reads so Neon compute can scale to zero without making active STT/LLM/Ask interactions feel slower. The atomic managed-usage rewrite is retained as a future plan, not part of the current cutover.
 
-**Architecture:** TalkMore remains the authorization and billing source of truth. One read-only account-snapshot query replaces the current multi-query status route; one generic, database-atomic quota service replaces process-local quota deltas and multi-step cloud-word mutations. Every successful managed response carries a versioned account snapshot. The desktop persists that snapshot in Rust, broadcasts it to all windows, refreshes only on meaningful events, and warms the account path concurrently with active Cloud recording.
+**Architecture:** TalkMore remains the authorization and billing source of truth. One read-only account-snapshot query replaces the current multi-query status route. The desktop removes fixed polling, refreshes only on meaningful events, and warms the account path concurrently with active Cloud recording. A generic database-atomic quota service remains designed for a later isolated-PostgreSQL phase; current production quota mutations stay unchanged.
 
 **Tech Stack:** Next.js App Router, TypeScript, Drizzle ORM, PostgreSQL/Neon, Vitest, Rust 2021, Tauri 2, Zustand.
 
 ## Global Constraints
 
+> **Current scope decision (2026-07-22):** The owner is not adding an isolated test database now. Tasks 4–6 are deferred. The additive schema may remain, but production routes must continue using the existing billing implementation. This deferral does not block the status-query, polling, warming, recording-limit, or managed-upload work.
+
 - Work in an isolated TalkMore worktree created from `origin/main`; do not mix with the existing SEO branch or dirty `tests/api-routes.test.ts`.
 - Keep authentication behavior and all legacy response fields compatible with released desktop clients.
 - Do not use process memory, Redis, Vercel cache, or a desktop cache as billing authority.
 - `/api/subscription/status` must be read-only after authentication and use one business-data database round trip.
-- Each reserve, settle, or release call must be one atomic business-data database round trip and safe under retries and concurrent devices.
+- For the future atomic phase, each reserve, settle, or release call must be one atomic business-data database round trip and safe under retries and concurrent devices.
 - Never start a paid upstream call before successful authorization and reservation.
-- A failed late snapshot update must not remove already streamed/generated user content.
+- A failed current-release post-use refresh, or a failed future snapshot update, must not remove already streamed/generated user content.
 - Do not add an idle timer, cron, or background request that keeps Neon awake.
 - Treat the existing legacy STT-seconds and LLM-token paths as a compatibility meter, not a license to change current plan limits.
 
@@ -201,7 +203,9 @@ git add src/lib/account-snapshot.ts src/app/api/subscription/status/route.ts \
 git commit -m "refactor: serve account status in one read"
 ```
 
-### Task 4: Replace Process-Local Quota with Atomic Operations
+### Task 4: Replace Process-Local Quota with Atomic Operations — Deferred
+
+Do not execute this task in the current release. Resume it only when an isolated real PostgreSQL endpoint is available. Unit tests or production-database experiments are not acceptable substitutes for the concurrency and replay tests below.
 
 **Files:**
 - Create: `src/lib/quota-service.ts`
@@ -273,7 +277,9 @@ git add src/lib/quota-service.ts src/lib/api-utils.ts src/lib/cloud-quota.ts tes
 git commit -m "refactor: make cloud usage accounting atomic"
 ```
 
-### Task 5: Attach Fresh Usage to Every Managed Response
+### Task 5: Attach Fresh Usage to Every Managed Response — Deferred
+
+This task depends on Task 4's verified atomic mutation result. In the current release, preserve managed-response contracts and issue one deduplicated status refresh only after user output is delivered.
 
 **Files:**
 - Modify: `src/app/api/proxy/stt/route.ts`
@@ -322,7 +328,9 @@ git add src/app/api/proxy src/lib/api-utils.ts tests
 git commit -m "feat: return usage snapshots from cloud requests"
 ```
 
-### Task 6: Persist and Broadcast the Snapshot in Rust
+### Task 6: Persist and Broadcast the Snapshot in Rust — Deferred
+
+Defer this task with Tasks 4–5. The current release continues using the existing frontend account store and status response, without presenting local data as billing authority.
 
 **Files:**
 - Create: `src-tauri/src/account_snapshot.rs`
@@ -383,20 +391,19 @@ git commit -m "feat: persist managed account snapshots"
 
 Assert:
 
-- initialization paints the persisted snapshot before any network refresh;
-- returning paid users do not flash Free during a cold/offline refresh;
 - the Ask WebView does not initialize auth independently;
 - there is no five-minute interval;
 - sign-in, deep-link checkout/license activation, explicit account refresh, and focus after a pending checkout do refresh;
-- snapshot events update every window and stale revisions are ignored.
+- concurrent refresh calls are singleflight;
+- one post-use refresh starts after managed output completes and its failure cannot affect that output.
 
-- [ ] **Step 2: Move snapshot ownership behind Tauri commands/events**
+- [ ] **Step 2: Keep account refresh ownership centralized**
 
-The Zustand store consumes Rust state rather than persisting independent WebView copies. Keep auth-session initialization in the main window. Ask and Capsule receive `account-snapshot-updated` and can invoke the getter once when mounted.
+Keep auth-session initialization and status refresh ownership in the main frontend store. Do not add a second independent polling or persistence owner in Ask or Capsule.
 
 - [ ] **Step 3: Remove fixed polling and focus churn**
 
-Delete the 5-minute `setInterval`. A normal window focus does not refresh status. Retain event refreshes for sign-in, successful purchase/deep link/license activation, pending-checkout focus, explicit account-page action, and managed-response snapshots.
+Delete the 5-minute `setInterval`. A normal window focus does not refresh status. Retain event refreshes for sign-in, successful purchase/deep link/license activation, pending-checkout focus, explicit account-page action, and one post-use refresh after managed output completes.
 
 - [ ] **Step 4: Run frontend tests and commit**
 
@@ -414,7 +421,7 @@ git commit -m "refactor: synchronize account usage without polling"
 **Files:**
 - Modify: `src-tauri/src/pipeline.rs`
 - Modify: `src-tauri/src/commands/ask.rs`
-- Modify: `src-tauri/src/account_snapshot.rs`
+- Modify: `src-tauri/src/stt/cloud.rs`
 - Test: those Rust modules
 
 **Interfaces:**
@@ -426,7 +433,7 @@ Prove warming starts only for authenticated managed Cloud intent, is deduplicate
 
 - [ ] **Step 2: Start warming concurrently with recording preparation**
 
-At Cloud dictation/Ask start, fire one bounded status/snapshot read on a separate async task. Do not await it in the microphone-ready UI path. Store the result if it arrives; the real reserve call remains authoritative.
+At Cloud dictation/Ask start, fire one bounded authenticated status read on a separate async task. Do not await it in the microphone-ready UI path. The current release discards the body after warming; the real operation remains authoritative.
 
 - [ ] **Step 3: Add long-recording refresh points**
 
@@ -437,7 +444,7 @@ For active Cloud recordings only, refresh at 4 and 8 minutes so Neon's usual fiv
 Measure cold and warm `recording stop -> first transcript byte` across at least 20 trials. Acceptance: common short-recording warm p95 does not regress by more than 100 ms; cold Neon wake is normally absorbed by speaking time; local/BYOK paths show no added request or latency.
 
 ```bash
-git add src-tauri/src/pipeline.rs src-tauri/src/commands/ask.rs src-tauri/src/account_snapshot.rs
+git add src-tauri/src/pipeline.rs src-tauri/src/commands/ask.rs src-tauri/src/stt/cloud.rs
 git commit -m "perf: warm cloud account checks during recording"
 ```
 
@@ -454,7 +461,7 @@ Run: `npm run typecheck`
 
 Run: `npm run build`
 
-Run the real PostgreSQL concurrency suite against an isolated database.
+Do not run production-destructive concurrency tests. Confirm instead that the deferred atomic service is not wired into production routes.
 
 - [ ] **Step 2: Run desktop verification**
 
@@ -466,9 +473,9 @@ Run: `npm test -- --run`
 
 Run: `npm run build`
 
-- [ ] **Step 3: Deploy schema and TalkMore before desktop**
+- [ ] **Step 3: Deploy TalkMore compatibility before desktop**
 
-Apply the additive migration, deploy the server, and verify Vercel Pro logs/Neon metrics. Old desktop clients must continue to receive flat fields and use their existing flows.
+Deploy the compatible server route and status-read changes, then verify Vercel Pro logs/Neon metrics. The additive migration may remain unapplied or unused; no current production route may depend on it. Old desktop clients must continue to receive flat fields and use their existing flows.
 
 - [ ] **Step 4: Observe cost and UX gates**
 
@@ -478,7 +485,7 @@ For 24–48 hours confirm:
 - Neon active compute time and statement volume fall;
 - quota overrun/double-charge count remains zero;
 - STT/LLM/Ask p50/p95 first-output latency stays within the stated budget;
-- snapshot merge failures do not correlate with lost user output.
+- post-use status-refresh failures do not correlate with lost or delayed user output.
 
 - [ ] **Step 5: Release desktop gradually**
 
