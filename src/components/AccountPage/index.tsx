@@ -590,8 +590,8 @@ function AccountDetails() {
 
   useEffect(() => {
     if (
-      subscriptionRefreshInFlightRef.current
-      || !shouldRefreshSubscriptionOnAccountOpen(subscriptionRefreshedAt, Date.now())
+      subscriptionRefreshInFlightRef.current ||
+      !shouldRefreshSubscriptionOnAccountOpen(subscriptionRefreshedAt, Date.now())
     ) {
       return
     }

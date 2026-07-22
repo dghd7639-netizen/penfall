@@ -6,10 +6,10 @@ export async function syncManagedSttCapability(
   expectedUserId: string | null,
 ): Promise<void> {
   if (
-    !accountSnapshot
-    || !expectedUserId
-    || accountSnapshot.schemaVersion !== 1
-    || accountSnapshot.userId !== expectedUserId
+    !accountSnapshot ||
+    !expectedUserId ||
+    accountSnapshot.schemaVersion !== 1 ||
+    accountSnapshot.userId !== expectedUserId
   ) {
     await invoke('clear_managed_stt_capability')
     return
