@@ -155,7 +155,7 @@ The remaining release gates are an authenticated end-to-end managed WAV/Ogg sess
 The owner does not plan to add an isolated database test environment in the current phase. Therefore:
 
 - atomic reserve, settle, release, replay, and reconciliation remain designed but are not current release scope;
-- the additive atomic-usage schema may remain deployed or committed, but no production route may depend on it yet;
+- the additive atomic-usage schema and migration artifacts must be excluded from the current release; legacy Drizzle `select()` and `returning()` calls can otherwise reference unapplied columns implicitly even when the new routes do not use those fields directly;
 - existing production quota mutations and billing formulas remain unchanged;
 - unit and contract tests may cover compatibility, but they must not be represented as proof of PostgreSQL concurrency correctness;
 - the atomic quota cutover can resume only when an isolated real PostgreSQL endpoint is available for destructive, concurrent, and replay testing;
@@ -1004,7 +1004,7 @@ Rollback: a desktop rollback continues using the unchanged legacy flat status fi
 
 This phase is explicitly deferred by the owner because the project is not adding an isolated database test environment now. It is not a release gate for the other phases. Do not implement the service cutover, remove the current billing implementation, or enable routes that depend on the staged schema until the required PostgreSQL tests can run outside production.
 
-Rollback: additive columns remain in place. Route handlers can return to the Phase 1 compatibility implementation without changing desktop contracts.
+Current-release rollback: there are no atomic-usage columns to roll back because this phase is not shipped. After a future isolated-database rollout, its migration must remain additive so route handlers can return to the Phase 1 compatibility implementation without changing desktop contracts.
 
 ### Phase 4: Provider-Aware Recording Limits
 

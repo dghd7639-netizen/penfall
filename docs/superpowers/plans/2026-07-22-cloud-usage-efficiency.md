@@ -30,7 +30,7 @@
 - Create: a sibling worktree for branch `codex/issues-81-cloud-usage`
 - Inspect: `package.json`, `vitest.config.ts`, `drizzle.config.ts`
 
-- [ ] **Step 1: Fetch and create the worktree from production main**
+- [x] **Step 1: Fetch and create the worktree from production main**
 
 Run:
 
@@ -41,7 +41,7 @@ git worktree add ../talkmore-cloud-usage -b codex/issues-81-cloud-usage origin/m
 
 Expected: the new worktree is clean and does not contain the current SEO branch's uncommitted files.
 
-- [ ] **Step 2: Install with the repository lockfile and run focused baseline tests**
+- [x] **Step 2: Install with the repository lockfile and run focused baseline tests**
 
 Run: `npm ci`
 
@@ -161,7 +161,7 @@ export interface AccountSnapshotV1 {
 export async function readAccountSnapshot(userId: string): Promise<AccountSnapshotV1>
 ```
 
-- [ ] **Step 1: Write failing pure and route-contract tests**
+- [x] **Step 1: Write failing pure and route-contract tests**
 
 Cover free, Pro subscription, active/refunded AppSumo, direct lifetime, absent quota row, old-client lifetime remapping, and the old flat response fields. Assert the status route never calls `getOrCreateQuota` or performs an insert/update.
 
@@ -169,13 +169,13 @@ Run: `npm test -- --run tests/account-snapshot.test.ts tests/contract-opentypele
 
 Expected: fail on the new snapshot contract and read-only invariant.
 
-- [ ] **Step 2: Implement one business-data SQL statement**
+- [x] **Step 2: Implement one business-data SQL statement**
 
 Use a single parameterized query/CTE after `requireAuth()` that selects the user, best current subscription, active/current license, and current-or-sentinel quota row. Compute defaults in SQL or the pure snapshot mapper without inserting a quota row.
 
 The query must return at most one row. In the current release it must not reference the staged `quota.usage_revision` column; return compatibility revision `0` for every status snapshot. Reading and incrementing real revisions is deferred with Tasks 4–6.
 
-- [ ] **Step 3: Return snapshot plus legacy flat fields**
+- [x] **Step 3: Return snapshot plus legacy flat fields**
 
 The status JSON is:
 
@@ -192,7 +192,9 @@ Preserve the current legacy lifetime remap for old desktop versions. Add `Cache-
 
 In the route test, mock/spy at the account-snapshot boundary and prove exactly one business-data read after authentication. In a database integration test, enable Drizzle query logging and assert one statement for `readAccountSnapshot`.
 
-- [ ] **Step 5: Run focused tests and commit**
+The route-boundary count is covered. The live Drizzle logger assertion remains open because the owner is not provisioning a separate database and production will not be used as a test target.
+
+- [x] **Step 5: Run focused tests and commit**
 
 Run: `npm test -- --run tests/account-snapshot.test.ts tests/contract-opentypeless.test.ts tests/p0-entitlement-regression.test.ts`
 
@@ -389,7 +391,7 @@ git commit -m "feat: persist managed account snapshots"
 - Modify: `src/hooks/useTauriEvents.ts`
 - Modify: `src/lib/deep-link.ts`
 
-- [ ] **Step 1: Add failing store/lifecycle tests**
+- [x] **Step 1: Add failing store/lifecycle tests**
 
 Assert:
 
@@ -399,15 +401,15 @@ Assert:
 - concurrent refresh calls are singleflight;
 - one post-use refresh starts after managed output completes and its failure cannot affect that output.
 
-- [ ] **Step 2: Keep account refresh ownership centralized**
+- [x] **Step 2: Keep account refresh ownership centralized**
 
 Keep auth-session initialization and status refresh ownership in the main frontend store. Do not add a second independent polling or persistence owner in Ask or Capsule.
 
-- [ ] **Step 3: Remove fixed polling and focus churn**
+- [x] **Step 3: Remove fixed polling and focus churn**
 
 Delete the 5-minute `setInterval`. A normal window focus does not refresh status. Retain event refreshes for sign-in, successful purchase/deep link/license activation, pending-checkout focus, explicit account-page action, and one post-use refresh after managed output completes.
 
-- [ ] **Step 4: Run frontend tests and commit**
+- [x] **Step 4: Run frontend tests and commit**
 
 Run: `npm test -- --run src/stores/__tests__/authStore.test.ts src/lib/__tests__/deep-link.test.ts`
 
@@ -498,3 +500,5 @@ For 24–48 hours confirm:
 Ship to a small cohort first, then expand. Keep the server's legacy fields and old schema columns through at least one full desktop rollback window.
 
 Desktop checkpoint: the Apple Silicon macOS debug `.app` compiles, bundles, launches, and renders the Cloud recording-limit fallback UI. Updater signing is blocked by the unavailable `TAURI_SIGNING_PRIVATE_KEY`, and the debug bundle still needs user-approved Accessibility permission before first-recording QA. A macOS-hosted Windows `cargo check` stopped at the missing Windows MSVC C sysroot and is not a Windows result. Native Windows/Linux validation and all signed release/cohort steps remain open.
+
+Fresh local verification checkpoint: TalkMore passes 121 test files / 717 tests and TypeScript checking; OpenTypeless passes the production frontend build, 44 test files / 392 tests on rerun, and 499 Rust library tests. One pre-existing app-mapping UI test failed once and then passed both in isolation and in the full rerun, so it is recorded as a nondeterministic test race rather than treated as a product pass/fail signal for Issues #81/#83.
