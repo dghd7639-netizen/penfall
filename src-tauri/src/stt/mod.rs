@@ -1,5 +1,6 @@
 pub mod apple_speech;
 pub mod assemblyai;
+pub mod capabilities;
 pub mod cloud;
 pub mod config;
 pub mod deepgram;

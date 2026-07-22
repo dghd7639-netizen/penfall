@@ -114,6 +114,27 @@ export type SubscriptionSource = 'free' | 'creem' | 'lifetime' | 'appsumo'
 export type LicenseStatus = 'pending' | 'active' | 'refunded' | 'deactivated'
 export type QuotaModel = 'legacy_dual_meter' | 'cloud_words'
 
+export interface ManagedSttFormat {
+  mimeType: string
+  maxAudioBytes: number
+  preferredClientSwitchBytes?: number
+  bitrateBitsPerSecond?: number
+}
+
+export interface ManagedSttCapability {
+  version: number
+  maxRecordingSeconds: number
+  maxMultipartBytes: number
+  formats: ManagedSttFormat[]
+}
+
+export interface AuthenticatedAccountSnapshot {
+  schemaVersion: 1
+  userId: string
+  managedSttCapabilities: ManagedSttCapability | null
+  generatedAt: string
+}
+
 export interface SubscriptionStatus {
   plan: SubscriptionPlan
   source: SubscriptionSource
@@ -133,6 +154,7 @@ export interface SubscriptionStatus {
   cloudWordsLimit: number
   cloudWordsResetAt: string | null
   byokUnlimited: boolean
+  accountSnapshot?: AuthenticatedAccountSnapshot | null
 }
 
 export function getSubscriptionStatus(): Promise<SubscriptionStatus> {
@@ -181,6 +203,7 @@ export function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       cloudWordsLimit: status.cloudWordsLimit ?? 0,
       cloudWordsResetAt: status.cloudWordsResetAt ?? null,
       byokUnlimited: status.byokUnlimited ?? true,
+      accountSnapshot: status.accountSnapshot ?? null,
     }
   })
 }

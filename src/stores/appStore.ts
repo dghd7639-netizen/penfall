@@ -226,7 +226,10 @@ export interface AppConfig {
   auto_start: boolean
   close_to_tray: boolean
   start_minimized: boolean
+  recording_limit_mode: 'auto' | 'custom'
+  custom_recording_limit_seconds: number
   max_recording_seconds: number
+  managed_stt_capability_state?: unknown
   history_enabled: boolean
   history_retention_days: number
   history_max_entries: number
@@ -762,6 +765,8 @@ const defaultConfig: AppConfig = {
   auto_start: true,
   close_to_tray: true,
   start_minimized: false,
+  recording_limit_mode: 'auto',
+  custom_recording_limit_seconds: 600,
   max_recording_seconds: 30,
   history_enabled: true,
   history_retention_days: 0,

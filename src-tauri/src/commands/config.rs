@@ -22,6 +22,18 @@ fn config_patch_between(previous: &storage::AppConfig, next: &storage::AppConfig
             json!(next.max_recording_seconds),
         );
     }
+    if previous.recording_limit_mode != next.recording_limit_mode {
+        patch.insert(
+            "recording_limit_mode".to_string(),
+            json!(next.recording_limit_mode),
+        );
+    }
+    if previous.custom_recording_limit_seconds != next.custom_recording_limit_seconds {
+        patch.insert(
+            "custom_recording_limit_seconds".to_string(),
+            json!(next.custom_recording_limit_seconds),
+        );
+    }
     if previous.history_enabled != next.history_enabled {
         patch.insert("history_enabled".to_string(), json!(next.history_enabled));
     }
@@ -53,6 +65,7 @@ fn prepare_config_for_save(mut config: storage::AppConfig) -> Result<storage::Ap
     sync_hotkey_fields_before_save(&mut config);
     crate::hotkey::validate_hotkey_config(&config.hotkeys).map_err(|e| e.to_string())?;
     config.normalize_values();
+    config.clamp_recording_limit_intent_for_save();
     crate::hotkey::validate_hotkey_config(&config.hotkeys).map_err(|e| e.to_string())?;
     Ok(config)
 }
@@ -340,6 +353,46 @@ mod tests {
         let patch = config_patch_between(&previous, &next);
 
         assert_eq!(patch["max_recording_seconds"], 45);
+    }
+
+    #[test]
+    fn config_patch_includes_recording_limit_intent_changes() {
+        let previous = storage::AppConfig::default();
+        let mut next = previous.clone();
+        next.recording_limit_mode = crate::stt::capabilities::RecordingLimitMode::Custom;
+        next.custom_recording_limit_seconds = 120;
+
+        let patch = config_patch_between(&previous, &next);
+
+        assert_eq!(patch["recording_limit_mode"], "custom");
+        assert_eq!(patch["custom_recording_limit_seconds"], 120);
+    }
+
+    #[test]
+    fn prepare_config_recomputes_auto_mirror_when_provider_changes() {
+        let config = storage::AppConfig {
+            stt_provider: "deepgram".to_string(),
+            ..storage::AppConfig::default()
+        };
+
+        let prepared = prepare_config_for_save(config).unwrap();
+
+        assert_eq!(prepared.max_recording_seconds, 600);
+        assert_eq!(prepared.custom_recording_limit_seconds, 600);
+    }
+
+    #[test]
+    fn prepare_config_clamps_custom_intent_only_when_settings_are_saved() {
+        let config = storage::AppConfig {
+            recording_limit_mode: crate::stt::capabilities::RecordingLimitMode::Custom,
+            custom_recording_limit_seconds: 9_999,
+            ..storage::AppConfig::default()
+        };
+
+        let prepared = prepare_config_for_save(config).unwrap();
+
+        assert_eq!(prepared.custom_recording_limit_seconds, 30);
+        assert_eq!(prepared.max_recording_seconds, 30);
     }
 
     #[test]

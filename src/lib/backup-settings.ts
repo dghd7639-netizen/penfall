@@ -41,6 +41,8 @@ type SafeScalarKey =
   | 'auto_start'
   | 'close_to_tray'
   | 'start_minimized'
+  | 'recording_limit_mode'
+  | 'custom_recording_limit_seconds'
   | 'max_recording_seconds'
   | 'history_enabled'
   | 'history_retention_days'
@@ -167,6 +169,8 @@ export function createBackupSettings(config: AppConfig): BackupSettings {
     auto_start: config.auto_start,
     close_to_tray: config.close_to_tray,
     start_minimized: config.start_minimized,
+    recording_limit_mode: config.recording_limit_mode,
+    custom_recording_limit_seconds: config.custom_recording_limit_seconds,
     max_recording_seconds: config.max_recording_seconds,
     history_enabled: config.history_enabled,
     history_retention_days: config.history_retention_days,
@@ -218,6 +222,8 @@ const SAFE_SCALAR_KEYS: readonly SafeScalarKey[] = [
   'auto_start',
   'close_to_tray',
   'start_minimized',
+  'recording_limit_mode',
+  'custom_recording_limit_seconds',
   'max_recording_seconds',
   'history_enabled',
   'history_retention_days',

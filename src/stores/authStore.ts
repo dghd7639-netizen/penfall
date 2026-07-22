@@ -17,6 +17,7 @@ import {
   type SubscriptionSource,
 } from '../lib/api'
 import { isActiveCloudPlan } from '../lib/constants'
+import { syncManagedSttCapability } from '../lib/managed-stt-capability'
 import { toast } from '../components/toast-service'
 import i18n from '../i18n'
 
@@ -435,6 +436,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         cloudWordsResetAt: status.cloudWordsResetAt,
         byokUnlimited: status.byokUnlimited,
       })
+      try {
+        await syncManagedSttCapability(status.accountSnapshot ?? null, get().user?.id ?? null)
+      } catch (error) {
+        console.warn('Failed to sync managed STT capability; using the safe fallback.', error)
+      }
       // Clear checkout pending flag after first post-checkout refresh
       if (get().checkoutPending) {
         set({ checkoutPending: false })

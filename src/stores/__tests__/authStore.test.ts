@@ -106,6 +106,12 @@ describe('authStore', () => {
       cloudWordsLimit: 0,
       cloudWordsResetAt: null,
       byokUnlimited: true,
+      accountSnapshot: {
+        schemaVersion: 1,
+        userId: '1',
+        managedSttCapabilities: null,
+        generatedAt: '2026-07-22T08:00:00.000Z',
+      },
     })
   })
 
@@ -216,6 +222,10 @@ describe('authStore', () => {
       expect(getState().sttSecondsLimit).toBe(36000)
       expect(getState().llmTokensUsed).toBe(5000)
       expect(getState().llmTokensLimit).toBe(5000000)
+      expect(invoke).toHaveBeenCalledWith('cache_managed_stt_capability', {
+        accountSnapshot: expect.objectContaining({ userId: '1' }),
+        expectedUserId: '1',
+      })
     })
 
     it('shows cloud words quota warning only once while usage stays high', async () => {
