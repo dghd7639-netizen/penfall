@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import ciWorkflowSource from '../../../.github/workflows/ci.yml?raw'
 import appImageVerificationScriptSource from '../../../.github/scripts/verify-appimage-runtime-libraries.sh?raw'
+import appImagePluginWrapperSource from '../../../.github/scripts/linuxdeploy-plugin-appimage-exclude-wrapper.sh?raw'
 import linuxdeployPrepareScriptSource from '../../../.github/scripts/prepare-linuxdeploy-wrapper.sh?raw'
 import linuxdeployWrapperSource from '../../../.github/scripts/linuxdeploy-exclude-wrapper.rs?raw'
 import constantsSource from '../constants.ts?raw'
@@ -62,8 +63,12 @@ describe('release version wiring', () => {
     expect(ciWorkflowSource).toContain('Test Linux AppImage packaging guards')
     expect(ciWorkflowSource).toContain('./.github/scripts/test-linux-appimage-packaging.sh')
     expect(linuxdeployPrepareScriptSource).toContain('linuxdeploy-exclude-wrapper.rs')
+    expect(linuxdeployPrepareScriptSource).toContain(
+      'linuxdeploy-plugin-appimage-exclude-wrapper.sh',
+    )
     expect(linuxdeployWrapperSource).toContain('--exclude-library')
     expect(linuxdeployWrapperSource).toContain('libwayland-client.so*')
+    expect(appImagePluginWrapperSource).toContain("-name 'libwayland-client.so*' -delete")
     expect(linuxVerificationScriptSource).toContain('verify-appimage-runtime-libraries.sh')
   })
 
