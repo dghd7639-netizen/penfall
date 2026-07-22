@@ -239,6 +239,14 @@ export interface AppConfig {
 
 export type TestStatus = 'idle' | 'testing' | 'success' | 'error'
 
+export interface RecordingDeadlineSnapshot {
+  sessionId: number
+  recordingKind: 'dictation' | 'ask'
+  startedAtUnixMs: number
+  deadlineAtUnixMs: number
+  effectiveMaxSeconds: number
+}
+
 interface AppState {
   // Pipeline
   pipelineState: PipelineState
@@ -258,6 +266,8 @@ interface AppState {
   appendPolishedChunk: (chunk: string) => void
   recordingDuration: number
   setRecordingDuration: (d: number) => void
+  recordingDeadline: RecordingDeadlineSnapshot | null
+  setRecordingDeadline: (deadline: RecordingDeadlineSnapshot | null) => void
   targetApp: string
   setTargetApp: (app: string) => void
   lastInsertResult: InsertResult | null
@@ -792,6 +802,8 @@ export const useAppStore = create<AppState>((set) => ({
   appendPolishedChunk: (chunk) => set((s) => ({ polishedText: s.polishedText + chunk })),
   recordingDuration: 0,
   setRecordingDuration: (recordingDuration) => set({ recordingDuration }),
+  recordingDeadline: null,
+  setRecordingDeadline: (recordingDeadline) => set({ recordingDeadline }),
   targetApp: '',
   setTargetApp: (targetApp) => set({ targetApp }),
   lastInsertResult: null,
@@ -863,6 +875,7 @@ export const useAppStore = create<AppState>((set) => ({
       finalTranscript: '',
       polishedText: '',
       recordingDuration: 0,
+      recordingDeadline: null,
     }),
 
   savedConfig: null,

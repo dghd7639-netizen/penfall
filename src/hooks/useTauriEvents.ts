@@ -8,6 +8,7 @@ import type {
   ContextProfileSummary,
   InsertResult,
   PipelineState,
+  RecordingDeadlineSnapshot,
   VoiceMode,
 } from '../stores/appStore'
 import { getHistory } from '../lib/tauri'
@@ -33,6 +34,7 @@ export function useTauriEvents() {
     setFinalTranscript,
     appendPolishedChunk,
     setPipelineState,
+    setRecordingDeadline,
     setActiveVoiceMode,
     setTargetApp,
     setLastInsertResult,
@@ -68,6 +70,9 @@ export function useTauriEvents() {
     addListener<string>('llm:chunk', appendPolishedChunk)
     addListener<PipelineState>('pipeline:state', (state) => {
       setPipelineState(state)
+      if (state === 'preparing' || state === 'idle') {
+        setRecordingDeadline(null)
+      }
       if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
         // Clear any previous error when starting a new pipeline run
         setPipelineError(null)
@@ -83,6 +88,7 @@ export function useTauriEvents() {
           })
       }
     })
+    addListener<RecordingDeadlineSnapshot>('recording:deadline', setRecordingDeadline)
     addListener<VoiceMode | null>('pipeline:voice_mode', setActiveVoiceMode)
     addListener<string>('pipeline:target_app', setTargetApp)
     addListener<InsertResult>('pipeline:insert_result', setLastInsertResult)
@@ -140,6 +146,7 @@ export function useTauriEvents() {
     setFinalTranscript,
     appendPolishedChunk,
     setPipelineState,
+    setRecordingDeadline,
     setActiveVoiceMode,
     setTargetApp,
     setLastInsertResult,

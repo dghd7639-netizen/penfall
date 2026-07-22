@@ -13,32 +13,44 @@ pub(crate) enum RecordingStartupError<AudioError, SttError> {
     Timeout,
 }
 
-pub(crate) async fn await_recording_startup<AudioFuture, SttFuture, AudioError, SttError>(
+pub(crate) async fn await_recording_startup<
+    AudioFuture,
+    SttFuture,
+    AudioReady,
+    AudioError,
+    SttError,
+>(
     audio_ready: AudioFuture,
     stt_ready: SttFuture,
-) -> Result<(), RecordingStartupError<AudioError, SttError>>
+) -> Result<AudioReady, RecordingStartupError<AudioError, SttError>>
 where
-    AudioFuture: Future<Output = Result<(), AudioError>>,
+    AudioFuture: Future<Output = Result<AudioReady, AudioError>>,
     SttFuture: Future<Output = Result<(), SttError>>,
 {
     await_recording_startup_with_timeout(audio_ready, stt_ready, STARTUP_TIMEOUT).await
 }
 
-async fn await_recording_startup_with_timeout<AudioFuture, SttFuture, AudioError, SttError>(
+async fn await_recording_startup_with_timeout<
+    AudioFuture,
+    SttFuture,
+    AudioReady,
+    AudioError,
+    SttError,
+>(
     audio_ready: AudioFuture,
     stt_ready: SttFuture,
     timeout: Duration,
-) -> Result<(), RecordingStartupError<AudioError, SttError>>
+) -> Result<AudioReady, RecordingStartupError<AudioError, SttError>>
 where
-    AudioFuture: Future<Output = Result<(), AudioError>>,
+    AudioFuture: Future<Output = Result<AudioReady, AudioError>>,
     SttFuture: Future<Output = Result<(), SttError>>,
 {
     tokio::time::timeout(timeout, async {
-        tokio::try_join!(
+        let (audio_ready, ()) = tokio::try_join!(
             async { audio_ready.await.map_err(RecordingStartupError::Audio) },
             async { stt_ready.await.map_err(RecordingStartupError::Stt) }
         )?;
-        Ok(())
+        Ok(audio_ready)
     })
     .await
     .unwrap_or(Err(RecordingStartupError::Timeout))
@@ -62,7 +74,7 @@ mod tests {
             async move {
                 audio_started.notify_one();
                 provider_connected.notified().await;
-                Ok::<(), &'static str>(())
+                Ok::<u32, &'static str>(42)
             }
         };
         let stt_ready = async move {
@@ -81,12 +93,13 @@ mod tests {
             result.is_ok(),
             "audio initialization was not polled while STT was connecting"
         );
+        assert_eq!(result.unwrap().unwrap(), 42);
     }
 
     #[tokio::test]
     async fn recording_startup_times_out_once() {
         let result = await_recording_startup_with_timeout(
-            std::future::pending::<Result<(), &'static str>>(),
+            std::future::pending::<Result<u32, &'static str>>(),
             std::future::pending::<Result<(), &'static str>>(),
             Duration::from_millis(20),
         )
@@ -98,7 +111,7 @@ mod tests {
     #[tokio::test]
     async fn audio_error_wins_when_both_sides_are_ready_with_errors() {
         let result = await_recording_startup_with_timeout(
-            async { Err::<(), _>("audio") },
+            async { Err::<u32, _>("audio") },
             async { Err::<(), _>("stt") },
             Duration::from_millis(20),
         )

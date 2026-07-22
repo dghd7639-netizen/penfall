@@ -13,6 +13,7 @@ use crate::voice_intent::{
 };
 use crate::{api_base_url, with_desktop_client_version, SessionTokenStore};
 use serde_json::json;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
@@ -22,6 +23,7 @@ pub const ASK_MAX_QUESTION_CHARS: usize = 500;
 pub const ASK_MAX_SELECTED_TEXT_CHARS: usize = 4_000;
 pub const ASK_OUTPUT_TOKEN_LIMIT: u32 = 80;
 const ASK_STT_FINALIZE_TIMEOUT_SECS: u64 = 12;
+static ASK_RECORDING_SESSION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +140,7 @@ impl AskDictationState {
 
 pub struct AskDictationSession {
     handle: AudioCaptureHandle,
+    recording_session_id: u64,
     operation_id: String,
     recording_context: RecordingContext,
     selected_text: Option<String>,
@@ -1034,14 +1037,16 @@ pub(crate) async fn start_reserved_ask_dictation(
         .map_err(|e| e.to_string())?;
         let (mut handle, mut audio_rx) = AudioCaptureHandle::start(AudioConfig::default())
             .map_err(|e| map_audio_capture_error(&e.to_string()))?;
-        if let Err(error) = crate::audio::await_recording_startup(
+        let capture_ready_at = match crate::audio::await_recording_startup(
             handle.wait_until_ready(),
             provider.connect(&stt_config),
         )
         .await
         {
-            handle.stop();
-            return Err(match error {
+            Ok(capture_ready_at) => capture_ready_at,
+            Err(error) => {
+                handle.stop();
+                return Err(match error {
                 crate::audio::RecordingStartupError::Audio(error) => {
                     map_audio_capture_error(&error.to_string())
                 }
@@ -1049,8 +1054,21 @@ pub(crate) async fn start_reserved_ask_dictation(
                 crate::audio::RecordingStartupError::Timeout => {
                     "Recording startup timed out after 30 seconds. Please try again.".to_string()
                 }
-            });
-        }
+                });
+            }
+        };
+        let recording_session_id = ASK_RECORDING_SESSION_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let resolved_limit = stt::capabilities::resolve_recording_limit(
+            &config,
+            None,
+            chrono::Utc::now().timestamp(),
+        );
+        let recording_deadline = crate::recording_deadline::RecordingDeadline::new(
+            recording_session_id,
+            crate::recording_deadline::RecordingKind::Ask,
+            capture_ready_at,
+            resolved_limit.effective_max_seconds,
+        );
         let mut handle = Some(handle);
         let transcript = Arc::new(Mutex::new(String::new()));
         let error = Arc::new(Mutex::new(None::<String>));
@@ -1067,6 +1085,7 @@ pub(crate) async fn start_reserved_ask_dictation(
                 guard.starting = false;
                 guard.session = Some(AskDictationSession {
                     handle: handle.take().expect("Ask audio handle was already consumed"),
+                    recording_session_id,
                     operation_id,
                     recording_context,
                     selected_text,
@@ -1087,7 +1106,10 @@ pub(crate) async fn start_reserved_ask_dictation(
         }
 
         emit_capsule_state(&app, PipelineState::AskRecording);
+        let _ = app.emit("recording:deadline", recording_deadline.event);
         let state_inner = state.0.clone();
+        let deadline_state_inner = state.0.clone();
+        let deadline_app = app.clone();
 
         tauri::async_runtime::spawn(async move {
             loop {
@@ -1169,6 +1191,63 @@ pub(crate) async fn start_reserved_ask_dictation(
             }
 
             done.notify_waiters();
+        });
+
+        tauri::async_runtime::spawn(async move {
+            let reached = crate::recording_deadline::drive_recording_deadline(
+                recording_deadline,
+                || {
+                    deadline_state_inner
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .session
+                        .as_ref()
+                        .is_some_and(|session| {
+                            session.recording_session_id == recording_session_id
+                        })
+                },
+                |signal| match signal {
+                    crate::recording_deadline::RecordingDeadlineSignal::Warning {
+                        seconds_remaining,
+                    } => {
+                        let _ = deadline_app.emit(
+                            "recording:deadline-warning",
+                            json!({
+                                "sessionId": recording_session_id,
+                                "recordingKind": "ask",
+                                "secondsRemaining": seconds_remaining,
+                            }),
+                        );
+                    }
+                    crate::recording_deadline::RecordingDeadlineSignal::Reached => {
+                        let _ = deadline_app.emit(
+                            "recording:deadline-reached",
+                            json!({
+                                "sessionId": recording_session_id,
+                                "recordingKind": "ask",
+                            }),
+                        );
+                    }
+                },
+            )
+            .await;
+            if reached {
+                let ask_state = deadline_app.state::<AskDictationState>();
+                let config_state = deadline_app.state::<storage::ConfigManager>();
+                let token_store = deadline_app.state::<SessionTokenStore>();
+                let client = deadline_app.state::<reqwest::Client>();
+                if let Err(error) = stop_ask_flow(
+                    deadline_app.clone(),
+                    ask_state,
+                    config_state,
+                    token_store,
+                    client,
+                )
+                .await
+                {
+                    tracing::error!("Failed to stop Ask at the provider deadline: {error}");
+                }
+            }
         });
 
         Ok(start_result)

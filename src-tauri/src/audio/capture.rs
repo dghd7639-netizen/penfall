@@ -4,11 +4,14 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
 struct CaptureStartupNotifier {
-    sender: Option<oneshot::Sender<std::result::Result<(), String>>>,
+    sender: Option<
+        oneshot::Sender<std::result::Result<crate::recording_deadline::CaptureReadyAt, String>>,
+    >,
 }
 
 struct CaptureStartupWaiter {
-    receiver: oneshot::Receiver<std::result::Result<(), String>>,
+    receiver:
+        oneshot::Receiver<std::result::Result<crate::recording_deadline::CaptureReadyAt, String>>,
 }
 
 fn capture_startup_channel() -> (CaptureStartupNotifier, CaptureStartupWaiter) {
@@ -22,9 +25,9 @@ fn capture_startup_channel() -> (CaptureStartupNotifier, CaptureStartupWaiter) {
 }
 
 impl CaptureStartupNotifier {
-    fn ready(&mut self) {
+    fn ready(&mut self, ready_at: crate::recording_deadline::CaptureReadyAt) {
         if let Some(sender) = self.sender.take() {
-            let _ = sender.send(Ok(()));
+            let _ = sender.send(Ok(ready_at));
         }
     }
 
@@ -36,7 +39,7 @@ impl CaptureStartupNotifier {
 }
 
 impl CaptureStartupWaiter {
-    async fn wait(self) -> std::result::Result<(), String> {
+    async fn wait(self) -> std::result::Result<crate::recording_deadline::CaptureReadyAt, String> {
         self.receiver.await.unwrap_or_else(|_| {
             Err("Audio capture thread ended before reporting readiness".to_string())
         })
@@ -135,7 +138,7 @@ impl AudioCaptureHandle {
     /// Wait until the platform backend has opened the input stream and
     /// `play()` has succeeded. The CPAL boundary is shared by CoreAudio,
     /// WASAPI, ALSA and PipeWire, so callers do not need platform delays.
-    pub async fn wait_until_ready(&mut self) -> Result<()> {
+    pub async fn wait_until_ready(&mut self) -> Result<crate::recording_deadline::CaptureReadyAt> {
         let waiter = self
             .startup_waiter
             .take()
@@ -278,8 +281,9 @@ fn run_capture(
     )?;
 
     stream.play()?;
+    let capture_ready_at = crate::recording_deadline::CaptureReadyAt::now();
     *state.lock().unwrap_or_else(|e| e.into_inner()) = CaptureState::Recording;
-    startup_notifier.ready();
+    startup_notifier.ready(capture_ready_at);
     tracing::info!(
         "Audio capture started (device: {}Hz {}ch -> target: {}Hz {}ch)",
         device_sample_rate,
@@ -328,9 +332,12 @@ mod tests {
     #[tokio::test]
     async fn capture_startup_completes_after_the_backend_is_ready() {
         let (mut notifier, waiter) = capture_startup_channel();
-        notifier.ready();
+        let ready_at = crate::recording_deadline::CaptureReadyAt::now();
+        notifier.ready(ready_at);
 
-        assert_eq!(waiter.wait().await, Ok(()));
+        let observed = waiter.wait().await.unwrap();
+        assert_eq!(observed.unix_millis, ready_at.unix_millis);
+        assert_eq!(observed.monotonic, ready_at.monotonic);
     }
 
     #[tokio::test]

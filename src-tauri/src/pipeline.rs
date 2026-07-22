@@ -678,6 +678,7 @@ fn apply_pipeline_start_options(
     config
 }
 
+#[derive(Clone)]
 pub struct PipelineHandle {
     app_handle: tauri::AppHandle,
     context_detector: app_detector::ContextDetectorHandle,
@@ -688,6 +689,7 @@ pub struct PipelineHandle {
     stt_session: Arc<Mutex<Option<SttTaskControl>>>,
     stt_error: Arc<Mutex<Option<(u64, crate::error::UserError)>>>,
     active_stt_session_id: Arc<AtomicU64>,
+    active_deadline_session_id: Arc<AtomicU64>,
     abort_flag: Arc<AtomicBool>,
     preloaded_config: Arc<Mutex<Option<storage::AppConfig>>>,
     preloaded_app_ctx: Arc<Mutex<Option<RecordingContext>>>,
@@ -703,7 +705,7 @@ pub struct PipelineHandle {
     /// its setup before reading shared state (preloaded_config, audio_handle, etc.).
     /// Without this, a quick press-release in hold mode causes stop() to run
     /// while start() is still connecting to STT, finding empty fields.
-    pipeline_lock: tokio::sync::Mutex<()>,
+    pipeline_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 struct PolishTextInput<'a> {
@@ -897,6 +899,7 @@ impl PipelineHandle {
             stt_session: Arc::new(Mutex::new(None)),
             stt_error: Arc::new(Mutex::new(None)),
             active_stt_session_id: Arc::new(AtomicU64::new(0)),
+            active_deadline_session_id: Arc::new(AtomicU64::new(0)),
             abort_flag: Arc::new(AtomicBool::new(false)),
             preloaded_config: Arc::new(Mutex::new(None)),
             preloaded_app_ctx: Arc::new(Mutex::new(None)),
@@ -908,7 +911,7 @@ impl PipelineHandle {
             recording_start: Arc::new(Mutex::new(None)),
             active_translation_operation: Arc::new(Mutex::new(None)),
             shared_client,
-            pipeline_lock: tokio::sync::Mutex::new(()),
+            pipeline_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -979,6 +982,7 @@ impl PipelineHandle {
         // Set abort flag so any running stop() exits early
         self.abort_flag.store(true, Ordering::SeqCst);
         self.active_stt_session_id.fetch_add(1, Ordering::SeqCst);
+        self.active_deadline_session_id.store(0, Ordering::SeqCst);
 
         // Stop audio capture (closes channel → STT task terminates naturally)
         {
@@ -1308,46 +1312,49 @@ impl PipelineHandle {
                 return Ok(());
             }
         };
-        let startup_error = match crate::audio::await_recording_startup(
+        let startup_result = crate::audio::await_recording_startup(
             handle.wait_until_ready(),
             provider.connect(&stt_config),
         )
-        .await
-        {
-            Ok(()) => None,
-            Err(crate::audio::RecordingStartupError::Audio(error)) => {
-                Some(format!("Audio capture failed: {error}"))
-            }
-            Err(crate::audio::RecordingStartupError::Stt(error)) => {
-                Some(format!("STT connection failed: {error}"))
-            }
-            Err(crate::audio::RecordingStartupError::Timeout) => {
-                Some("Recording startup timed out after 30 seconds. Please try again.".to_string())
+        .await;
+        let capture_ready_at = match startup_result {
+            Ok(capture_ready_at) => capture_ready_at,
+            Err(error) => {
+                let message = match error {
+                    crate::audio::RecordingStartupError::Audio(error) => {
+                        format!("Audio capture failed: {error}")
+                    }
+                    crate::audio::RecordingStartupError::Stt(error) => {
+                        format!("STT connection failed: {error}")
+                    }
+                    crate::audio::RecordingStartupError::Timeout => {
+                        "Recording startup timed out after 30 seconds. Please try again."
+                            .to_string()
+                    }
+                };
+                tracing::error!("Recording startup failed: {}", message);
+                handle.stop();
+                let _ = self.app_handle.emit("pipeline:error", message);
+                *self
+                    .preloaded_config
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                *self
+                    .preloaded_app_ctx
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                *self
+                    .preloaded_dictionary
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                *self
+                    .preloaded_correction_rules
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()) = None;
+                self.set_state(PipelineState::Idle);
+                return Ok(());
             }
         };
-        if let Some(message) = startup_error {
-            tracing::error!("Recording startup failed: {}", message);
-            handle.stop();
-            let _ = self.app_handle.emit("pipeline:error", message);
-            *self
-                .preloaded_config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_app_ctx
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_dictionary
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_correction_rules
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            self.set_state(PipelineState::Idle);
-            return Ok(());
-        }
 
         // Store the audio handle's volume reference.
         // Check abort_flag first — if abort() was called while we were connecting
@@ -1406,10 +1413,24 @@ impl PipelineHandle {
             return Ok(());
         }
 
+        let session_id = self.active_stt_session_id.fetch_add(1, Ordering::SeqCst) + 1;
+        let resolved_limit = stt::capabilities::resolve_recording_limit(
+            &config_data,
+            None,
+            chrono::Utc::now().timestamp(),
+        );
+        let recording_deadline = crate::recording_deadline::RecordingDeadline::new(
+            session_id,
+            crate::recording_deadline::RecordingKind::Dictation,
+            capture_ready_at,
+            resolved_limit.effective_max_seconds,
+        );
+        self.active_deadline_session_id
+            .store(session_id, Ordering::SeqCst);
         *self
             .recording_start
             .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(std::time::Instant::now());
+            .unwrap_or_else(|e| e.into_inner()) = Some(capture_ready_at.monotonic);
         *self
             .active_translation_operation
             .lock()
@@ -1418,6 +1439,9 @@ impl PipelineHandle {
             .then(|| TranslationOperationState::new(config_data.translation.active_target.clone()));
         self.set_state(PipelineState::Recording);
         let _ = self.app_handle.emit("pipeline:voice_mode", voice_mode);
+        let _ = self
+            .app_handle
+            .emit("recording:deadline", recording_deadline.event);
 
         // Volume monitoring task
         let app_handle = self.app_handle.clone();
@@ -1450,7 +1474,6 @@ impl PipelineHandle {
         // STT streaming task — provider is already connected
         let app_handle = self.app_handle.clone();
         let accumulated = self.accumulated_text.clone();
-        let session_id = self.active_stt_session_id.fetch_add(1, Ordering::SeqCst) + 1;
         let stt_control = SttTaskControl {
             id: session_id,
             done: Arc::new(Notify::new()),
@@ -1603,6 +1626,45 @@ impl PipelineHandle {
             stt_control.done.notify_one();
         });
 
+        let deadline_pipeline = self.clone();
+        let deadline_app = self.app_handle.clone();
+        let active_deadline_session_id = self.active_deadline_session_id.clone();
+        tokio::spawn(async move {
+            let reached = crate::recording_deadline::drive_recording_deadline(
+                recording_deadline,
+                || active_deadline_session_id.load(Ordering::SeqCst) == session_id,
+                |signal| match signal {
+                    crate::recording_deadline::RecordingDeadlineSignal::Warning {
+                        seconds_remaining,
+                    } => {
+                        let _ = deadline_app.emit(
+                            "recording:deadline-warning",
+                            serde_json::json!({
+                                "sessionId": session_id,
+                                "recordingKind": "dictation",
+                                "secondsRemaining": seconds_remaining,
+                            }),
+                        );
+                    }
+                    crate::recording_deadline::RecordingDeadlineSignal::Reached => {
+                        let _ = deadline_app.emit(
+                            "recording:deadline-reached",
+                            serde_json::json!({
+                                "sessionId": session_id,
+                                "recordingKind": "dictation",
+                            }),
+                        );
+                    }
+                },
+            )
+            .await;
+            if reached {
+                if let Err(error) = deadline_pipeline.stop().await {
+                    tracing::error!("Failed to stop recording at the provider deadline: {error}");
+                }
+            }
+        });
+
         Ok(())
     }
 
@@ -1625,6 +1687,7 @@ impl PipelineHandle {
         {
             return Ok(());
         }
+        self.active_deadline_session_id.store(0, Ordering::SeqCst);
         let _ = self
             .app_handle
             .emit("pipeline:state", PipelineState::Transcribing);
