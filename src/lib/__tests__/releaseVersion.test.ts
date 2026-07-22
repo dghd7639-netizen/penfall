@@ -56,6 +56,9 @@ describe('release version wiring', () => {
   it('excludes the bundled Wayland client from Linux AppImages', () => {
     expect(releaseWorkflowSource).toContain('Prepare Linux AppImage library exclusions')
     expect(releaseWorkflowSource).toContain('./.github/scripts/prepare-linuxdeploy-wrapper.sh')
+    expect(releaseWorkflowSource).toContain('LINUXDEPLOY_EXCLUDED_LIBRARIES: libwayland-client.so*')
+    expect(releaseWorkflowSource).toContain('xdg-utils')
+    expect(releaseWorkflowSource).toContain('command -v xdg-mime >/dev/null')
     expect(ciWorkflowSource).toContain('Test Linux AppImage packaging guards')
     expect(ciWorkflowSource).toContain('./.github/scripts/test-linux-appimage-packaging.sh')
     expect(linuxdeployPrepareScriptSource).toContain('linuxdeploy-exclude-wrapper.rs')

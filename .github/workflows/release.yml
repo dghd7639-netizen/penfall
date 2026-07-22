@@ -93,7 +93,8 @@ jobs:
         if: ${{ matrix.platform_group == 'linux' && (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group) }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev libfuse2 gnupg rpm
+          sudo apt-get install -y cmake libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libxdo-dev libfuse2 gnupg rpm xdg-utils
+          command -v xdg-mime >/dev/null
 
       - name: Verify release publishing token
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform_group }}
@@ -204,6 +205,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPIMAGETOOL_SIGN_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
           TAURI_SIGNING_RPM_KEY_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUXDEPLOY_EXCLUDED_LIBRARIES: libwayland-client.so*
           WINDOWS_CERTIFICATE_THUMBPRINT: ${{ env.WINDOWS_CERTIFICATE_THUMBPRINT }}
           WINDOWS_TIMESTAMP_URL: ${{ env.WINDOWS_TIMESTAMP_URL }}
         with:
