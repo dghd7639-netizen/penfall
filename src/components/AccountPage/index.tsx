@@ -29,6 +29,7 @@ import {
   clearOAuthState,
   handleDeepLinkUrl,
 } from '../../lib/deep-link'
+import { shouldRefreshSubscriptionOnAccountOpen } from '../../lib/subscription-refresh-policy'
 import { createDesktopAuthCallbackURL } from '../../lib/desktop-auth-callback'
 import { PasswordDialog } from './PasswordDialog'
 import { PasswordField } from './PasswordField'
@@ -567,6 +568,8 @@ function AccountDetails() {
     changePassword,
     loading,
     signOut,
+    refreshSubscription,
+    subscriptionRefreshedAt,
   } = useAuthStore()
   const config = useAppStore((s) => s.config)
   const history = useAppStore((s) => s.history)
@@ -583,6 +586,20 @@ function AccountDetails() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [securityOpen, setSecurityOpen] = useState(false)
   const passwordTriggerRef = useRef<HTMLButtonElement>(null)
+  const subscriptionRefreshInFlightRef = useRef(false)
+
+  useEffect(() => {
+    if (
+      subscriptionRefreshInFlightRef.current
+      || !shouldRefreshSubscriptionOnAccountOpen(subscriptionRefreshedAt, Date.now())
+    ) {
+      return
+    }
+    subscriptionRefreshInFlightRef.current = true
+    void refreshSubscription().finally(() => {
+      subscriptionRefreshInFlightRef.current = false
+    })
+  }, [refreshSubscription, subscriptionRefreshedAt])
 
   useEffect(() => {
     if (credentialCapability !== 'unknown') return

@@ -67,6 +67,7 @@ interface AuthState {
 
   // Checkout flow
   checkoutPending: boolean
+  subscriptionRefreshedAt: number | null
 
   // Actions
   initialize: () => Promise<void>
@@ -139,6 +140,7 @@ function signedOutCloudState() {
     emailVerificationPending: false,
     pendingEmail: null,
     checkoutPending: false,
+    subscriptionRefreshedAt: null,
   }
 }
 
@@ -168,6 +170,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   emailVerificationPending: false,
   pendingEmail: null,
   checkoutPending: false,
+  subscriptionRefreshedAt: null,
 
   initialize: async () => {
     try {
@@ -435,6 +438,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         cloudWordsLimit: status.cloudWordsLimit,
         cloudWordsResetAt: status.cloudWordsResetAt,
         byokUnlimited: status.byokUnlimited,
+        subscriptionRefreshedAt: Date.now(),
       })
       try {
         await syncManagedSttCapability(status.accountSnapshot ?? null, get().user?.id ?? null)
