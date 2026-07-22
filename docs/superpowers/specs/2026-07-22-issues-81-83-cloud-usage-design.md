@@ -1,7 +1,7 @@
 # Issues #81/#83, STT Recording Limits, and Cloud Usage Efficiency Design
 
 - Date: 2026-07-22
-- Status: Implemented in feature branches and Vercel Preview verified; production/cross-platform rollout pending; atomic quota cutover deferred
+- Status: TalkMore compatibility server deployed to Production with capability v2 disabled; desktop/cross-platform rollout pending; atomic quota cutover deferred
 - Repositories: `opentypeless` desktop and `talkmore` cloud service
 - Issues: [OpenTypeless #81](https://github.com/tover0314-w/opentypeless/issues/81), [OpenTypeless #83](https://github.com/tover0314-w/opentypeless/issues/83)
 
@@ -44,7 +44,7 @@ The current file-upload providers buffer 16 kHz, 16-bit, mono PCM and build a WA
 
 Issue #83 occurs because the UI can enter a recording state while platform audio capture and the STT connection are still becoming ready. A fixed platform delay would be unreliable and would slow every recording.
 
-The approved behavior is already represented in the current uncommitted desktop worktree:
+The approved behavior is committed on the current desktop feature branch:
 
 - audio capture has `Starting`, `Recording`, and `Idle` states;
 - capture reports ready only after CPAL `stream.play()` succeeds;
@@ -77,20 +77,22 @@ Current cloud quota flows also issue several statements for reserve, settle, or 
 
 No audio payload is stored in Neon. The dominant optimization target is compute activity and database round trips, not storage volume.
 
-### 2.4 Implementation and Preview Checkpoint (2026-07-22)
+### 2.4 Implementation and Production Checkpoint (2026-07-22)
 
-The implementation has passed its automated and server-preview gates without changing production:
+The implementation has passed its automated, Preview, and compatibility-only Production gates:
 
 - the desktop implementation is committed on `codex/issues-83-startup` and the TalkMore compatibility implementation is committed on `codex/issues-81-cloud-usage`;
 - the TalkMore suite passes 121 test files and 717 tests, `tsc --noEmit`, a local Webpack production build, and Vercel's clean-install default Turbopack production build;
-- Vercel Preview `talkmore-cnamdik2u-tovers-projects.vercel.app` is `READY`, generated all 5,517 static pages, and produced all Serverless Functions without build or runtime error logs during the verification window;
+- final Vercel Preview `talkmore-opt40ya29-tovers-projects.vercel.app` is `READY`, generated all 5,517 static pages, and produced all Serverless Functions without build or runtime error logs during the verification window;
 - the deployed `/api/proxy/stt` Lambda is Node.js 24.x in `iad1`, has 2,048 MB memory, and has an effective 210-second timeout; project Fluid Compute is enabled;
-- authenticated Vercel protection-bypass smoke checks returned 200 for `/en` and `/robots.txt`; the warmed `/en` check reported approximately 1.75 seconds TTFB and 2.09 seconds total, which is a protected-preview smoke measurement rather than an STT latency release metric;
+- a pre-production ORM audit found that the deferred Drizzle columns would be selected implicitly by legacy `select()` and `returning()` calls when the migration was not applied; commit `6bb76b5` removed the deferred runtime schema and migration artifacts and added a regression test before Production deployment;
+- Production deployment `talkmore-d02ldydr8-tovers-projects.vercel.app` is `READY` and owns the `opentypeless.com`, `www.opentypeless.com`, and `talkmore.vercel.app` aliases; the previous deployment `talkmore-o6mr5rgsa-tovers-projects.vercel.app` is the recorded rollback target;
+- public browser verification rendered the homepage and Features route with meaningful content, correct headings, working navigation, no framework error overlay, and no captured console errors;
 - unauthenticated application requests returned 401 from `/api/subscription/status` and from `/api/proxy/stt` before media parsing or database-backed quota work;
-- Preview does not define `MANAGED_STT_V2_ENABLED`, so capability version 2 remains disabled and current cloud users retain the existing compatible recording path;
-- no production alias, production environment variable, database schema, or production billing path was changed.
+- neither Preview nor Production defines `MANAGED_STT_V2_ENABLED`, so capability version 2 remains disabled and current cloud users retain the existing compatible recording path;
+- the post-deploy verification window contains no Vercel error-level or HTTP 500 logs; no database migration, production environment variable, or production billing path was changed.
 
-The remaining release gates are an authenticated end-to-end managed WAV/Ogg session in a controlled environment, the 20-trial latency/quality measurements, real Windows/macOS/Linux desktop validation, production server-first rollout, and post-rollout Neon/latency observation. Preview success alone does not close either issue.
+The remaining release gates are an authenticated end-to-end managed WAV/Ogg session in a controlled environment, the 20-trial latency/quality measurements, real Windows/macOS/Linux desktop validation, desktop rollout, and 24–48 hour post-rollout Neon/latency observation. Server deployment alone does not close either issue.
 
 ## 3. Goals
 
@@ -665,7 +667,7 @@ Implementations may differ in counters, but they share:
 
 For managed cloud words, `operationId` and `${operationId}:${stage}` remain the idempotency keys.
 
-The additive schema includes:
+The future additive schema design includes the following fields. They are intentionally absent from the current runtime schema and migration journal until the isolated-PostgreSQL phase resumes:
 
 - `quota.usage_revision bigint NOT NULL DEFAULT 0`;
 - `cloud_usage_operation.quota_model text NOT NULL DEFAULT 'cloud_words'`;

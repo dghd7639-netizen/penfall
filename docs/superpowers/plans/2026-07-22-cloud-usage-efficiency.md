@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-> **Current scope decision (2026-07-22):** The owner is not adding an isolated test database now. Tasks 4–6 are deferred. The additive schema may remain, but production routes must continue using the existing billing implementation. This deferral does not block the status-query, polling, warming, recording-limit, or managed-upload work.
+> **Current scope decision (2026-07-22):** The owner is not adding an isolated test database now. Task 2 and Tasks 4–6 are deferred. The deferred Drizzle schema and migration artifacts are excluded from the current release because legacy `select()`/`returning()` calls would otherwise reference unapplied columns implicitly. Production routes continue using the existing billing implementation. This deferral does not block the status-query, polling, warming, recording-limit, or managed-upload work.
 
 - Work in an isolated TalkMore worktree created from `origin/main`; do not mix with the existing SEO branch or dirty `tests/api-routes.test.ts`.
 - Keep authentication behavior and all legacy response fields compatible with released desktop clients.
@@ -49,7 +49,9 @@ Run: `npm test -- --run tests/contract-opentypeless.test.ts tests/api-routes.tes
 
 Expected: baseline passes. If production-main tests fail, record the exact failure before changing implementation.
 
-### Task 2: Add the Additive Atomic-Meter Schema
+### Task 2: Add the Additive Atomic-Meter Schema — Deferred
+
+Do not execute or ship this task in the current release. Resume it together with Tasks 4–6 when an isolated real PostgreSQL endpoint is available. The current branch contains a regression test proving the deferred columns and migration artifacts are absent.
 
 **Files:**
 - Modify: `src/db/schema.ts`
@@ -475,11 +477,11 @@ Run: `npm test -- --run`
 
 Run: `npm run build`
 
-- [ ] **Step 3: Deploy TalkMore compatibility before desktop**
+- [x] **Step 3: Deploy TalkMore compatibility before desktop**
 
-Deploy the compatible server route and status-read changes, then verify Vercel Pro logs/Neon metrics. The additive migration may remain unapplied or unused; no current production route may depend on it. Old desktop clients must continue to receive flat fields and use their existing flows.
+Deploy the compatible server route and status-read changes, then verify Vercel Pro logs/Neon metrics. The deferred additive migration is not present in this release, and no current production route depends on it. Old desktop clients must continue to receive flat fields and use their existing flows.
 
-Preview checkpoint: `talkmore-cnamdik2u-tovers-projects.vercel.app` is `READY` after Vercel's default Turbopack build. The deployed STT function reports a 210-second timeout with Fluid Compute enabled, and the verification window has no error logs. `MANAGED_STT_V2_ENABLED` remains absent/disabled. Production deployment is intentionally still pending, so this step stays open.
+Production checkpoint: Vercel deployment `talkmore-d02ldydr8-tovers-projects.vercel.app` is `READY` and serves the production aliases after the default Turbopack build. The STT function reports a 210-second timeout with Fluid Compute enabled. Public homepage/Features browser checks pass, and the post-deploy window has no error-level or HTTP 500 logs. `MANAGED_STT_V2_ENABLED` remains absent/disabled, so current desktop clients retain the existing managed path. Rollback target: `talkmore-o6mr5rgsa-tovers-projects.vercel.app`.
 
 - [ ] **Step 4: Observe cost and UX gates**
 
