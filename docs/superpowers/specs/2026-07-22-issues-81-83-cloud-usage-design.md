@@ -92,16 +92,18 @@ The implementation has passed its automated, Preview, and compatibility-only Pro
 - neither Preview nor Production defines `MANAGED_STT_V2_ENABLED`, so capability version 2 remains disabled and current cloud users retain the existing compatible recording path;
 - the post-deploy verification window contains no Vercel error-level or HTTP 500 logs; no database migration, production environment variable, or production billing path was changed.
 
-The remaining release gates are an authenticated end-to-end managed WAV/Ogg session in a controlled environment, the 20-trial latency/quality measurements, real Windows/macOS/Linux desktop validation, desktop rollout, and 24–48 hour post-rollout Neon/latency observation. Server deployment alone does not close either issue.
+The remaining release gates are an authenticated end-to-end managed long-form Ogg session, the 20-trial latency/quality measurements, real Windows/Linux desktop validation, desktop rollout, and 24–48 hour post-rollout Neon/latency observation. The authenticated macOS short-WAV gate is complete, but server deployment and one macOS sample alone do not close either issue.
 
 ### 2.5 Desktop Runtime Checkpoint (2026-07-22)
 
 - Apple Silicon macOS successfully compiled and bundled the debug Tauri app at `src-tauri/target/debug/bundle/macos/OpenTypeless.app`; the generated bundle is arm64, ad-hoc signed, and includes the microphone usage description.
 - The debug app launched as a real macOS process and rendered Home and Settings without a crash. Speech Recognition displayed `Auto (recommended) — 30 seconds` for OpenTypeless Cloud and the explicit stale/unavailable-capability warning, proving that Production's disabled capability does not expose the 10-minute path.
 - The packaging command subsequently failed only when signing the updater archive because `TAURI_SIGNING_PRIVATE_KEY` is unavailable. The local debug `.app` is usable for QA, but it is not a releasable signed updater artifact.
-- The debug bundle does not currently have macOS Accessibility permission. No permission was granted and no real recording/cloud charge was triggered, so first-audio runtime validation remains open.
+- The owner explicitly approved macOS Accessibility and microphone access for the debug bundle. System Settings shows both permissions enabled, the restarted app no longer reports an Accessibility blocker, and the default input remains the built-in MacBook Air microphone.
+- A controlled authenticated managed-Cloud short-WAV run disabled AI Polish, started recording after a local countdown, recorded for eight seconds, and stopped automatically. Capture readiness completed in 107 ms and `stop_recording` completed after the managed STT result in 4,539 ms. The newest local history row records `provider_kind = managed_cloud`, equal raw/polished text, and no output error; the owner confirmed the observed first-audio experience passed. AI Polish was restored to its original enabled setting afterward.
+- This is one real Apple Silicon macOS sample, not the required 20-trial latency/quality cohort. It validates the macOS short-recording path and Issue #83 startup experience for this device, but does not validate the capability-v2 long Ogg path or other operating systems.
 - A Windows MSVC-target `cargo check` was attempted from macOS but stopped in `ring`'s C build because the Windows MSVC headers/sysroot are unavailable (`assert.h` not found). This is a cross-toolchain limitation and is not counted as a Windows pass or an application-code failure.
-- Linux was not run in this macOS environment. Windows and Linux still require their native build/runtime jobs, and macOS still requires the permission-enabled first-recording matrix.
+- Linux was not run in this macOS environment. Windows and Linux still require their native build/runtime jobs; macOS still requires the broader latency/quality matrix and signed-release verification.
 
 ## 3. Goals
 
