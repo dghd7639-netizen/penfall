@@ -171,7 +171,7 @@ Expected: fail on the new snapshot contract and read-only invariant.
 
 Use a single parameterized query/CTE after `requireAuth()` that selects the user, best current subscription, active/current license, and current-or-sentinel quota row. Compute defaults in SQL or the pure snapshot mapper without inserting a quota row.
 
-The query must return at most one row. `revision` comes from `quota.usage_revision`, or `0` when the quota row does not yet exist.
+The query must return at most one row. In the current release it must not reference the staged `quota.usage_revision` column; return compatibility revision `0` for every status snapshot. Reading and incrementing real revisions is deferred with Tasks 4–6.
 
 - [ ] **Step 3: Return snapshot plus legacy flat fields**
 

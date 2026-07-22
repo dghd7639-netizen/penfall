@@ -507,11 +507,11 @@ Conceptual account snapshot:
 }
 ```
 
-`revision` is serialized as a decimal string to avoid JavaScript integer precision problems.
+`revision` is serialized as a decimal string to avoid JavaScript integer precision problems. In the current non-atomic release, the status query returns the compatibility value `"0"` and does not reference the staged `usage_revision` column. Real monotonic revisions begin only with the deferred atomic quota cutover.
 
 Cloud operation responses add an optional `usageSnapshot`. They do not need to repeat all entitlement fields on every request.
 
-### 8.2 Snapshot Ordering
+### 8.2 Snapshot Ordering (Deferred)
 
 The `quota` table adds a non-null `usage_revision` bigint with default zero. Every successful mutation of displayed quota counters or limits increments it in the same transaction.
 
@@ -534,6 +534,8 @@ After authentication, `/api/subscription/status` performs one read-only business
 - the current-period quota row if present.
 
 Entitlement resolution remains a pure function over the returned rows. A missing quota row is represented as zero usage with entitlement-derived limits. GET must not insert or update quota.
+
+The current query must use only pre-existing production columns and return revision `"0"`; deploying the additive atomic-meter migration is not a prerequisite for this status optimization.
 
 Do not force an entitlement index merely because PostgreSQL chooses a sequential scan for a seven-row table. Check the combined account query with realistic data before changing subscription/license indexes. Add a `(user_id, expires_at)` operation index for the required per-user expiration/reconciliation path and verify that query with `EXPLAIN (ANALYZE, BUFFERS)` in staging.
 
