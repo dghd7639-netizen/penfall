@@ -209,6 +209,23 @@ describe('authStore', () => {
   })
 
   describe('refreshSubscription', () => {
+    it('coalesces concurrent refresh triggers into one status request', async () => {
+      let release: (() => void) | undefined
+      vi.mocked(getSubscriptionStatus).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ accountSnapshot: null } as never)
+          }),
+      )
+
+      const first = getState().refreshSubscription()
+      const second = getState().refreshSubscription()
+
+      expect(getSubscriptionStatus).toHaveBeenCalledTimes(1)
+      release?.()
+      await Promise.all([first, second])
+    })
+
     it('updates quota fields from API response', async () => {
       useAuthStore.setState({
         user: { id: '1', email: 'test@example.com', name: 'Test', emailVerified: true },

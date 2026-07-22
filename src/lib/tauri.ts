@@ -118,6 +118,41 @@ export async function updateConfig(config: AppConfig): Promise<void> {
   return invoke('update_config', { config })
 }
 
+export type RecordingLimitMode = 'auto' | 'custom'
+export type SttTransport = 'fileUpload' | 'streaming' | 'localBuffered' | 'managedUpload'
+export type RecordingLimitSource =
+  | 'provider'
+  | 'managedProduct'
+  | 'clientBuffer'
+  | 'productSafety'
+  | 'unknownUpstream'
+
+export interface SttRecordingCapability {
+  registryVersion: number
+  providerId: string
+  transport: SttTransport
+  recommendedMaxSeconds: number
+  hardMaxSeconds: number
+  maxUploadBytes: number | null
+  source: RecordingLimitSource
+  explanationKey: string
+}
+
+export interface ResolvedSttRecordingLimit {
+  capability: SttRecordingCapability
+  mode: RecordingLimitMode
+  requestedSeconds: number
+  effectiveMaxSeconds: number
+}
+
+export async function getSttRecordingCapability(
+  provider: string,
+  mode: RecordingLimitMode,
+  customSeconds: number,
+): Promise<ResolvedSttRecordingLimit> {
+  return invoke('get_stt_recording_capability', { provider, mode, customSeconds })
+}
+
 export type LlmModelCapability = 'certified' | 'best_effort' | 'unknown'
 
 export async function getLlmModelCapability(

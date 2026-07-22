@@ -791,6 +791,32 @@
     "reset": "重置",
     "connectionFail": "连接失败"
   },
+  "recordingLimits": {
+    "auto": "自动（推荐）— {{duration}}",
+    "custom": "自定义",
+    "presets": "录音时长预设",
+    "numericEntry": "输入秒数",
+    "customDuration": "自定义录音秒数",
+    "allowedRange": "可用范围：{{min}}–{{max}} 秒。",
+    "corrected": "此服务商实际将使用 {{duration}}。",
+    "deadlineWarning": "录音将在 {{seconds}} 秒后自动停止。",
+    "deadlineReached": "已达到录音上限（{{duration}}），正在提交已录制的音频。{{reason}}",
+    "loading": "正在检查此服务商的录音限制…",
+    "durationSeconds": "{{count}} 秒",
+    "durationMinute": "{{count}} 分钟",
+    "durationMinutes": "{{count}} 分钟",
+    "reasons": {
+      "providerDuration": "受此语音服务商的最长录音时长限制。",
+      "appleSpeech": "受 Apple Speech 设备端识别会话限制。",
+      "clientBuffer": "受应用本地音频缓冲区的安全上限限制。",
+      "unknownUpstream": "自定义服务的限制未知，因此使用保守的默认值。",
+      "unknownProvider": "暂未识别此服务商，因此使用安全的回退值。",
+      "productSafety": "这是应用为流式语音服务设置的保守安全上限。",
+      "managedCapability": "你的云端服务支持最长至此时长的托管录音。",
+      "encoderFallback": "托管音频编码器不可用，本次录音已使用较短的本地 WAV 安全上限。",
+      "managedFallback": "云端能力信息不可用或已过期，因此使用安全的 30 秒限制。"
+    }
+  },
   "providers": {
     "stt": {
       "deepgram": "Deepgram Nova-3",

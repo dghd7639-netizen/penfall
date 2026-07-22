@@ -791,6 +791,32 @@
     "reset": "Restablecer",
     "connectionFail": "Error de conexión"
   },
+  "recordingLimits": {
+    "auto": "Automático (recomendado) — {{duration}}",
+    "custom": "Personalizado",
+    "presets": "Duraciones de grabación predefinidas",
+    "numericEntry": "Introducir segundos",
+    "customDuration": "Duración personalizada en segundos",
+    "allowedRange": "Rango permitido: {{min}}–{{max}} segundos.",
+    "corrected": "Este proveedor usará {{duration}}.",
+    "deadlineWarning": "La grabación se detendrá automáticamente en {{seconds}} segundos.",
+    "deadlineReached": "Se alcanzó el límite de grabación ({{duration}}). Enviando el audio. {{reason}}",
+    "loading": "Comprobando el límite de grabación…",
+    "durationSeconds": "{{count}} segundos",
+    "durationMinute": "{{count}} minuto",
+    "durationMinutes": "{{count}} minutos",
+    "reasons": {
+      "providerDuration": "Limitado por la duración máxima del proveedor.",
+      "appleSpeech": "Limitado por la sesión de reconocimiento local de Apple Speech.",
+      "clientBuffer": "Limitado por el búfer de audio local seguro de la aplicación.",
+      "unknownUpstream": "Se desconoce el límite del servidor personalizado; se usa un valor prudente.",
+      "unknownProvider": "Este proveedor aún no se reconoce; se usa un límite seguro.",
+      "productSafety": "Un límite prudente de la aplicación para este proveedor de streaming.",
+      "managedCapability": "Tu servicio Cloud admite grabaciones gestionadas hasta esta duración.",
+      "encoderFallback": "El codificador de audio gestionado no estaba disponible; esta sesión usó el límite WAV local más corto.",
+      "managedFallback": "La capacidad Cloud no está disponible o está obsoleta; se usa el límite seguro de 30 segundos."
+    }
+  },
   "providers": {
     "stt": {
       "deepgram": "Deepgram Nova-3",

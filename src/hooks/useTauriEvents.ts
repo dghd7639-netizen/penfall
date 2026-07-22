@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import { useAppStore } from '../stores/appStore'
+import { useAuthStore } from '../stores/authStore'
 import type {
   AppConfig,
   ContextProfileSummary,
@@ -17,6 +18,23 @@ import { capsuleErrorKeyFromPayload, type PipelineErrorPayload } from '../lib/ca
 import { invalidateCloudSessionOnce } from '../lib/cloud-session'
 
 type Unlisten = () => void | Promise<void>
+
+interface RecordingDeadlineNotice {
+  sessionId: number
+  recordingKind: 'dictation' | 'ask'
+  secondsRemaining?: number
+  effectiveMaxSeconds: number
+  providerId: string
+  explanationKey: string
+}
+
+function formatDeadlineDuration(seconds: number, t: ReturnType<typeof useTranslation>['t']) {
+  if (seconds === 60) return t('recordingLimits.durationMinute', { count: 1 })
+  if (seconds > 0 && seconds % 60 === 0) {
+    return t('recordingLimits.durationMinutes', { count: seconds / 60 })
+  }
+  return t('recordingLimits.durationSeconds', { count: seconds })
+}
 
 function safeUnlisten(unlisten: Unlisten) {
   try {
@@ -48,6 +66,7 @@ export function useTauriEvents() {
 
   useEffect(() => {
     let cancelled = false
+    let managedRunActive = false
     const unlisteners: Unlisten[] = []
 
     function addListener<T>(event: string, handler: (payload: T) => void) {
@@ -70,6 +89,12 @@ export function useTauriEvents() {
     addListener<string>('llm:chunk', appendPolishedChunk)
     addListener<PipelineState>('pipeline:state', (state) => {
       setPipelineState(state)
+      if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
+        const config = useAppStore.getState().config
+        managedRunActive =
+          config.stt_provider === 'cloud' ||
+          (config.polish_enabled && config.llm_provider === 'cloud')
+      }
       if (state === 'preparing' || state === 'idle') {
         setRecordingDeadline(null)
       }
@@ -86,9 +111,32 @@ export function useTauriEvents() {
           .catch((err) => {
             console.error('Failed to refresh history:', err)
           })
+        if (managedRunActive && useAuthStore.getState().user) {
+          // The managed request has already completed, so this read cannot add
+          // stop-to-output latency and Neon is already awake from real usage.
+          void useAuthStore.getState().refreshSubscription()
+        }
+        managedRunActive = false
       }
     })
     addListener<RecordingDeadlineSnapshot>('recording:deadline', setRecordingDeadline)
+    addListener<RecordingDeadlineNotice>('recording:deadline-warning', (payload) => {
+      toast(
+        t('recordingLimits.deadlineWarning', {
+          seconds: payload.secondsRemaining ?? 10,
+        }),
+        'info',
+      )
+    })
+    addListener<RecordingDeadlineNotice>('recording:deadline-reached', (payload) => {
+      toast(
+        t('recordingLimits.deadlineReached', {
+          duration: formatDeadlineDuration(payload.effectiveMaxSeconds, t),
+          reason: t(payload.explanationKey),
+        }),
+        'info',
+      )
+    })
     addListener<VoiceMode | null>('pipeline:voice_mode', setActiveVoiceMode)
     addListener<string>('pipeline:target_app', setTargetApp)
     addListener<InsertResult>('pipeline:insert_result', setLastInsertResult)

@@ -24,6 +24,7 @@ import i18n from '../i18n'
 let sttWarningShown = false
 let llmWarningShown = false
 let cloudWordsWarningShown = false
+let subscriptionRefreshInFlight: Promise<void> | null = null
 
 export interface AuthUser {
   id: string
@@ -416,76 +417,84 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  refreshSubscription: async () => {
-    try {
-      const status = await getSubscriptionStatus()
-      set({
-        plan: status.plan,
-        source: status.source,
-        displayName: status.displayName,
-        subscriptionEnd: status.subscriptionEnd,
-        subscriptionStatus: status.subscriptionStatus,
-        licenseStatus: status.licenseStatus ?? null,
-        quotaModel: status.quotaModel,
-        displayWordsUsedEstimate: status.displayWordsUsedEstimate,
-        displayWordsLimit: status.displayWordsLimit,
-        displayWordsResetAt: status.displayWordsResetAt,
-        sttSecondsUsed: status.sttSecondsUsed,
-        sttSecondsLimit: status.sttSecondsLimit,
-        llmTokensUsed: status.llmTokensUsed,
-        llmTokensLimit: status.llmTokensLimit,
-        cloudWordsUsed: status.cloudWordsUsed,
-        cloudWordsLimit: status.cloudWordsLimit,
-        cloudWordsResetAt: status.cloudWordsResetAt,
-        byokUnlimited: status.byokUnlimited,
-        subscriptionRefreshedAt: Date.now(),
-      })
+  refreshSubscription: () => {
+    if (subscriptionRefreshInFlight) return subscriptionRefreshInFlight
+    const refresh = (async () => {
       try {
-        await syncManagedSttCapability(status.accountSnapshot ?? null, get().user?.id ?? null)
-      } catch (error) {
-        console.warn('Failed to sync managed STT capability; using the safe fallback.', error)
-      }
-      // Clear checkout pending flag after first post-checkout refresh
-      if (get().checkoutPending) {
-        set({ checkoutPending: false })
-      }
-      const wordsUsed =
-        status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
-          ? status.displayWordsUsedEstimate
-          : status.cloudWordsUsed
-      const wordsLimit =
-        status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
-          ? status.displayWordsLimit
-          : status.cloudWordsLimit
-      if (wordsLimit > 0 && wordsUsed / wordsLimit >= 0.9) {
-        if (!cloudWordsWarningShown) {
-          toast(i18n.t('account.cloudQuotaWarning', 'Cloud words are almost used up.'), 'error')
-          cloudWordsWarningShown = true
+        const status = await getSubscriptionStatus()
+        set({
+          plan: status.plan,
+          source: status.source,
+          displayName: status.displayName,
+          subscriptionEnd: status.subscriptionEnd,
+          subscriptionStatus: status.subscriptionStatus,
+          licenseStatus: status.licenseStatus ?? null,
+          quotaModel: status.quotaModel,
+          displayWordsUsedEstimate: status.displayWordsUsedEstimate,
+          displayWordsLimit: status.displayWordsLimit,
+          displayWordsResetAt: status.displayWordsResetAt,
+          sttSecondsUsed: status.sttSecondsUsed,
+          sttSecondsLimit: status.sttSecondsLimit,
+          llmTokensUsed: status.llmTokensUsed,
+          llmTokensLimit: status.llmTokensLimit,
+          cloudWordsUsed: status.cloudWordsUsed,
+          cloudWordsLimit: status.cloudWordsLimit,
+          cloudWordsResetAt: status.cloudWordsResetAt,
+          byokUnlimited: status.byokUnlimited,
+          subscriptionRefreshedAt: Date.now(),
+        })
+        try {
+          await syncManagedSttCapability(status.accountSnapshot ?? null, get().user?.id ?? null)
+        } catch (error) {
+          console.warn('Failed to sync managed STT capability; using the safe fallback.', error)
         }
-        sttWarningShown = true
-        llmWarningShown = true
-      } else {
-        cloudWordsWarningShown = false
+        // Clear checkout pending flag after first post-checkout refresh
+        if (get().checkoutPending) {
+          set({ checkoutPending: false })
+        }
+        const wordsUsed =
+          status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
+            ? status.displayWordsUsedEstimate
+            : status.cloudWordsUsed
+        const wordsLimit =
+          status.quotaModel === 'legacy_dual_meter' && status.displayWordsLimit > 0
+            ? status.displayWordsLimit
+            : status.cloudWordsLimit
+        if (wordsLimit > 0 && wordsUsed / wordsLimit >= 0.9) {
+          if (!cloudWordsWarningShown) {
+            toast(i18n.t('account.cloudQuotaWarning', 'Cloud words are almost used up.'), 'error')
+            cloudWordsWarningShown = true
+          }
+          sttWarningShown = true
+          llmWarningShown = true
+        } else {
+          cloudWordsWarningShown = false
+        }
+        if (
+          status.sttSecondsLimit > 0 &&
+          status.sttSecondsUsed / status.sttSecondsLimit >= 0.9 &&
+          !sttWarningShown
+        ) {
+          toast(i18n.t('account.sttQuotaWarning'), 'error')
+          sttWarningShown = true
+        }
+        if (
+          status.llmTokensLimit > 0 &&
+          status.llmTokensUsed / status.llmTokensLimit >= 0.9 &&
+          !llmWarningShown
+        ) {
+          toast(i18n.t('account.llmQuotaWarning'), 'error')
+          llmWarningShown = true
+        }
+      } catch (e) {
+        console.warn('Failed to refresh subscription status:', e instanceof Error ? e.message : e)
       }
-      if (
-        status.sttSecondsLimit > 0 &&
-        status.sttSecondsUsed / status.sttSecondsLimit >= 0.9 &&
-        !sttWarningShown
-      ) {
-        toast(i18n.t('account.sttQuotaWarning'), 'error')
-        sttWarningShown = true
-      }
-      if (
-        status.llmTokensLimit > 0 &&
-        status.llmTokensUsed / status.llmTokensLimit >= 0.9 &&
-        !llmWarningShown
-      ) {
-        toast(i18n.t('account.llmQuotaWarning'), 'error')
-        llmWarningShown = true
-      }
-    } catch (e) {
-      console.warn('Failed to refresh subscription status:', e instanceof Error ? e.message : e)
-    }
+    })()
+    subscriptionRefreshInFlight = refresh
+    void refresh.finally(() => {
+      if (subscriptionRefreshInFlight === refresh) subscriptionRefreshInFlight = null
+    })
+    return refresh
   },
 
   handleDeepLinkToken: async (token: string) => {

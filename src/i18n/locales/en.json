@@ -791,6 +791,32 @@
     "reset": "Reset",
     "connectionFail": "Connection failed"
   },
+  "recordingLimits": {
+    "auto": "Auto (recommended) — {{duration}}",
+    "custom": "Custom",
+    "presets": "Recording limit presets",
+    "numericEntry": "Enter seconds",
+    "customDuration": "Custom duration in seconds",
+    "allowedRange": "Allowed range: {{min}}–{{max}} seconds.",
+    "corrected": "This provider will use {{duration}}.",
+    "deadlineWarning": "Recording will stop automatically in {{seconds}} seconds.",
+    "deadlineReached": "Recording limit reached ({{duration}}). Your audio is being submitted. {{reason}}",
+    "loading": "Checking this provider’s recording limit…",
+    "durationSeconds": "{{count}} seconds",
+    "durationMinute": "{{count}} minute",
+    "durationMinutes": "{{count}} minutes",
+    "reasons": {
+      "providerDuration": "Limited by this provider’s maximum recording duration.",
+      "appleSpeech": "Limited by Apple Speech’s on-device recognition session.",
+      "clientBuffer": "Limited by the app’s safe local audio buffer.",
+      "unknownUpstream": "The custom server’s limit is unknown; a conservative default is used.",
+      "unknownProvider": "This provider is not yet recognized; a safe fallback is used.",
+      "productSafety": "A conservative app limit for this streaming provider.",
+      "managedCapability": "Your Cloud service supports managed recordings up to this duration.",
+      "encoderFallback": "The managed audio encoder was unavailable, so this session used the shorter local WAV-safe limit.",
+      "managedFallback": "Cloud capability is unavailable or stale, so the safe 30-second limit is used."
+    }
+  },
   "providers": {
     "stt": {
       "deepgram": "Deepgram Nova-3",

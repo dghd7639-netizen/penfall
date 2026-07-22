@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import { SttPane } from '../SttPane'
 import * as tauri from '../../../lib/tauri'
 
@@ -9,7 +9,7 @@ vi.mock('../../../lib/tauri')
 // Mock i18n
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, values?: Record<string, string | number>) => {
       const translations: Record<string, string> = {
         'settings.provider': 'Provider',
         'nav.upgrade': 'Upgrade',
@@ -20,6 +20,21 @@ vi.mock('react-i18next', () => ({
         'settings.connectionFailed': 'Connection failed',
         'settings.storedLocally': 'Stored locally',
         'settings.sttLanguage': 'STT Language',
+        'settings.maxRecordingDuration': 'Recording limit',
+        'recordingLimits.auto': 'Auto (recommended) — {{duration}}',
+        'recordingLimits.custom': 'Custom',
+        'recordingLimits.customDuration': 'Custom duration in seconds',
+        'recordingLimits.allowedRange': 'Allowed range: {{min}}–{{max}} seconds.',
+        'recordingLimits.corrected': 'This provider will use {{duration}}.',
+        'recordingLimits.durationSeconds': '{{count}} seconds',
+        'recordingLimits.durationMinute': '{{count}} minute',
+        'recordingLimits.durationMinutes': '{{count}} minutes',
+        'recordingLimits.presets': 'Recording limit presets',
+        'recordingLimits.numericEntry': 'Enter seconds',
+        'recordingLimits.reasons.productSafety': 'Product safety limit',
+        'recordingLimits.reasons.providerDuration': 'Provider duration limit',
+        'recordingLimits.reasons.managedCapability': 'Managed Cloud limit',
+        'recordingLimits.reasons.managedFallback': 'Safe Cloud fallback',
         'settings.cloudSttPro': 'Cloud STT (Pro)',
         'settings.sttSignInHint': 'Sign in to use cloud STT',
         'settings.sttUpgradeHint': 'Upgrade to Pro to use cloud STT',
@@ -48,7 +63,10 @@ vi.mock('react-i18next', () => ({
         'providers.stt.volcengineDoubao': 'Volcengine Doubao Realtime ASR',
         'providers.stt.appleSpeech': 'Apple Speech (Local)',
       }
-      return translations[key] || key
+      return Object.entries(values ?? {}).reduce(
+        (text, [name, value]) => text.replace(`{{${name}}}`, String(value)),
+        translations[key] || key,
+      )
     },
   }),
 }))
@@ -64,6 +82,9 @@ const mockAppStore = {
     stt_custom_base_url: 'http://localhost:8000/v1',
     stt_custom_model: 'Systran/faster-whisper-large-v3',
     stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
+    recording_limit_mode: 'auto' as 'auto' | 'custom',
+    custom_recording_limit_seconds: 600,
+    max_recording_seconds: 600,
   },
   updateConfig: vi.fn(),
   sttTestStatus: 'idle' as 'idle' | 'testing' | 'success' | 'error',
@@ -125,6 +146,9 @@ describe('SttPane', () => {
       stt_custom_base_url: 'http://localhost:8000/v1',
       stt_custom_model: 'Systran/faster-whisper-large-v3',
       stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
+      recording_limit_mode: 'auto',
+      custom_recording_limit_seconds: 600,
+      max_recording_seconds: 600,
     }
     mockAppStore.sttTestStatus = 'idle'
     mockAppStore.sttLatencyMs = null
@@ -145,6 +169,21 @@ describe('SttPane', () => {
     vi.clearAllMocks()
     vi.mocked(tauri.readCredential).mockResolvedValue(null)
     vi.mocked(tauri.setCredential).mockResolvedValue(undefined)
+    vi.mocked(tauri.getSttRecordingCapability).mockResolvedValue({
+      capability: {
+        registryVersion: 1,
+        providerId: 'deepgram',
+        transport: 'streaming',
+        recommendedMaxSeconds: 600,
+        hardMaxSeconds: 3600,
+        maxUploadBytes: null,
+        source: 'productSafety',
+        explanationKey: 'recordingLimits.reasons.productSafety',
+      },
+      mode: 'auto',
+      requestedSeconds: 600,
+      effectiveMaxSeconds: 600,
+    })
     vi.mocked(tauri.getSttProviderDiagnostics).mockResolvedValue({
       provider: 'custom-whisper',
       kind: 'localCompatible',
@@ -262,6 +301,113 @@ describe('SttPane', () => {
       expect(mockAppStore.updateConfig).toHaveBeenCalledWith({ stt_provider: 'assemblyai' })
       expect(mockAppStore.setSttTestStatus).toHaveBeenCalledWith('idle')
       expect(mockAppStore.setSttLatencyMs).toHaveBeenCalledWith(null)
+    })
+  })
+
+  describe('Recording limit', () => {
+    it('shows the Rust-resolved Auto value and governing reason', async () => {
+      render(<SttPane />)
+
+      expect(
+        await screen.findByRole('option', { name: /Auto \(recommended\).*10 minutes/i }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Product safety limit')).toBeInTheDocument()
+      expect(tauri.getSttRecordingCapability).toHaveBeenCalledWith('deepgram', 'auto', 600)
+    })
+
+    it('filters preset choices using the Rust hard maximum', async () => {
+      mockAppStore.config.stt_provider = 'glm-asr'
+      mockAppStore.config.recording_limit_mode = 'custom'
+      mockAppStore.config.custom_recording_limit_seconds = 600
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'glm-asr',
+          transport: 'fileUpload',
+          recommendedMaxSeconds: 30,
+          hardMaxSeconds: 30,
+          maxUploadBytes: 24 * 1024 * 1024,
+          source: 'provider',
+          explanationKey: 'recordingLimits.reasons.providerDuration',
+        },
+        mode: 'custom',
+        requestedSeconds: 600,
+        effectiveMaxSeconds: 30,
+      })
+
+      render(<SttPane />)
+
+      const preset = await screen.findByLabelText('Recording limit presets')
+      expect(within(preset).getByRole('option', { name: '30 seconds' })).toBeInTheDocument()
+      expect(within(preset).queryByRole('option', { name: '1 minute' })).not.toBeInTheDocument()
+      expect(screen.getByText('This provider will use 30 seconds.')).toBeInTheDocument()
+    })
+
+    it('updates mode and exposes a bounded numeric custom entry', async () => {
+      render(<SttPane />)
+      const mode = await screen.findByLabelText('Recording limit')
+
+      fireEvent.change(mode, { target: { value: 'custom' } })
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({ recording_limit_mode: 'custom' })
+
+      mockAppStore.config.recording_limit_mode = 'custom'
+      cleanup()
+      render(<SttPane />)
+      const input = await screen.findByLabelText('Custom duration in seconds')
+      expect(input).toHaveAttribute('min', '30')
+      expect(input).toHaveAttribute('max', '3600')
+      fireEvent.change(input, { target: { value: '300' } })
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        custom_recording_limit_seconds: 300,
+      })
+    })
+
+    it('shows 30 seconds for stale Cloud metadata and 10 minutes only for compatible v2', async () => {
+      mockAppStore.config.stt_provider = 'cloud'
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'cloud',
+          transport: 'managedUpload',
+          recommendedMaxSeconds: 30,
+          hardMaxSeconds: 30,
+          maxUploadBytes: 4_000_000,
+          source: 'managedProduct',
+          explanationKey: 'recordingLimits.reasons.managedFallback',
+        },
+        mode: 'auto',
+        requestedSeconds: 30,
+        effectiveMaxSeconds: 30,
+      })
+      render(<SttPane />)
+
+      expect(
+        await screen.findByRole('option', { name: /Auto \(recommended\).*30 seconds/i }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Safe Cloud fallback')).toBeInTheDocument()
+
+      cleanup()
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'cloud',
+          transport: 'managedUpload',
+          recommendedMaxSeconds: 600,
+          hardMaxSeconds: 600,
+          maxUploadBytes: 4_000_000,
+          source: 'managedProduct',
+          explanationKey: 'recordingLimits.reasons.managedCapability',
+        },
+        mode: 'auto',
+        requestedSeconds: 600,
+        effectiveMaxSeconds: 600,
+      })
+      render(<SttPane />)
+
+      expect(
+        await screen.findByRole('option', { name: /Auto \(recommended\).*10 minutes/i }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Managed Cloud limit')).toBeInTheDocument()
     })
   })
 
