@@ -1221,7 +1221,7 @@ impl PipelineHandle {
                 None
             };
 
-        // P0-3: Pre-connect STT provider before spawning task
+        // Prepare STT configuration before starting the shared audio/STT readiness phase.
         let cloud_operation_id = generate_cloud_operation_id();
         *self
             .cloud_operation_id
@@ -1277,34 +1277,11 @@ impl PipelineHandle {
                 return Ok(());
             }
         };
-        if let Err(e) = provider.connect(&stt_config).await {
-            tracing::error!("STT connect failed: {}", e);
-            let _ = self
-                .app_handle
-                .emit("pipeline:error", format!("STT connection failed: {e}"));
-            *self
-                .preloaded_config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_app_ctx
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_dictionary
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            *self
-                .preloaded_correction_rules
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-            self.set_state(PipelineState::Idle);
-            return Ok(());
-        }
-
-        // Start audio capture on dedicated thread
+        // Start the platform audio backend before connecting STT. Both readiness
+        // operations are then polled concurrently, so speech captured while a
+        // network provider connects remains queued instead of being clipped.
         let config = AudioConfig::default();
-        let (handle, mut audio_rx) = match AudioCaptureHandle::start(config) {
+        let (mut handle, mut audio_rx) = match AudioCaptureHandle::start(config) {
             Ok(result) => result,
             Err(e) => {
                 tracing::error!("Audio capture failed: {}", e);
@@ -1331,6 +1308,46 @@ impl PipelineHandle {
                 return Ok(());
             }
         };
+        let startup_error = match crate::audio::await_recording_startup(
+            handle.wait_until_ready(),
+            provider.connect(&stt_config),
+        )
+        .await
+        {
+            Ok(()) => None,
+            Err(crate::audio::RecordingStartupError::Audio(error)) => {
+                Some(format!("Audio capture failed: {error}"))
+            }
+            Err(crate::audio::RecordingStartupError::Stt(error)) => {
+                Some(format!("STT connection failed: {error}"))
+            }
+            Err(crate::audio::RecordingStartupError::Timeout) => {
+                Some("Recording startup timed out after 30 seconds. Please try again.".to_string())
+            }
+        };
+        if let Some(message) = startup_error {
+            tracing::error!("Recording startup failed: {}", message);
+            handle.stop();
+            let _ = self.app_handle.emit("pipeline:error", message);
+            *self
+                .preloaded_config
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            *self
+                .preloaded_app_ctx
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            *self
+                .preloaded_dictionary
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            *self
+                .preloaded_correction_rules
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = None;
+            self.set_state(PipelineState::Idle);
+            return Ok(());
+        }
 
         // Store the audio handle's volume reference.
         // Check abort_flag first — if abort() was called while we were connecting
@@ -1591,7 +1608,7 @@ impl PipelineHandle {
 
     pub async fn stop(&self) -> Result<()> {
         // Acquire pipeline_lock so we wait for start() to finish its setup
-        // (load_config, connect STT, start audio) before reading shared state.
+        // (load config, initialize audio and connect STT) before reading shared state.
         // Released before the long stt_done wait so start() isn't blocked 120s.
         let guard = self.pipeline_lock.lock().await;
 

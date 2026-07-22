@@ -1032,13 +1032,25 @@ pub(crate) async fn start_reserved_ask_dictation(
             Some(client.inner().clone()),
         )
         .map_err(|e| e.to_string())?;
-        provider
-            .connect(&stt_config)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let (handle, mut audio_rx) = AudioCaptureHandle::start(AudioConfig::default())
+        let (mut handle, mut audio_rx) = AudioCaptureHandle::start(AudioConfig::default())
             .map_err(|e| map_audio_capture_error(&e.to_string()))?;
+        if let Err(error) = crate::audio::await_recording_startup(
+            handle.wait_until_ready(),
+            provider.connect(&stt_config),
+        )
+        .await
+        {
+            handle.stop();
+            return Err(match error {
+                crate::audio::RecordingStartupError::Audio(error) => {
+                    map_audio_capture_error(&error.to_string())
+                }
+                crate::audio::RecordingStartupError::Stt(error) => error.to_string(),
+                crate::audio::RecordingStartupError::Timeout => {
+                    "Recording startup timed out after 30 seconds. Please try again.".to_string()
+                }
+            });
+        }
         let mut handle = Some(handle);
         let transcript = Arc::new(Mutex::new(String::new()));
         let error = Arc::new(Mutex::new(None::<String>));
