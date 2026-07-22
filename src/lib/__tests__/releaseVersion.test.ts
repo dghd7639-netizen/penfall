@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import ciWorkflowSource from '../../../.github/workflows/ci.yml?raw'
 import constantsSource from '../constants.ts?raw'
+import linuxVerificationScriptSource from '../../../.github/scripts/upload-linux-verification-artifacts.sh?raw'
 import windowsCertificateScriptSource from '../../../.github/scripts/import-windows-certificate.ps1?raw'
 import releaseWorkflowSource from '../../../.github/workflows/release.yml?raw'
 
@@ -27,6 +29,24 @@ describe('release version wiring', () => {
     )
     expect(windowsCertificateScriptSource).toContain(
       'Unsigned Windows release explicitly allowed for this manual dispatch.',
+    )
+  })
+
+  it('builds and verifies Linux arm64 release artifacts on a native runner', () => {
+    expect(ciWorkflowSource).toContain('platform: ubuntu-22.04-arm')
+    expect(ciWorkflowSource).toContain('target: aarch64-unknown-linux-gnu')
+    expect(releaseWorkflowSource).toContain('platform: ubuntu-22.04-arm')
+    expect(releaseWorkflowSource).toContain('rust_targets: aarch64-unknown-linux-gnu')
+    expect(releaseWorkflowSource).toContain("args: '--target aarch64-unknown-linux-gnu'")
+    expect(releaseWorkflowSource).toContain('LINUX_ARCH: ${{ matrix.linux_arch }}')
+    expect(linuxVerificationScriptSource).toContain(
+      'verification_dir="release-verification/linux-${LINUX_ARCH}"',
+    )
+    expect(linuxVerificationScriptSource).toContain(
+      'sha_file="$verification_dir/SHA256SUMS-linux-${LINUX_ARCH}.txt"',
+    )
+    expect(linuxVerificationScriptSource).toContain(
+      'public_key_path="$verification_dir/OpenTypeless-Linux-${LINUX_ARCH}-GPG-KEY.asc"',
     )
   })
 })
