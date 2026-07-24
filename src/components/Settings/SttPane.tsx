@@ -24,6 +24,7 @@ import { FormField } from './shared/FormField'
 import { CheckCircle2, XCircle, Loader2, Crown } from 'lucide-react'
 
 const RECORDING_LIMIT_PRESETS = [30, 60, 120, 300, 600, 1800, 3600]
+const MIN_CUSTOM_RECORDING_SECONDS = 30
 
 function formatRecordingDuration(
   seconds: number,
@@ -50,6 +51,7 @@ export function SttPane() {
   const [testErrorMessage, setTestErrorMessage] = useState<string | null>(null)
   const [credentialErrorMessage, setCredentialErrorMessage] = useState<string | null>(null)
   const [recordingLimit, setRecordingLimit] = useState<ResolvedSttRecordingLimit | null>(null)
+  const [customDurationEntryRequested, setCustomDurationEntryRequested] = useState(false)
 
   const isCloud = config.stt_provider === 'cloud'
   const isAppleSpeech = config.stt_provider === APPLE_SPEECH_PROVIDER
@@ -159,6 +161,16 @@ export function SttPane() {
     config.stt_provider,
   ])
 
+  useEffect(() => {
+    setCustomDurationEntryRequested(false)
+  }, [config.stt_provider])
+
+  useEffect(() => {
+    if (config.recording_limit_mode === 'auto') {
+      setCustomDurationEntryRequested(false)
+    }
+  }, [config.recording_limit_mode])
+
   const persistSttCredential = useCallback(
     (value: string, delayMs = 350) => {
       if (isCloud || isAppleSpeech) return
@@ -209,6 +221,91 @@ export function SttPane() {
       setTestErrorMessage(err instanceof Error ? err.message : typeof err === 'string' ? err : null)
       setSttTestStatus('error')
     }
+  }
+
+  const availableRecordingPresets = recordingLimit
+    ? RECORDING_LIMIT_PRESETS.filter(
+        (seconds) => seconds <= recordingLimit.capability.hardMaxSeconds,
+      )
+    : []
+  const savedDurationIsPreset =
+    recordingLimit !== null &&
+    availableRecordingPresets.includes(config.custom_recording_limit_seconds)
+  const canEnterCustomDuration =
+    recordingLimit !== null &&
+    recordingLimit.capability.hardMaxSeconds > MIN_CUSTOM_RECORDING_SECONDS
+  const recordingDurationValue =
+    config.recording_limit_mode === 'auto'
+      ? 'auto'
+      : customDurationEntryRequested && canEnterCustomDuration
+        ? 'custom'
+        : savedDurationIsPreset
+          ? String(config.custom_recording_limit_seconds)
+          : canEnterCustomDuration
+            ? 'custom'
+            : String(recordingLimit?.effectiveMaxSeconds ?? MIN_CUSTOM_RECORDING_SECONDS)
+  const showCustomDurationEntry =
+    canEnterCustomDuration &&
+    (customDurationEntryRequested ||
+      (config.recording_limit_mode === 'custom' && !savedDurationIsPreset))
+  const isManagedCapability =
+    recordingLimit?.capability.explanationKey === 'recordingLimits.reasons.managedCapability'
+  const isManagedFallback =
+    recordingLimit?.capability.explanationKey === 'recordingLimits.reasons.managedFallback'
+  const isProviderFixedLimit =
+    !canEnterCustomDuration &&
+    recordingLimit?.capability.explanationKey === 'recordingLimits.reasons.providerDuration'
+  const recordingLimitHelper = recordingLimit
+    ? showCustomDurationEntry
+      ? t(
+          isManagedCapability
+            ? 'recordingLimits.allowedCloudRange'
+            : 'recordingLimits.allowedRangeWithReason',
+          {
+            min: formatRecordingDuration(MIN_CUSTOM_RECORDING_SECONDS, t),
+            max: formatRecordingDuration(recordingLimit.capability.hardMaxSeconds, t),
+            reason: t(recordingLimit.capability.explanationKey),
+          },
+        )
+      : config.recording_limit_mode === 'custom'
+        ? isProviderFixedLimit
+          ? t('recordingLimits.providerFixedLimit', {
+              max: formatRecordingDuration(recordingLimit.capability.hardMaxSeconds, t),
+            })
+          : isManagedCapability
+            ? t('recordingLimits.currentSelectionWithCloudMax', {
+                current: formatRecordingDuration(recordingLimit.effectiveMaxSeconds, t),
+                max: formatRecordingDuration(recordingLimit.capability.hardMaxSeconds, t),
+              })
+            : isManagedFallback
+              ? t(recordingLimit.capability.explanationKey)
+              : t('recordingLimits.currentSelectionWithLimit', {
+                  current: formatRecordingDuration(recordingLimit.effectiveMaxSeconds, t),
+                  max: formatRecordingDuration(recordingLimit.capability.hardMaxSeconds, t),
+                  reason: t(recordingLimit.capability.explanationKey),
+                })
+        : t(recordingLimit.capability.explanationKey)
+    : null
+
+  const handleRecordingDurationChange = (value: string) => {
+    if (value === 'auto') {
+      setCustomDurationEntryRequested(false)
+      updateConfig({ recording_limit_mode: 'auto' })
+      return
+    }
+    if (value === 'custom') {
+      setCustomDurationEntryRequested(true)
+      updateConfig({ recording_limit_mode: 'custom' })
+      return
+    }
+
+    const seconds = Number(value)
+    if (!Number.isFinite(seconds)) return
+    setCustomDurationEntryRequested(false)
+    updateConfig({
+      recording_limit_mode: 'custom',
+      custom_recording_limit_seconds: seconds,
+    })
   }
 
   return (
@@ -510,12 +607,8 @@ export function SttPane() {
           <div className="space-y-2">
             <select
               aria-label={t('settings.maxRecordingDuration')}
-              value={config.recording_limit_mode}
-              onChange={(event) =>
-                updateConfig({
-                  recording_limit_mode: event.target.value as 'auto' | 'custom',
-                })
-              }
+              value={recordingDurationValue}
+              onChange={(event) => handleRecordingDurationChange(event.target.value)}
               className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
             >
               <option value="auto">
@@ -526,75 +619,59 @@ export function SttPane() {
                   ),
                 })}
               </option>
-              <option value="custom">{t('recordingLimits.custom')}</option>
+              {availableRecordingPresets.map((seconds) => (
+                <option key={seconds} value={seconds}>
+                  {formatRecordingDuration(seconds, t)}
+                </option>
+              ))}
+              {canEnterCustomDuration && (
+                <option value="custom">{t('recordingLimits.numericEntry')}</option>
+              )}
             </select>
 
-            {config.recording_limit_mode === 'custom' && (
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                <select
-                  aria-label={t('recordingLimits.presets')}
-                  value={
-                    RECORDING_LIMIT_PRESETS.includes(config.custom_recording_limit_seconds) &&
-                    config.custom_recording_limit_seconds <=
-                      recordingLimit.capability.hardMaxSeconds
-                      ? String(config.custom_recording_limit_seconds)
-                      : 'custom'
-                  }
-                  onChange={(event) => {
-                    if (event.target.value !== 'custom') {
-                      updateConfig({
-                        custom_recording_limit_seconds: Number(event.target.value),
-                      })
-                    }
-                  }}
-                  className="min-w-0 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+            {showCustomDurationEntry && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="custom-recording-duration"
+                  className="block text-[12px] font-medium text-text-secondary"
                 >
-                  {RECORDING_LIMIT_PRESETS.filter(
-                    (seconds) => seconds <= recordingLimit.capability.hardMaxSeconds,
-                  ).map((seconds) => (
-                    <option key={seconds} value={seconds}>
-                      {formatRecordingDuration(seconds, t)}
-                    </option>
-                  ))}
-                  <option value="custom">{t('recordingLimits.numericEntry')}</option>
-                </select>
-                <input
-                  aria-label={t('recordingLimits.customDuration')}
-                  type="number"
-                  min={30}
-                  max={recordingLimit.capability.hardMaxSeconds}
-                  step={1}
-                  value={config.custom_recording_limit_seconds}
-                  onChange={(event) => {
-                    const seconds = Number(event.target.value)
-                    if (Number.isFinite(seconds) && seconds >= 0) {
-                      updateConfig({ custom_recording_limit_seconds: Math.floor(seconds) })
-                    }
-                  }}
-                  className="min-w-0 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
-                />
+                  {t('recordingLimits.customDuration')}
+                </label>
+                <div className="flex items-center rounded-[10px] border border-border bg-bg-secondary transition-colors focus-within:border-border-focus">
+                  <input
+                    id="custom-recording-duration"
+                    aria-label={t('recordingLimits.customDuration')}
+                    type="number"
+                    min={MIN_CUSTOM_RECORDING_SECONDS}
+                    max={recordingLimit.capability.hardMaxSeconds}
+                    step={1}
+                    value={config.custom_recording_limit_seconds}
+                    onChange={(event) => {
+                      const seconds = Number(event.target.value)
+                      if (Number.isFinite(seconds) && seconds >= 0) {
+                        updateConfig({ custom_recording_limit_seconds: Math.floor(seconds) })
+                      }
+                    }}
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[13px] text-text-primary outline-none"
+                  />
+                  <span className="pr-3 text-[12px] text-text-secondary" aria-hidden="true">
+                    {t('recordingLimits.secondsUnit')}
+                  </span>
+                </div>
               </div>
             )}
 
-            {config.recording_limit_mode === 'custom' && (
-              <p className="text-[11px] text-text-tertiary">
-                {t('recordingLimits.allowedRange', {
-                  min: 30,
-                  max: recordingLimit.capability.hardMaxSeconds,
-                })}
-              </p>
+            {recordingLimitHelper && (
+              <p className="text-[12px] text-text-secondary">{recordingLimitHelper}</p>
             )}
-            {recordingLimit.mode === 'custom' &&
+            {config.recording_limit_mode === 'custom' &&
               recordingLimit.requestedSeconds !== recordingLimit.effectiveMaxSeconds && (
-                <p className="text-[11px] text-amber-500">
+                <p className="text-[12px] text-amber-500">
                   {t('recordingLimits.corrected', {
                     duration: formatRecordingDuration(recordingLimit.effectiveMaxSeconds, t),
                   })}
                 </p>
               )}
-            <p className="text-[11px] text-text-tertiary">
-              {t(recordingLimit.capability.explanationKey)}
-            </p>
           </div>
         ) : (
           <p className="text-[12px] text-text-tertiary">{t('recordingLimits.loading')}</p>

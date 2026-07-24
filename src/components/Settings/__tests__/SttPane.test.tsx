@@ -20,20 +20,33 @@ vi.mock('react-i18next', () => ({
         'settings.connectionFailed': 'Connection failed',
         'settings.storedLocally': 'Stored locally',
         'settings.sttLanguage': 'STT Language',
-        'settings.maxRecordingDuration': 'Recording limit',
-        'recordingLimits.auto': 'Auto (recommended) — {{duration}}',
+        'settings.maxRecordingDuration': 'Single recording duration',
+        'recordingLimits.auto': 'Auto (recommended, up to {{duration}})',
         'recordingLimits.custom': 'Custom',
-        'recordingLimits.customDuration': 'Custom duration in seconds',
-        'recordingLimits.allowedRange': 'Allowed range: {{min}}–{{max}} seconds.',
+        'recordingLimits.customDuration': 'Custom duration',
+        'recordingLimits.allowedRange': 'Supported range: {{min}}–{{max}}.',
+        'recordingLimits.allowedRangeWithReason': 'Range: {{min}}–{{max}}. {{reason}}',
+        'recordingLimits.allowedCloudRange':
+          'Range: {{min}}–{{max}}. Set by current Cloud capability.',
         'recordingLimits.corrected': 'This provider will use {{duration}}.',
+        'recordingLimits.currentSelectionWithCloudMax':
+          'Current: {{current}}. Cloud supports up to {{max}}.',
+        'recordingLimits.currentSelectionWithLimit':
+          'Selected: {{current}}; app limit: {{max}}. {{reason}}',
+        'recordingLimits.providerFixedLimit': 'This provider allows recordings up to {{max}}.',
         'recordingLimits.durationSeconds': '{{count}} seconds',
         'recordingLimits.durationMinute': '{{count}} minute',
         'recordingLimits.durationMinutes': '{{count}} minutes',
+        'recordingLimits.secondsUnit': 'seconds',
         'recordingLimits.presets': 'Recording limit presets',
-        'recordingLimits.numericEntry': 'Enter seconds',
+        'recordingLimits.numericEntry': 'Custom duration…',
         'recordingLimits.reasons.productSafety': 'Product safety limit',
         'recordingLimits.reasons.providerDuration': 'Provider duration limit',
-        'recordingLimits.reasons.managedCapability': 'Managed Cloud limit',
+        'recordingLimits.reasons.appleSpeech': 'Apple Speech session limit',
+        'recordingLimits.reasons.clientBuffer': 'Client buffer limit',
+        'recordingLimits.reasons.unknownUpstream': 'Upstream limit unknown',
+        'recordingLimits.reasons.unknownProvider': 'Provider limit unknown',
+        'recordingLimits.reasons.managedCapability': 'Set automatically for OpenTypeless Cloud.',
         'recordingLimits.reasons.managedFallback': 'Safe Cloud fallback',
         'settings.cloudSttPro': 'Cloud STT (Pro)',
         'settings.sttSignInHint': 'Sign in to use cloud STT',
@@ -309,13 +322,13 @@ describe('SttPane', () => {
       render(<SttPane />)
 
       expect(
-        await screen.findByRole('option', { name: /Auto \(recommended\).*10 minutes/i }),
+        await screen.findByRole('option', { name: /Auto \(recommended,.*10 minutes/i }),
       ).toBeInTheDocument()
       expect(screen.getByText('Product safety limit')).toBeInTheDocument()
       expect(tauri.getSttRecordingCapability).toHaveBeenCalledWith('deepgram', 'auto', 600)
     })
 
-    it('filters preset choices using the Rust hard maximum', async () => {
+    it('filters choices in the single duration selector using the Rust hard maximum', async () => {
       mockAppStore.config.stt_provider = 'glm-asr'
       mockAppStore.config.recording_limit_mode = 'custom'
       mockAppStore.config.custom_recording_limit_seconds = 600
@@ -337,27 +350,160 @@ describe('SttPane', () => {
 
       render(<SttPane />)
 
-      const preset = await screen.findByLabelText('Recording limit presets')
-      expect(within(preset).getByRole('option', { name: '30 seconds' })).toBeInTheDocument()
-      expect(within(preset).queryByRole('option', { name: '1 minute' })).not.toBeInTheDocument()
+      const duration = await screen.findByLabelText('Single recording duration')
+      expect(within(duration).getByRole('option', { name: '30 seconds' })).toBeInTheDocument()
+      expect(within(duration).queryByRole('option', { name: '1 minute' })).not.toBeInTheDocument()
+      expect(
+        within(duration).queryByRole('option', { name: 'Custom duration…' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.getByText('This provider allows recordings up to 30 seconds.'),
+      ).toBeInTheDocument()
       expect(screen.getByText('This provider will use 30 seconds.')).toBeInTheDocument()
     })
 
-    it('updates mode and exposes a bounded numeric custom entry', async () => {
-      render(<SttPane />)
-      const mode = await screen.findByLabelText('Recording limit')
+    it('shows one selected duration and distinguishes it from the Cloud maximum', async () => {
+      mockAppStore.config.stt_provider = 'cloud'
+      mockAppStore.config.recording_limit_mode = 'custom'
+      mockAppStore.config.custom_recording_limit_seconds = 30
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'cloud',
+          transport: 'managedUpload',
+          recommendedMaxSeconds: 600,
+          hardMaxSeconds: 600,
+          maxUploadBytes: 4_000_000,
+          source: 'managedProduct',
+          explanationKey: 'recordingLimits.reasons.managedCapability',
+        },
+        mode: 'custom',
+        requestedSeconds: 30,
+        effectiveMaxSeconds: 30,
+      })
 
-      fireEvent.change(mode, { target: { value: 'custom' } })
+      render(<SttPane />)
+
+      const duration = await screen.findByLabelText('Single recording duration')
+      expect(duration).toHaveValue('30')
+      expect(screen.queryByLabelText('Recording limit presets')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Custom duration')).not.toBeInTheDocument()
+      expect(
+        screen.getByText('Current: 30 seconds. Cloud supports up to 10 minutes.'),
+      ).toBeInTheDocument()
+    })
+
+    it('reveals a bounded numeric entry only after Custom duration is selected', async () => {
+      mockAppStore.config.stt_provider = 'cloud'
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'cloud',
+          transport: 'managedUpload',
+          recommendedMaxSeconds: 600,
+          hardMaxSeconds: 600,
+          maxUploadBytes: 4_000_000,
+          source: 'managedProduct',
+          explanationKey: 'recordingLimits.reasons.managedCapability',
+        },
+        mode: 'auto',
+        requestedSeconds: 600,
+        effectiveMaxSeconds: 600,
+      })
+      render(<SttPane />)
+
+      const duration = await screen.findByLabelText('Single recording duration')
+      expect(screen.queryByLabelText('Custom duration')).not.toBeInTheDocument()
+
+      fireEvent.change(duration, { target: { value: 'custom' } })
       expect(mockAppStore.updateConfig).toHaveBeenCalledWith({ recording_limit_mode: 'custom' })
 
-      mockAppStore.config.recording_limit_mode = 'custom'
-      cleanup()
-      render(<SttPane />)
-      const input = await screen.findByLabelText('Custom duration in seconds')
+      const input = await screen.findByLabelText('Custom duration')
       expect(input).toHaveAttribute('min', '30')
-      expect(input).toHaveAttribute('max', '3600')
+      expect(input).toHaveAttribute('max', '600')
+      expect(screen.getByText('seconds')).toBeInTheDocument()
+      expect(
+        screen.getByText('Range: 30 seconds–10 minutes. Set by current Cloud capability.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Current: 10 minutes. Cloud supports up to 10 minutes.'),
+      ).not.toBeInTheDocument()
       fireEvent.change(input, { target: { value: '300' } })
       expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        custom_recording_limit_seconds: 300,
+      })
+    })
+
+    it('describes an app buffer limit without claiming it is provider support', async () => {
+      mockAppStore.config.stt_provider = 'openai-whisper'
+      mockAppStore.config.recording_limit_mode = 'custom'
+      mockAppStore.config.custom_recording_limit_seconds = 600
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'openai-whisper',
+          transport: 'fileUpload',
+          recommendedMaxSeconds: 600,
+          hardMaxSeconds: 720,
+          maxUploadBytes: 24 * 1024 * 1024,
+          source: 'clientBuffer',
+          explanationKey: 'recordingLimits.reasons.clientBuffer',
+        },
+        mode: 'custom',
+        requestedSeconds: 600,
+        effectiveMaxSeconds: 600,
+      })
+
+      render(<SttPane />)
+
+      expect(
+        await screen.findByText('Selected: 10 minutes; app limit: 12 minutes. Client buffer limit'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Current: 10 minutes. This service supports up to 12 minutes.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('keeps the managed fallback explanation and hides meaningless custom entry', async () => {
+      mockAppStore.config.stt_provider = 'cloud'
+      mockAppStore.config.recording_limit_mode = 'custom'
+      mockAppStore.config.custom_recording_limit_seconds = 30
+      vi.mocked(tauri.getSttRecordingCapability).mockResolvedValueOnce({
+        capability: {
+          registryVersion: 1,
+          providerId: 'cloud',
+          transport: 'managedUpload',
+          recommendedMaxSeconds: 30,
+          hardMaxSeconds: 30,
+          maxUploadBytes: 4_000_000,
+          source: 'managedProduct',
+          explanationKey: 'recordingLimits.reasons.managedFallback',
+        },
+        mode: 'custom',
+        requestedSeconds: 30,
+        effectiveMaxSeconds: 30,
+      })
+
+      render(<SttPane />)
+
+      const duration = await screen.findByLabelText('Single recording duration')
+      expect(
+        within(duration).queryByRole('option', { name: 'Custom duration…' }),
+      ).not.toBeInTheDocument()
+      expect(screen.getByText('Safe Cloud fallback')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Current: 30 seconds. Cloud supports up to 30 seconds.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('stores a preset as a custom duration from the single selector', async () => {
+      render(<SttPane />)
+      const duration = await screen.findByLabelText('Single recording duration')
+
+      fireEvent.change(duration, { target: { value: '300' } })
+
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        recording_limit_mode: 'custom',
         custom_recording_limit_seconds: 300,
       })
     })
@@ -382,7 +528,7 @@ describe('SttPane', () => {
       render(<SttPane />)
 
       expect(
-        await screen.findByRole('option', { name: /Auto \(recommended\).*30 seconds/i }),
+        await screen.findByRole('option', { name: /Auto \(recommended,.*30 seconds/i }),
       ).toBeInTheDocument()
       expect(screen.getByText('Safe Cloud fallback')).toBeInTheDocument()
 
@@ -405,9 +551,9 @@ describe('SttPane', () => {
       render(<SttPane />)
 
       expect(
-        await screen.findByRole('option', { name: /Auto \(recommended\).*10 minutes/i }),
+        await screen.findByRole('option', { name: /Auto \(recommended,.*10 minutes/i }),
       ).toBeInTheDocument()
-      expect(screen.getByText('Managed Cloud limit')).toBeInTheDocument()
+      expect(screen.getByText('Set automatically for OpenTypeless Cloud.')).toBeInTheDocument()
     })
   })
 
