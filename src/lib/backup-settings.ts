@@ -17,6 +17,7 @@ type SafeScalarKey =
   | 'stt_custom_base_url'
   | 'stt_custom_model'
   | 'stt_volcengine_resource_id'
+  | 'stt_aliyun_qwen_region'
   | 'llm_provider'
   | 'llm_model'
   | 'llm_base_url'
@@ -76,6 +77,7 @@ export function createBackupSettings(config: AppConfig): BackupSettings {
     stt_custom_base_url: config.stt_custom_base_url,
     stt_custom_model: config.stt_custom_model,
     stt_volcengine_resource_id: config.stt_volcengine_resource_id,
+    stt_aliyun_qwen_region: config.stt_aliyun_qwen_region,
     llm_provider: config.llm_provider,
     llm_model: config.llm_model,
     llm_base_url: config.llm_base_url,
@@ -198,6 +200,7 @@ const SAFE_SCALAR_KEYS: readonly SafeScalarKey[] = [
   'stt_custom_base_url',
   'stt_custom_model',
   'stt_volcengine_resource_id',
+  'stt_aliyun_qwen_region',
   'llm_provider',
   'llm_model',
   'llm_base_url',

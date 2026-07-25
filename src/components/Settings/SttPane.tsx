@@ -57,6 +57,7 @@ export function SttPane() {
   const isAppleSpeech = config.stt_provider === APPLE_SPEECH_PROVIDER
   const isCustomWhisper = config.stt_provider === CUSTOM_WHISPER_PROVIDER
   const isVolcengineDoubao = config.stt_provider === 'volcengine-doubao'
+  const isAliyunQwen3 = config.stt_provider === 'aliyun-qwen3-asr'
   const credentialProvider = isCustomWhisper ? CUSTOM_WHISPER_PROVIDER : config.stt_provider
   const legacyApiKey = isCustomWhisper ? config.stt_custom_api_key : config.stt_api_key
   const volcengineResourceId =
@@ -209,6 +210,15 @@ export function SttPane() {
           undefined,
           undefined,
           volcengineResourceId,
+        )
+      } else if (isAliyunQwen3) {
+        ms = await benchSttConnection(
+          apiKeyDraft,
+          config.stt_provider,
+          undefined,
+          undefined,
+          undefined,
+          config.stt_aliyun_qwen_region,
         )
       } else {
         ms = await benchSttConnection(apiKeyDraft, config.stt_provider)
@@ -530,6 +540,31 @@ export function SttPane() {
                   </option>
                 ))}
               </select>
+            </FormField>
+          )}
+
+          {isAliyunQwen3 && (
+            <FormField label={t('settings.aliyunQwenRegion')}>
+              <select
+                aria-label={t('settings.aliyunQwenRegion')}
+                value={config.stt_aliyun_qwen_region}
+                onChange={(e) => {
+                  updateConfig({
+                    stt_aliyun_qwen_region: e.target.value as typeof config.stt_aliyun_qwen_region,
+                  })
+                  setSttTestStatus('idle')
+                  setSttLatencyMs(null)
+                  setTestErrorMessage(null)
+                  setCredentialErrorMessage(null)
+                }}
+                className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+              >
+                <option value="china-mainland">{t('settings.aliyunQwenRegionChina')}</option>
+                <option value="international">{t('settings.aliyunQwenRegionInternational')}</option>
+              </select>
+              <p className="text-[11px] text-text-tertiary mt-1.5">
+                {t('settings.aliyunQwenRegionHint')}
+              </p>
             </FormField>
           )}
 

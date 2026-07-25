@@ -630,6 +630,22 @@ fn take_matching_stt_error(
     None
 }
 
+fn latch_stt_task_error_if_active(
+    abort_flag: &AtomicBool,
+    active_session_id: &AtomicU64,
+    stt_error: &Mutex<Option<(u64, crate::error::UserError)>>,
+    task_session_id: u64,
+    error: &crate::error::AppError,
+) -> Option<crate::error::UserError> {
+    if !should_finalize_stt_task(abort_flag, active_session_id, task_session_id) {
+        return None;
+    }
+    let user_error = error.to_user_error();
+    *stt_error.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some((task_session_id, user_error.clone()));
+    Some(user_error)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PipelineStartOptions {
     pub force_translate: bool,
@@ -1252,6 +1268,9 @@ impl PipelineHandle {
                 &config_data,
                 chrono::Utc::now().timestamp(),
             ),
+            provider_region: (config_data.stt_provider
+                == stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER)
+                .then(|| config_data.stt_aliyun_qwen_region.clone()),
         };
         let managed_cloud_session_token =
             (config_data.stt_provider == "cloud").then(|| stt_config.api_key.clone());
@@ -1544,7 +1563,20 @@ impl PipelineHandle {
                     chunk = audio_rx.recv() => {
                         match chunk {
                             Some(data) => {
-                                let _ = provider.send_audio(&data).await;
+                                if let Err(error) = provider.send_audio(&data).await {
+                                    tracing::error!("STT send audio error: {}", error);
+                                    crate::error::emit_cloud_session_invalid(&app_handle, &error);
+                                    if let Some(user_error) = latch_stt_task_error_if_active(
+                                        abort_flag_ref.as_ref(),
+                                        active_session_id_ref.as_ref(),
+                                        stt_error_ref.as_ref(),
+                                        stt_control.id,
+                                        &error,
+                                    ) {
+                                        let _ = app_handle.emit("pipeline:error", user_error);
+                                    }
+                                    break;
+                                }
                             }
                             None => {
                                 // Audio channel closed — disconnect and capture final transcript
@@ -3329,6 +3361,31 @@ mod tests {
 
         assert!(take_matching_stt_error(&latch, 7).is_none());
         assert!(latch.lock().unwrap().is_some());
+    }
+
+    #[test]
+    fn send_audio_error_is_latched_only_for_the_active_session() {
+        let abort_flag = AtomicBool::new(false);
+        let active_session_id = AtomicU64::new(7);
+        let latch = Mutex::new(None);
+        let error = crate::error::AppError::Network("socket closed".to_string());
+
+        let user_error =
+            latch_stt_task_error_if_active(&abort_flag, &active_session_id, &latch, 7, &error)
+                .expect("active send failure should be surfaced");
+
+        assert_eq!(user_error.code, "stt_timeout");
+        assert_eq!(
+            take_matching_stt_error(&latch, 7)
+                .expect("matching error should be consumable")
+                .code,
+            "stt_timeout"
+        );
+
+        assert!(
+            latch_stt_task_error_if_active(&abort_flag, &active_session_id, &latch, 6, &error,)
+                .is_none()
+        );
     }
 
     #[test]

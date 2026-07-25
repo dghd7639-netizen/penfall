@@ -337,6 +337,7 @@ pub struct AppConfig {
     pub stt_custom_base_url: String,
     pub stt_custom_model: String,
     pub stt_volcengine_resource_id: String,
+    pub stt_aliyun_qwen_region: String,
     pub llm_provider: String,
     pub llm_api_key: String,
     pub llm_model: String,
@@ -392,6 +393,8 @@ impl Default for AppConfig {
             stt_custom_model: crate::stt::config::DEFAULT_CUSTOM_WHISPER_MODEL.to_string(),
             stt_volcengine_resource_id: crate::stt::volcengine::VOLCENGINE_SEEDASR_RESOURCE_ID
                 .to_string(),
+            stt_aliyun_qwen_region:
+                crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND.to_string(),
             llm_provider: "openrouter".to_string(),
             llm_api_key: String::new(),
             llm_model: "google/gemini-2.5-flash".to_string(),
@@ -554,6 +557,14 @@ impl AppConfig {
     }
 
     pub(crate) fn normalize_values(&mut self) {
+        if !matches!(
+            self.stt_aliyun_qwen_region.as_str(),
+            crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND
+                | crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_INTERNATIONAL
+        ) {
+            self.stt_aliyun_qwen_region =
+                crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND.to_string();
+        }
         self.polish_style = normalize_polish_style(&self.polish_style).to_string();
         self.polish_custom_prompt = sanitize_polish_custom_prompt(&self.polish_custom_prompt);
         self.polish_chinese_script = "preserve".to_string();
@@ -2133,6 +2144,30 @@ mod tests {
         assert_eq!(
             config.stt_volcengine_resource_id,
             crate::stt::volcengine::VOLCENGINE_SEEDASR_RESOURCE_ID
+        );
+        assert_eq!(
+            config.stt_aliyun_qwen_region,
+            crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND
+        );
+    }
+
+    #[test]
+    fn app_config_preserves_supported_qwen_region_and_normalizes_unknown_values() {
+        let international = AppConfig::from_stored_value(serde_json::json!({
+            "stt_provider": "aliyun-qwen3-asr",
+            "stt_aliyun_qwen_region": "international"
+        }))
+        .unwrap();
+        assert_eq!(international.stt_aliyun_qwen_region, "international");
+
+        let unknown = AppConfig::from_stored_value(serde_json::json!({
+            "stt_provider": "aliyun-qwen3-asr",
+            "stt_aliyun_qwen_region": "unknown"
+        }))
+        .unwrap();
+        assert_eq!(
+            unknown.stt_aliyun_qwen_region,
+            crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND
         );
     }
 

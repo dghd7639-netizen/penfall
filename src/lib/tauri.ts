@@ -310,12 +310,14 @@ export async function getSttProviderDiagnostics(
   provider: string,
   customBaseUrl?: string,
   customModel?: string,
+  providerRegion?: string,
 ): Promise<SttProviderDiagnostics> {
   return invoke('get_stt_provider_diagnostics', {
     apiKey,
     provider,
     customBaseUrl,
     customModel,
+    providerRegion,
   })
 }
 
@@ -326,6 +328,7 @@ export async function testSttConnection(
   customBaseUrl?: string,
   customModel?: string,
   volcengineResourceId?: string,
+  providerRegion?: string,
 ): Promise<boolean> {
   return invoke('test_stt_connection', {
     apiKey,
@@ -333,6 +336,7 @@ export async function testSttConnection(
     customBaseUrl,
     customModel,
     volcengineResourceId,
+    providerRegion,
   })
 }
 
@@ -352,6 +356,7 @@ export async function benchSttConnection(
   customBaseUrl?: string,
   customModel?: string,
   volcengineResourceId?: string,
+  providerRegion?: string,
 ): Promise<number> {
   return invoke('bench_stt_connection', {
     apiKey,
@@ -359,6 +364,7 @@ export async function benchSttConnection(
     customBaseUrl,
     customModel,
     volcengineResourceId,
+    providerRegion,
   })
 }
 

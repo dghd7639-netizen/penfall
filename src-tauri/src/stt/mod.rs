@@ -25,6 +25,7 @@ pub struct SttConfig {
     pub resource_id: Option<String>,
     pub operation_id: Option<String>,
     pub managed_audio: Option<managed_audio::ManagedAudioEncodingConfig>,
+    pub provider_region: Option<String>,
 }
 
 impl Default for SttConfig {
@@ -37,6 +38,7 @@ impl Default for SttConfig {
             resource_id: None,
             operation_id: None,
             managed_audio: None,
+            provider_region: None,
         }
     }
 }

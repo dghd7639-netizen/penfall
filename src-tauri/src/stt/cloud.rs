@@ -562,6 +562,7 @@ mod tests {
             resource_id: None,
             operation_id: Some("operation-1".to_string()),
             managed_audio: Some(managed_config()),
+            provider_region: None,
         }
     }
 

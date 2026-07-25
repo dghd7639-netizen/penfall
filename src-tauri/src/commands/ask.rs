@@ -643,6 +643,8 @@ fn build_ask_stt_config(
             config,
             chrono::Utc::now().timestamp(),
         ),
+        provider_region: (config.stt_provider == stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER)
+            .then(|| config.stt_aliyun_qwen_region.clone()),
     }
 }
 

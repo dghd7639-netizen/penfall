@@ -25,6 +25,8 @@ export type SttProvider =
   | 'apple-speech'
   | 'custom-whisper'
   | 'cloud'
+
+export type AliyunQwenRegion = 'china-mainland' | 'international'
 export type LlmProvider =
   | 'zhipu'
   | 'deepseek'
@@ -194,6 +196,7 @@ export interface AppConfig {
   stt_custom_base_url: string
   stt_custom_model: string
   stt_volcengine_resource_id: string
+  stt_aliyun_qwen_region: AliyunQwenRegion
   stt_language: string
   llm_provider: LlmProvider
   llm_api_key: string
@@ -725,6 +728,7 @@ const defaultConfig: AppConfig = {
   stt_custom_base_url: 'http://localhost:8000/v1',
   stt_custom_model: 'Systran/faster-whisper-large-v3',
   stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
+  stt_aliyun_qwen_region: 'china-mainland',
   stt_language: 'multi',
   llm_provider: 'openrouter',
   llm_api_key: '',

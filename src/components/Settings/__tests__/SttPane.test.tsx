@@ -73,6 +73,11 @@ vi.mock('react-i18next', () => ({
         'settings.volcengineResourceId': 'Volcengine ASR resource',
         'settings.volcengineResourceSeedAsr': 'SeedASR 2.0',
         'settings.volcengineResourceBigAsr': 'BigASR 1.0',
+        'settings.aliyunQwenRegion': 'Service region',
+        'settings.aliyunQwenRegionChina': 'China Mainland (Beijing)',
+        'settings.aliyunQwenRegionInternational': 'International (Singapore)',
+        'settings.aliyunQwenRegionHint':
+          'Use the region where your DashScope API key was created. Keys are region-specific.',
         'providers.stt.aliyunQwen3Asr': 'Aliyun Qwen3 Realtime ASR',
         'providers.stt.volcengineDoubao': 'Volcengine Doubao Realtime ASR',
         'providers.stt.appleSpeech': 'Apple Speech (Local)',
@@ -96,6 +101,7 @@ const mockAppStore = {
     stt_custom_base_url: 'http://localhost:8000/v1',
     stt_custom_model: 'Systran/faster-whisper-large-v3',
     stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
+    stt_aliyun_qwen_region: 'china-mainland' as 'china-mainland' | 'international',
     recording_limit_mode: 'auto' as 'auto' | 'custom',
     custom_recording_limit_seconds: 600,
     max_recording_seconds: 600,
@@ -160,6 +166,7 @@ describe('SttPane', () => {
       stt_custom_base_url: 'http://localhost:8000/v1',
       stt_custom_model: 'Systran/faster-whisper-large-v3',
       stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
+      stt_aliyun_qwen_region: 'china-mainland',
       recording_limit_mode: 'auto',
       custom_recording_limit_seconds: 600,
       max_recording_seconds: 600,
@@ -235,6 +242,49 @@ describe('SttPane', () => {
       expect(screen.getByRole('option', { name: 'Aliyun Qwen3 Realtime ASR' })).toHaveValue(
         'aliyun-qwen3-asr',
       )
+    })
+
+    it('shows a persisted Beijing or Singapore region selector for Aliyun Qwen3', () => {
+      mockAppStore.config.stt_provider = 'aliyun-qwen3-asr'
+
+      render(<SttPane />)
+
+      const region = screen.getByLabelText('Service region')
+      expect(region).toHaveValue('china-mainland')
+      expect(
+        screen.getByText(
+          'Use the region where your DashScope API key was created. Keys are region-specific.',
+        ),
+      ).toBeInTheDocument()
+
+      fireEvent.change(region, { target: { value: 'international' } })
+
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        stt_aliyun_qwen_region: 'international',
+      })
+      expect(mockAppStore.setSttTestStatus).toHaveBeenCalledWith('idle')
+      expect(mockAppStore.setSttLatencyMs).toHaveBeenCalledWith(null)
+    })
+
+    it('tests Aliyun Qwen3 against the selected region', async () => {
+      mockAppStore.config.stt_provider = 'aliyun-qwen3-asr'
+      mockAppStore.config.stt_aliyun_qwen_region = 'international'
+      mockAppStore.config.stt_api_key = 'sk-international'
+      vi.mocked(tauri.benchSttConnection).mockResolvedValueOnce(120)
+
+      render(<SttPane />)
+      fireEvent.click(screen.getAllByRole('button', { name: /test/i })[0])
+
+      await waitFor(() => {
+        expect(tauri.benchSttConnection).toHaveBeenCalledWith(
+          'sk-international',
+          'aliyun-qwen3-asr',
+          undefined,
+          undefined,
+          undefined,
+          'international',
+        )
+      })
     })
 
     it('shows Apple Speech as a built-in local provider on macOS only', () => {

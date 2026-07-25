@@ -17,8 +17,12 @@ type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub const ALIYUN_QWEN3_ASR_PROVIDER: &str = "aliyun-qwen3-asr";
-pub const ALIYUN_QWEN3_ASR_URL: &str =
+pub const ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND: &str = "china-mainland";
+pub const ALIYUN_QWEN3_ASR_REGION_INTERNATIONAL: &str = "international";
+pub const ALIYUN_QWEN3_ASR_CHINA_URL: &str =
     "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime";
+pub const ALIYUN_QWEN3_ASR_INTERNATIONAL_URL: &str =
+    "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime";
 const AUDIO_CHUNK_BYTES: usize = 3200;
 const INITIAL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const FINISH_RESPONSE_TIMEOUT: Duration = Duration::from_secs(8);
@@ -35,7 +39,7 @@ pub struct AliyunQwen3AsrProvider {
     ws: Option<WsStream>,
     pending_audio: Vec<u8>,
     completed_item_ids: HashSet<String>,
-    url: String,
+    url_override: Option<String>,
 }
 
 impl Default for AliyunQwen3AsrProvider {
@@ -50,23 +54,38 @@ impl AliyunQwen3AsrProvider {
             ws: None,
             pending_audio: Vec::with_capacity(AUDIO_CHUNK_BYTES),
             completed_item_ids: HashSet::new(),
-            url: ALIYUN_QWEN3_ASR_URL.to_string(),
+            url_override: None,
         }
     }
 
     #[cfg(test)]
     fn with_url(url: String) -> Self {
         let mut provider = Self::new();
-        provider.url = url;
+        provider.url_override = Some(url);
         provider
     }
 
-    fn build_request(&self, api_key: &str) -> Result<http::Request<()>, AppError> {
+    fn build_request(
+        &self,
+        api_key: &str,
+        region: Option<&str>,
+    ) -> Result<http::Request<()>, AppError> {
+        let url = self
+            .url_override
+            .as_deref()
+            .unwrap_or_else(|| qwen_realtime_url(region));
+        let uri = url
+            .parse::<http::Uri>()
+            .map_err(|error| AppError::Config(error.to_string()))?;
+        let host = uri
+            .authority()
+            .map(http::uri::Authority::as_str)
+            .ok_or_else(|| AppError::Config("Aliyun Qwen3 ASR endpoint has no host".to_string()))?;
         http::Request::builder()
-            .uri(&self.url)
+            .uri(uri.clone())
             .header("Authorization", format!("Bearer {api_key}"))
             .header("User-Agent", "OpenTypeless/1")
-            .header("Host", "dashscope.aliyuncs.com")
+            .header("Host", host)
             .header("Connection", "Upgrade")
             .header("Upgrade", "websocket")
             .header("Sec-WebSocket-Version", "13")
@@ -173,6 +192,13 @@ impl AliyunQwen3AsrProvider {
     }
 }
 
+pub fn qwen_realtime_url(region: Option<&str>) -> &'static str {
+    match region {
+        Some(ALIYUN_QWEN3_ASR_REGION_INTERNATIONAL) => ALIYUN_QWEN3_ASR_INTERNATIONAL_URL,
+        _ => ALIYUN_QWEN3_ASR_CHINA_URL,
+    }
+}
+
 fn event_id() -> String {
     format!("event_{}", Uuid::new_v4())
 }
@@ -245,7 +271,7 @@ fn completed_item_id(message: &str) -> Option<String> {
 fn map_connect_error(error: WsError) -> AppError {
     match error {
         WsError::Http(response) if response.status() == 401 || response.status() == 403 => {
-            AppError::Auth("Aliyun Qwen3 ASR authentication failed. Check your DashScope API key and realtime ASR entitlement.".to_string())
+            AppError::Auth("Aliyun Qwen3 ASR authentication failed. Make sure the API key was created in the selected Beijing or Singapore region and has realtime ASR access.".to_string())
         }
         WsError::Http(response) => AppError::Api {
             status: response.status().as_u16(),
@@ -264,7 +290,8 @@ impl SttProvider for AliyunQwen3AsrProvider {
             ));
         }
 
-        let request = self.build_request(config.api_key.trim())?;
+        let request =
+            self.build_request(config.api_key.trim(), config.provider_region.as_deref())?;
         let (ws, _) = connect_async(request).await.map_err(map_connect_error)?;
         self.ws = Some(ws);
         self.pending_audio.clear();
@@ -384,17 +411,42 @@ mod tests {
             resource_id: None,
             operation_id: None,
             managed_audio: None,
+            provider_region: None,
         }
     }
 
     #[test]
     fn builds_authorized_beijing_realtime_request() {
         let provider = AliyunQwen3AsrProvider::new();
-        let request = provider.build_request("test-key").unwrap();
+        let request = provider
+            .build_request("test-key", Some(ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND))
+            .unwrap();
 
-        assert_eq!(request.uri(), ALIYUN_QWEN3_ASR_URL);
+        assert_eq!(request.uri(), ALIYUN_QWEN3_ASR_CHINA_URL);
         assert_eq!(request.headers()["authorization"], "Bearer test-key");
         assert_eq!(request.headers()["user-agent"], "OpenTypeless/1");
+        assert_eq!(request.headers()["host"], "dashscope.aliyuncs.com");
+    }
+
+    #[test]
+    fn builds_authorized_international_realtime_request() {
+        let provider = AliyunQwen3AsrProvider::new();
+        let request = provider
+            .build_request("test-key", Some(ALIYUN_QWEN3_ASR_REGION_INTERNATIONAL))
+            .unwrap();
+
+        assert_eq!(request.uri(), ALIYUN_QWEN3_ASR_INTERNATIONAL_URL);
+        assert_eq!(request.headers()["authorization"], "Bearer test-key");
+        assert_eq!(request.headers()["host"], "dashscope-intl.aliyuncs.com");
+    }
+
+    #[test]
+    fn missing_or_unknown_region_falls_back_to_beijing() {
+        assert_eq!(qwen_realtime_url(None), ALIYUN_QWEN3_ASR_CHINA_URL);
+        assert_eq!(
+            qwen_realtime_url(Some("not-a-region")),
+            ALIYUN_QWEN3_ASR_CHINA_URL
+        );
     }
 
     #[test]
