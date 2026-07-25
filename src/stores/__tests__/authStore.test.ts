@@ -41,7 +41,7 @@ function getState() {
 
 describe('authStore', () => {
   it('pins the Better Auth desktop client version', () => {
-    expect(packageJson.dependencies['better-auth']).toBe('1.6.17')
+    expect(packageJson.dependencies['better-auth']).toBe('1.6.25')
   })
 
   beforeEach(() => {
