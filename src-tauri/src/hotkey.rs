@@ -1318,13 +1318,8 @@ mod tests {
                 entry.role == HotkeyRole::Dictation
                     && entry.trigger == crate::native_hotkey::NativeHotkeyTrigger::Fn
             }));
-            assert!(plan.native.iter().any(|entry| {
-                entry.role == HotkeyRole::Ask
-                    && entry.trigger == crate::native_hotkey::NativeHotkeyTrigger::FnSpace
-            }));
-            assert!(plan.native.iter().any(|entry| {
-                entry.role == HotkeyRole::TranslateSelection
-                    && entry.trigger == crate::native_hotkey::NativeHotkeyTrigger::FnLeftShift
+            assert!(!plan.native.iter().any(|entry| {
+                matches!(entry.role, HotkeyRole::Ask | HotkeyRole::TranslateSelection)
             }));
             assert!(!plan
                 .global

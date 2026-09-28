@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
 import { useAppStore } from '../../../stores/appStore'
+import { LlmPane } from '../LlmPane'
 
 // 每个测试后清理 DOM，防止多次 render 的节点积累导致 getByText 找到多个元素
 afterEach(() => {
@@ -190,6 +191,15 @@ vi.mock('../../../lib/tauri', () => ({
   testLlmConnection: vi.fn().mockResolvedValue(true),
   readCredential: vi.fn().mockResolvedValue(null),
   setCredential: vi.fn().mockResolvedValue(undefined),
+  getCredentialStatus: vi
+    .fn()
+    .mockResolvedValue({
+      namespace: 'stt',
+      provider: 'aliyun-qwen3-asr',
+      hasSecret: false,
+      storage: 'os-vault',
+      updatedAt: null,
+    }),
   fetchLlmModels: vi.fn().mockResolvedValue(['gpt-4o', 'gpt-3.5-turbo']),
   getLlmModelCapability: vi.fn().mockResolvedValue('unknown'),
   addDictionaryEntry: vi.fn().mockResolvedValue(undefined),
@@ -258,7 +268,6 @@ import {
   listCustomAppMappings,
   setFamilySceneAssignment,
   setAutoStart,
-  startAskFlow,
   updateConfig,
 } from '../../../lib/tauri'
 import { toast } from '../../../components/toast-service'
@@ -346,58 +355,37 @@ describe('Settings tab 切换', () => {
     seedSavedConfig()
   })
 
-  it('初始渲染显示简化后的常用设置', () => {
+  it('shows dictation, output and local history without Ask controls', () => {
     renderSettings()
-
-    expect(screen.getByText('settings.hotkey')).toBeDefined()
     expect(screen.getByText('settings.dictationHotkey')).toBeDefined()
-    expect(screen.getByText('settings.askHotkey')).toBeDefined()
-    expect(screen.getByText('settings.translateHotkey')).toBeDefined()
     expect(screen.getByText('settings.dictationMode')).toBeDefined()
-    expect(screen.getAllByRole('button', { name: 'settings.shortcutAdd' })).toHaveLength(3)
-    expect(screen.queryByText('settings.askAnything')).toBeNull()
-    expect(screen.queryByText('settings.askAnythingDesc')).toBeNull()
-    expect(screen.getByLabelText('settings.tryAsk')).toBeDefined()
-    expect(screen.queryByText('ask.voiceQuestion')).toBeNull()
     expect(screen.getByText('settings.outputMode')).toBeDefined()
-    expect(screen.getByText('settings.dictationMode')).toBeDefined()
-    expect(screen.queryByText('settings.diagnostics')).toBeNull()
+    expect(screen.getByText('历史记录与隐私')).toBeDefined()
+    expect(screen.getByText('30 天')).toBeDefined()
+    expect(screen.queryByText('settings.askHotkey')).toBeNull()
+    expect(screen.queryByText('settings.translateHotkey')).toBeNull()
   })
 
-  it('General pane keeps Ask visible and hides low-frequency settings until More is opened', () => {
+  it('keeps startup and capsule preferences under Advanced', () => {
     renderSettings()
-
-    expect(screen.getByText('settings.hotkey')).toBeDefined()
-    expect(screen.getByText('settings.askHotkey')).toBeDefined()
-    expect(screen.getByText('settings.outputMode')).toBeDefined()
-    expect(screen.queryByText('settings.diagnostics')).toBeNull()
-    expect(screen.queryByText('settings.restoreClipboardAfterPaste')).toBeNull()
-    expect(screen.queryByText('settings.maxRecordingDuration')).toBeNull()
-    expect(screen.queryByText('settings.historyPrivacy')).toBeNull()
+    expect(screen.getByText('历史记录与隐私')).toBeDefined()
     expect(screen.queryByText('settings.launchAtStartup')).toBeNull()
-
     fireEvent.click(screen.getByText('settings.advancedGeneral'))
-
-    expect(screen.getAllByText('settings.askHotkey')).toHaveLength(1)
-    expect(screen.getByText('settings.saveHistory')).toBeDefined()
     expect(screen.getByText('settings.launchAtStartup')).toBeDefined()
-    expect(screen.queryByText('settings.diagnostics')).toBeNull()
-    expect(screen.queryByText('settings.restoreClipboardAfterPaste')).toBeNull()
-    expect(screen.queryByText('settings.maxRecordingDuration')).toBeNull()
-    expect(screen.queryByText('settings.historyPrivacy')).toBeNull()
     expect(screen.getByText('settings.hideCapsuleWhenIdle')).toBeDefined()
+    expect(screen.queryByText('settings.askHotkey')).toBeNull()
   })
 
   it('keeps unsaved drafts dirty after leaving and reopening Settings', () => {
     const firstRender = renderSettings()
-    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    act(() => useAppStore.getState().updateConfig({ auto_start: true }))
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
 
     firstRender.unmount()
     renderSettings()
 
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
-    expect(useAppStore.getState().savedConfig?.auto_start).toBe(true)
+    expect(useAppStore.getState().savedConfig?.auto_start).toBe(false)
   })
 
   it('does not mark an unchanged backend config dirty when object key order differs', () => {
@@ -418,16 +406,6 @@ describe('Settings tab 切换', () => {
     renderSettings()
 
     expect(screen.queryByText('settings.waylandHotkeyLimited')).toBeNull()
-  })
-
-  it('General pane starts Ask recording from a lightweight Try Ask entry', async () => {
-    renderSettings()
-
-    fireEvent.click(screen.getByLabelText('settings.tryAsk'))
-
-    await waitFor(() => {
-      expect(startAskFlow).toHaveBeenCalledTimes(1)
-    })
   })
 
   it('General pane leaves macOS Accessibility to the global permission banner', () => {
@@ -455,25 +433,12 @@ describe('Settings tab 切换', () => {
     }
   })
 
-  it('More settings keeps only preference toggles visible', () => {
+  it('allows disabling local history without clearing it', () => {
     renderSettings()
-    fireEvent.click(screen.getByText('settings.advancedGeneral'))
-
-    expect(screen.getAllByText('settings.askHotkey')).toHaveLength(1)
-    expect(screen.getByText('settings.launchAtStartup')).toBeDefined()
-    expect(screen.getByText('settings.saveHistory')).toBeDefined()
-    expect(screen.queryByText('settings.startMinimized')).toBeNull()
-    expect(screen.getByText('settings.hideCapsuleWhenIdle')).toBeDefined()
-    expect(screen.queryByText('settings.outputDetails')).toBeNull()
-    expect(screen.queryByText('settings.diagnostics')).toBeNull()
-    expect(screen.getByRole('switch', { name: 'settings.launchAtStartup' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-
-    const historyLabel = screen.getByText('settings.saveHistory')
+    const historyLabel = screen.getByText('在本机保存文字历史')
     fireEvent.click(historyLabel.closest('label') ?? historyLabel)
     expect(useAppStore.getState().config.history_enabled).toBe(false)
+    expect(screen.getByText('历史页可清空已有记录', { exact: false })).toBeDefined()
   })
 
   it('General pane shows compact hotkey conflict status', async () => {
@@ -582,13 +547,6 @@ describe('Settings tab 切换', () => {
     }
   })
 
-  it('General pane does not expose the optional Ask hotkey disable action', () => {
-    renderSettings()
-
-    expect(screen.queryByLabelText('settings.disableAskHotkey')).toBeNull()
-    expect(useAppStore.getState().config.ask_hotkey).toBe('Ctrl+.')
-  })
-
   it('renders native single-key dictation hotkeys without marking them invalid', async () => {
     const { getHotkeyStatus } = await import('../../../lib/tauri')
     vi.mocked(getHotkeyStatus).mockResolvedValueOnce(
@@ -605,96 +563,12 @@ describe('Settings tab 切换', () => {
     expect(screen.queryByText('settings.hotkeyInvalid')).toBeNull()
   })
 
-  it('does not offer Windows RightAlt as a default shortcut chip', async () => {
-    const originalPlatform = window.navigator.platform
-    Object.defineProperty(window.navigator, 'platform', {
-      value: 'Win32',
-      configurable: true,
-    })
-    useAppStore.getState().setPlatformCapabilities({
-      os: 'windows',
-      sessionType: 'unknown',
-      globalHotkeyReliable: true,
-      keyboardOutputReliable: true,
-      clipboardAutoPasteReliable: true,
-    })
-
-    try {
-      renderSettings()
-
-      fireEvent.click(screen.getByText('Ctrl+.'))
-      expect(screen.queryByRole('button', { name: 'Right Alt' })).toBeNull()
-      fireEvent.click(screen.getByText('settings.pressKeyCombination'))
-
-      fireEvent.click(screen.getByText('Ctrl+/'))
-      expect(screen.queryByRole('button', { name: 'Right Alt' })).toBeNull()
-      expect(useAppStore.getState().config.hotkey).toBe('Ctrl+/')
-    } finally {
-      Object.defineProperty(window.navigator, 'platform', {
-        value: originalPlatform,
-        configurable: true,
-      })
-    }
-  })
-
-  it('blocks local Ask hotkey drafts that conflict with Dictation', async () => {
-    vi.useFakeTimers()
-    try {
-      renderSettings()
-      fireEvent.click(screen.getByText('Ctrl+.'))
-      await act(async () => {
-        await Promise.resolve()
-      })
-      fireEvent.keyDown(window, { key: '/', ctrlKey: true })
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1600)
-      })
-
-      expect(useAppStore.getState().config.ask_hotkey).toBe('Ctrl+.')
-      expect(screen.getByText('settings.hotkeyConflict')).toBeDefined()
-      expect(screen.queryByText('Unsaved changes')).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('blocks local Dictation hotkey drafts that conflict with Ask', async () => {
-    vi.useFakeTimers()
-    try {
-      renderSettings()
-      fireEvent.click(screen.getByText('Ctrl+/'))
-      await act(async () => {
-        await Promise.resolve()
-      })
-      fireEvent.keyDown(window, { key: '.', ctrlKey: true })
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1600)
-      })
-
-      expect(useAppStore.getState().config.hotkey).toBe('Ctrl+/')
-      expect(screen.getByText('settings.hotkeyConflict')).toBeDefined()
-      expect(screen.queryByText('Unsaved changes')).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('点击 Speech Recognition 后显示 STT provider 字段', () => {
+  it('shows one shared DashScope setup for transcription and polish', () => {
     renderSettings()
-    clickSidebarItem('settings.speechRecognition')
-    expect(screen.getByText('settings.provider')).toBeDefined()
-    // STT pane 含语言选择
-    expect(screen.getByText('settings.sttLanguage')).toBeDefined()
-  })
-
-  it('点击 AI Polish 后显示 LLM provider 字段', () => {
-    renderSettings()
-    clickSidebarItem('settings.aiPolish')
-    // LLM pane 也含 provider，但还含 enableAiPolish toggle
-    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
-    expect(screen.queryByText('settings.askAnything')).toBeNull()
+    clickSidebarItem('语音与润色')
+    expect(screen.getByText('DashScope API Key')).toBeDefined()
+    expect(screen.getByText('阿里云 Qwen3 实时识别')).toBeDefined()
+    expect(screen.getByText('启用 Qwen 轻度润色')).toBeDefined()
   })
 
   it('点击 Dictionary 后显示词典输入框 placeholder', () => {
@@ -719,30 +593,21 @@ describe('Settings tab 切换', () => {
     expect(screen.getByText('settings.openSource')).toBeDefined()
   })
 
-  it('可以在多个 tab 之间来回切换', () => {
+  it('switches between shared service setup and general settings', () => {
     renderSettings()
-    clickSidebarItem('settings.aiPolish')
-    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
-
+    clickSidebarItem('语音与润色')
+    expect(screen.getByText('DashScope API Key')).toBeDefined()
     clickSidebarItem('settings.general')
     expect(screen.getByText('settings.hotkey')).toBeDefined()
   })
 
-  it('切换到 Scenes 后不会残留上一个设置页内容', () => {
+  it('leaves service settings when navigating to scenes', () => {
     renderSettings()
-    clickSidebarItem('settings.aiPolish')
-    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
-
-    clickSidebarItem('settings.general')
-    expect(screen.getByText('settings.hotkey')).toBeDefined()
-    expect(screen.getByLabelText('settings.tryAsk')).toBeDefined()
-
+    clickSidebarItem('语音与润色')
+    expect(screen.getByText('DashScope API Key')).toBeDefined()
     clickSidebarItem('settings.scenes')
-
     expect(screen.getByText('scenes.myScenes')).toBeDefined()
-    expect(screen.queryByText('settings.askAnything')).toBeNull()
-    expect(screen.queryByText('settings.hotkey')).toBeNull()
-    expect(screen.queryByText('settings.enableAiPolish')).toBeNull()
+    expect(screen.queryByText('DashScope API Key')).toBeNull()
   })
 
   it('切换 tab 后 title bar 更新', () => {
@@ -752,41 +617,6 @@ describe('Settings tab 切换', () => {
     const titles = screen.getAllByText('settings.dictionary')
     // 至少出现两次：sidebar nav 和 title bar h2
     expect(titles.length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('records macOS Ask hotkey as a local draft without immediate persistence', async () => {
-    vi.useFakeTimers()
-    try {
-      Object.defineProperty(window.navigator, 'platform', {
-        value: 'MacIntel',
-        configurable: true,
-      })
-      const { resumeHotkey, updateAskHotkey } = await import('../../../lib/tauri')
-      const mockUpdateAskHotkey = vi.mocked(updateAskHotkey)
-      const mockResumeHotkey = vi.mocked(resumeHotkey)
-      mockUpdateAskHotkey.mockClear()
-      mockResumeHotkey.mockClear()
-      useAppStore.getState().updateConfig({ ask_hotkey: 'Command+.' })
-      seedSavedConfig()
-
-      renderSettings()
-      fireEvent.click(screen.getByText('Command+.'))
-      await act(async () => {
-        await Promise.resolve()
-      })
-      fireEvent.keyDown(window, { key: ';', metaKey: true })
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1600)
-      })
-
-      expect(useAppStore.getState().config.ask_hotkey).toBe('Command+;')
-      expect(mockUpdateAskHotkey).not.toHaveBeenCalled()
-      expect(mockResumeHotkey).toHaveBeenCalledTimes(1)
-      expect(screen.getByText('Unsaved changes')).toBeDefined()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })
 
@@ -929,7 +759,7 @@ describe('Settings Scenes local custom scenes', () => {
 
   it('persists only scene fields and preserves unrelated unsaved settings', async () => {
     renderSettings()
-    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    act(() => useAppStore.getState().updateConfig({ auto_start: true }))
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
     clickSidebarItem('settings.scenes')
 
@@ -944,9 +774,9 @@ describe('Settings Scenes local custom scenes', () => {
 
     await waitFor(() => expect(vi.mocked(updateConfig)).toHaveBeenCalledTimes(1))
     const persistedConfig = vi.mocked(updateConfig).mock.calls[0][0]
-    expect(persistedConfig.auto_start).toBe(true)
-    expect(useAppStore.getState().config.auto_start).toBe(false)
-    expect(useAppStore.getState().savedConfig?.auto_start).toBe(true)
+    expect(persistedConfig.auto_start).toBe(false)
+    expect(useAppStore.getState().config.auto_start).toBe(true)
+    expect(useAppStore.getState().savedConfig?.auto_start).toBe(false)
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
   })
 
@@ -1126,11 +956,10 @@ describe('Settings 动画结构', () => {
     expect(container.querySelector('[data-motion]')).not.toBeNull()
   })
 
-  it('切换 tab 后 pane 内容正常更新（无卡死）', () => {
+  it('renders the service pane after changing tabs', () => {
     renderSettings()
-    clickSidebarItem('settings.speechRecognition')
-    // 仅断言组件没有崩溃，DOM 还在
-    expect(document.body).toBeDefined()
+    clickSidebarItem('语音与润色')
+    expect(screen.getByText('DashScope API Key')).toBeDefined()
   })
 })
 
@@ -1181,20 +1010,13 @@ describe('LlmPane provider 切换清空 models', () => {
     seedSavedConfig()
   })
 
-  it('切换 provider 时 store 中的 llmModels 被清空', async () => {
+  it('still clears the legacy model cache in the underlying LLM component', async () => {
     useAppStore.getState().setLlmModels(['model-x', 'model-y'])
-
-    renderSettings()
-    clickSidebarItem('settings.aiPolish')
-
-    // provider select 是当前 pane 中的第一个 combobox
-    const selects = screen.getAllByRole('combobox')
-    const providerSelect = selects[0]
-
+    render(<LlmPane />)
+    const providerSelect = screen.getAllByRole('combobox')[0]
     await act(async () => {
       fireEvent.change(providerSelect, { target: { value: 'openai' } })
     })
-
     expect(useAppStore.getState().llmModels).toEqual([])
   })
 })
@@ -1226,8 +1048,7 @@ describe('LlmPane models 缓存：已有缓存时跳过 fetch', () => {
       llm_provider: 'openai',
     })
 
-    renderSettings()
-    clickSidebarItem('settings.aiPolish')
+    render(<LlmPane />)
 
     await act(async () => {
       vi.runAllTimers()
@@ -1248,8 +1069,7 @@ describe('LlmPane models 缓存：已有缓存时跳过 fetch', () => {
       llm_provider: 'openai',
     })
 
-    renderSettings()
-    clickSidebarItem('settings.aiPolish')
+    render(<LlmPane />)
 
     // runAllTimersAsync 同时推进 fake timer 并 flush 所有 pending microtasks/promises
     await act(async () => {
@@ -1270,8 +1090,7 @@ describe('LlmPane models 缓存：已有缓存时跳过 fetch', () => {
       llm_provider: 'openai',
     })
 
-    renderSettings()
-    clickSidebarItem('settings.aiPolish')
+    render(<LlmPane />)
 
     await act(async () => {
       await vi.runAllTimersAsync()
@@ -1405,6 +1224,8 @@ describe('DirtyBar 行为', () => {
   })
 
   it('开机启动系统设置失败时不保存 config，并恢复后端真值', async () => {
+    useAppStore.getState().updateConfig({ auto_start: true })
+    seedSavedConfig()
     const backendConfig = {
       ...useAppStore.getState().config,
       auto_start: true,
@@ -1432,6 +1253,8 @@ describe('DirtyBar 行为', () => {
   })
 
   it('config 保存失败时回滚已应用的开机启动系统设置', async () => {
+    useAppStore.getState().updateConfig({ auto_start: true })
+    seedSavedConfig()
     const backendConfig = {
       ...useAppStore.getState().config,
       auto_start: true,

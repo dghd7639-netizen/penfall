@@ -1,14 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, MessageCircle } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode, ShortcutBinding } from '../../stores/appStore'
-import {
-  getPlatformCapabilities,
-  getHotkeyStatus,
-  resumeHotkey,
-  startAskFlow,
-} from '../../lib/tauri'
+import { getPlatformCapabilities, getHotkeyStatus, resumeHotkey } from '../../lib/tauri'
 import type { HotkeyStatus } from '../../lib/tauri'
 import { SegmentedControl } from './shared/SegmentedControl'
 import { Toggle } from './shared/Toggle'
@@ -80,12 +75,6 @@ export function GeneralPane() {
       })
   }, [accessibilityTrusted, hotkeyRegistrationError, isMac, setHotkeyRegistrationError])
 
-  const handleOpenAsk = useCallback(() => {
-    startAskFlow().catch((err) => {
-      console.error('Failed to start Ask flow:', err)
-    })
-  }, [])
-
   const hotkeyStatusMessage = hotkeyStatus?.conflict
     ? t('settings.hotkeyConflict')
     : hotkeyStatus && (!hotkeyStatus.dictation.valid || !hotkeyStatus.ask.valid)
@@ -97,8 +86,6 @@ export function GeneralPane() {
     hotkeyRegistrationError?.includes('Accessibility permission may be denied'),
   )
   const dictationSpecialOptions = isMac ? [{ value: 'Fn', label: 'Fn' }] : []
-  const askSpecialOptions = isMac ? [{ value: 'Fn+Space', label: 'Fn + Space' }] : []
-  const translateSpecialOptions = isMac ? [{ value: 'Fn+LeftShift', label: 'Fn + Left Shift' }] : []
   const dictationBindings = config.hotkeys.dictationBindings?.length
     ? config.hotkeys.dictationBindings
     : [config.hotkeys.dictation]
@@ -147,35 +134,6 @@ export function GeneralPane() {
             required
             specialOptions={dictationSpecialOptions}
             onChange={(bindings) => updateCoreBindings('dictation', bindings)}
-          />
-          <ShortcutBindingList
-            role="ask"
-            label={t('settings.askHotkey')}
-            bindings={askBindings}
-            otherBindings={otherBindingsFor('ask')}
-            required={false}
-            specialOptions={askSpecialOptions}
-            onChange={(bindings) => updateCoreBindings('ask', bindings)}
-            trailingAction={
-              <button
-                type="button"
-                aria-label={t('settings.tryAsk')}
-                title={t('settings.tryAsk')}
-                onClick={handleOpenAsk}
-                className="grid h-7 w-7 place-items-center rounded-[6px] border border-transparent bg-bg-secondary text-text-tertiary hover:border-border hover:text-text-primary"
-              >
-                <MessageCircle size={13} />
-              </button>
-            }
-          />
-          <ShortcutBindingList
-            role="translate"
-            label={t('settings.translateHotkey')}
-            bindings={translateBindings}
-            otherBindings={otherBindingsFor('translate')}
-            required={false}
-            specialOptions={translateSpecialOptions}
-            onChange={(bindings) => updateCoreBindings('translate', bindings)}
           />
         </div>
         {platformCapabilities && !platformCapabilities.globalHotkeyReliable && (
@@ -230,6 +188,29 @@ export function GeneralPane() {
           )}
       </Section>
 
+      <Section title="历史记录与隐私">
+        <Toggle
+          checked={config.history_enabled}
+          onChange={(checked) => updateConfig({ history_enabled: checked })}
+          label="在本机保存文字历史"
+        />
+        <label className="block mt-3 text-[13px]">
+          保留时间
+          <select
+            className="ml-3 bg-bg-secondary border border-border rounded px-2 py-1"
+            value={config.history_retention_days}
+            onChange={(e) => updateConfig({ history_retention_days: Number(e.target.value) })}
+          >
+            <option value={7}>7 天</option>
+            <option value={30}>30 天</option>
+            <option value={90}>90 天</option>
+            <option value={0}>不限时间</option>
+          </select>
+        </label>
+        <p className="text-[12px] text-text-tertiary mt-2">
+          关闭后不再保存新记录。历史页可清空已有记录；到期记录在读取或新增历史时清理。
+        </p>
+      </Section>
       <div>
         <button
           type="button"
@@ -250,11 +231,6 @@ export function GeneralPane() {
               checked={config.auto_start}
               onChange={(checked) => updateConfig({ auto_start: checked })}
               label={t('settings.launchAtStartup')}
-            />
-            <Toggle
-              checked={config.history_enabled}
-              onChange={(checked) => updateConfig({ history_enabled: checked })}
-              label={t('settings.saveHistory')}
             />
             <Toggle
               checked={config.capsule_auto_hide}

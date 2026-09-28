@@ -3,7 +3,6 @@ import i18n from './i18n'
 import { useTauriEvents } from './hooks/useTauriEvents'
 import { useTheme } from './hooks/useTheme'
 import { useAppStore } from './stores/appStore'
-import { useAuthStore } from './stores/authStore'
 import { useRoute } from './lib/router'
 import {
   loadOnboardingCompleted,
@@ -15,20 +14,13 @@ import {
   getPlatformCapabilities,
   getHotkeyRegistrationError,
 } from './lib/tauri'
-import { initDeepLinkListener } from './lib/deep-link'
-import { readPendingDesktopCheckout } from './lib/desktop-checkout-intent'
-import { shouldRefreshSubscriptionOnFocus } from './lib/subscription-refresh-policy'
 import { Capsule } from './components/Capsule'
 import { Settings } from './components/Settings'
 import { History } from './components/History'
 import { Onboarding } from './components/Onboarding'
 import { MainLayout } from './components/MainLayout'
 import { HomePage } from './components/HomePage'
-import { UpgradePage } from './components/UpgradePage'
-import { AccountPage } from './components/AccountPage'
-import { AskPanel } from './components/AskPanel'
 import { ToastContainer } from './components/Toast'
-import { UpdatePrompt } from './components/UpdatePrompt'
 
 function CapsuleApp() {
   useTauriEvents()
@@ -58,32 +50,6 @@ function CapsuleApp() {
   return <Capsule />
 }
 
-function AskApp() {
-  useTheme()
-  const setConfig = useAppStore((s) => s.setConfig)
-
-  useEffect(() => {
-    getConfig()
-      .then((config) => {
-        setConfig(config)
-        if (config.ui_language && config.ui_language !== i18n.language) {
-          i18n.changeLanguage(config.ui_language)
-          localStorage.setItem('ui_language', config.ui_language)
-        }
-      })
-      .catch((e) => {
-        console.error('Failed to load config in Ask app:', e)
-      })
-  }, [setConfig])
-
-  return (
-    <>
-      <AskPanel />
-      <ToastContainer />
-    </>
-  )
-}
-
 function MainApp() {
   useTauriEvents()
   useTheme()
@@ -100,12 +66,12 @@ function MainApp() {
   const setHotkeyRegistrationError = useAppStore((s) => s.setHotkeyRegistrationError)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const { route, navigate } = useRoute()
+  const { route } = useRoute()
 
   useEffect(() => {
-    loadOnboardingCompleted().then(async (done) => {
-      setOnboardingCompleted(done)
-      if (done) {
+    loadOnboardingCompleted()
+      .then(async (done) => {
+        setOnboardingCompleted(done)
         try {
           const [
             config,
@@ -144,15 +110,12 @@ function MainApp() {
           console.error('Failed to load initial data:', e)
           setLoadError(true)
         }
-      }
-      setLoaded(true)
-    })
-
-    // Initialize auth session (non-blocking)
-    useAuthStore.getState().initialize()
-
-    // Initialize deep-link listener
-    initDeepLinkListener()
+        setLoaded(true)
+      })
+      .catch(() => {
+        setLoadError(true)
+        setLoaded(true)
+      })
   }, [
     setOnboardingCompleted,
     setConfig,
@@ -165,53 +128,21 @@ function MainApp() {
     setHotkeyRegistrationError,
   ])
 
-  const user = useAuthStore((s) => s.user)
-  const authLoading = useAuthStore((s) => s.loading)
-
-  useEffect(() => {
-    if (!loaded || authLoading || !user || route !== 'account') return
-    if (readPendingDesktopCheckout(localStorage)) navigate('upgrade')
-  }, [authLoading, loaded, navigate, route, user])
-
-  // Subscription changes are event-driven. Focus refresh is reserved for a pending checkout.
-  useEffect(() => {
-    if (!loaded || !user) return
-
-    let refreshInFlight = false
-    const refreshPendingCheckout = () => {
-      const { checkoutPending } = useAuthStore.getState()
-      if (!shouldRefreshSubscriptionOnFocus(checkoutPending) || refreshInFlight) return
-      refreshInFlight = true
-      void useAuthStore
-        .getState()
-        .refreshSubscription()
-        .finally(() => {
-          refreshInFlight = false
-        })
-    }
-
-    window.addEventListener('focus', refreshPendingCheckout)
-
-    return () => {
-      window.removeEventListener('focus', refreshPendingCheckout)
-    }
-  }, [loaded, user])
-
   if (!loaded)
     return (
       <div className="flex items-center justify-center h-screen">
-        <span className="text-text-tertiary text-[13px]">Loading...</span>
+        <span className="text-text-tertiary text-[13px]">正在加载…</span>
       </div>
     )
   if (loadError)
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-3">
-        <span className="text-error text-[13px]">Failed to load application data.</span>
+        <span className="text-error text-[13px]">无法读取本地数据，请重试。</span>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover transition-colors"
         >
-          Retry
+          重试
         </button>
       </div>
     )
@@ -222,9 +153,6 @@ function MainApp() {
       {route === 'home' && <HomePage />}
       {route === 'settings' && <Settings />}
       {route === 'history' && <History />}
-      {route === 'upgrade' && <UpgradePage />}
-      {route === 'account' && <AccountPage />}
-      <UpdatePrompt />
       <ToastContainer />
     </MainLayout>
   )
@@ -233,7 +161,6 @@ function MainApp() {
 function App() {
   // Capsule window loads with #capsule hash — detect synchronously, no race condition
   if (window.location.hash === '#capsule') return <CapsuleApp />
-  if (window.location.hash === '#ask') return <AskApp />
   return <MainApp />
 }
 

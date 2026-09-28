@@ -46,27 +46,31 @@ describe('appStore', () => {
   })
 
   describe('config', () => {
+    it('does not resurrect an unbound Fn translation shortcut when saving hold mode', () => {
+      const initial = getState().config
+      expect(initial.hotkeys.translate).toBeNull()
+      getState().updateConfig({ hotkey_mode: 'hold' })
+      expect(getState().config.hotkeys.translate).toBeNull()
+      expect(getState().config.hotkeys.translateBindings).toEqual([])
+    })
+
     it('has sensible defaults', () => {
       const { config } = getState()
       const isMac =
         typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC')
-      const isWindows =
-        typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('WIN')
       expect(config.theme).toBe('system')
       expect(config.hotkey).toBe(isMac ? 'Fn' : 'Ctrl+/')
-      expect(config.ask_hotkey).toBe(isMac ? 'Fn+Space' : 'Ctrl+.')
+      expect(config.ask_hotkey).toBe('')
       expect(config.hotkeys.dictation).toEqual(
         isMac ? { primary: 'Fn', modifiers: [] } : { primary: '/', modifiers: ['Ctrl'] },
       )
-      expect(config.hotkeys.ask).toEqual(
-        isMac ? { primary: 'Space', modifiers: ['Fn'] } : { primary: '.', modifiers: ['Ctrl'] },
-      )
+      expect(config.hotkeys.ask).toBeNull()
       expect(config.hotkeys.dictationBindings).toEqual([config.hotkeys.dictation])
-      expect(config.hotkeys.askBindings).toEqual([config.hotkeys.ask])
+      expect(config.hotkeys.askBindings).toEqual([])
       expect(config.hotkeys.translateBindings).toEqual(
         config.hotkeys.translate ? [config.hotkeys.translate] : [],
       )
-      expect(config.hotkeys.dictationMode).toBe(isMac || isWindows ? 'toggle' : 'hold')
+      expect(config.hotkeys.dictationMode).toBe('hold')
       expect(config.output_mode).toBe('keyboard')
       expect(config.insertion_strategy).toBe('auto')
       expect(config.windows_sendinput_newline_mode).toBe('enter')
@@ -80,7 +84,7 @@ describe('appStore', () => {
       expect(config.target_lang).toBe('en')
       expect(config.stt_custom_api_key).toBe('')
       expect(config.capsule_auto_hide).toBe(true)
-      expect(config.auto_start).toBe(true)
+      expect(config.auto_start).toBe(false)
     })
 
     it('setConfig replaces entire config', () => {

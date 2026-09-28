@@ -1,21 +1,31 @@
 import { useTranslation } from 'react-i18next'
-import { motion, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { Check, X } from 'lucide-react'
 import { abortRecording } from '../../lib/tauri'
+import { useRecording } from '../../hooks/useRecording'
+import { useAppStore } from '../../stores/appStore'
 import { Waveform } from './Waveform'
-import { DurationTimer } from './DurationTimer'
 import { TranslateTargetChip } from './TranslateTargetChip'
 
 export function CapsuleRecording() {
   const { t } = useTranslation()
-  const reduced = useReducedMotion()
+  const { stopRecording } = useRecording()
+  const pending = useRef(false)
+  const [busy, setBusy] = useState(false)
 
-  const handleCancel = async (e: React.MouseEvent) => {
+  const handleAction = async (e: React.MouseEvent, action: () => Promise<void>) => {
     e.stopPropagation()
+    if (pending.current) return
+    pending.current = true
+    setBusy(true)
     try {
-      await abortRecording()
-    } catch (err) {
-      console.error('Failed to abort recording:', err)
+      await action()
+    } catch {
+      useAppStore.getState().setPipelineError(t('capsule.errors.unknown'))
+    } finally {
+      pending.current = false
+      setBusy(false)
     }
   }
 
@@ -24,25 +34,35 @@ export function CapsuleRecording() {
   }
 
   return (
-    <motion.div className="relative z-10 flex items-center gap-2 h-9 px-3">
-      {/* White pulse dot — gentle opacity loop */}
-      <motion.div
-        className="w-2 h-2 rounded-full bg-white/80 flex-shrink-0"
-        animate={reduced ? undefined : { opacity: [1, 0.5, 1] }}
-        transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
-      />
-      <Waveform />
-      <TranslateTargetChip />
-      <div className="flex-1" />
-      <DurationTimer />
+    <motion.div className="relative z-10 flex items-center gap-1 h-9 px-1">
       <button
         onPointerDown={stopPointerPropagation}
         onPointerUp={stopPointerPropagation}
-        onClick={handleCancel}
+        onClick={(e) => void handleAction(e, abortRecording)}
+        disabled={busy}
         aria-label={t('capsule.cancelRecording')}
-        className="flex-shrink-0 p-1 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors bg-transparent border-none cursor-pointer"
+        title={t('capsule.cancelRecording')}
+        className="flex items-center justify-center shrink-0 w-7 h-7 rounded-full text-white/80 hover:text-white bg-white/15 hover:bg-white/25 border-none cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
       >
-        <X size={12} />
+        <X size={16} />
+      </button>
+      <div
+        className="flex-1 min-w-0 flex justify-center cursor-grab active:cursor-grabbing"
+        aria-hidden="true"
+      >
+        <Waveform />
+      </div>
+      <TranslateTargetChip />
+      <button
+        onPointerDown={stopPointerPropagation}
+        onPointerUp={stopPointerPropagation}
+        onClick={(e) => void handleAction(e, stopRecording)}
+        disabled={busy}
+        aria-label={t('capsule.finishRecording')}
+        title={t('capsule.finishRecording')}
+        className="flex items-center justify-center shrink-0 w-7 h-7 rounded-full text-neutral-950 bg-white/90 hover:bg-white border-none cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
+      >
+        <Check size={18} />
       </button>
     </motion.div>
   )

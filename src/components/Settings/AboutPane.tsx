@@ -29,6 +29,9 @@ export function AboutPane() {
       </div>
 
       <p className="text-text-secondary leading-relaxed">{t('settings.aboutDescription')}</p>
+      <p className="text-text-secondary leading-relaxed">
+        基于 OpenTypeless（MIT）二次开发。原作者版权声明和第三方许可请参阅随应用附带的许可文件。
+      </p>
 
       {/* Language */}
       <SectionCard title={t('settings.language')}>

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Voice Input MVP",
     "tagline": "AI-Spracheingabe"
   },
   "nav": {
@@ -53,7 +53,7 @@
     "output_wayland_clipboard_copy_only": "Copied to clipboard. Paste manually on Wayland."
   },
   "cloudRecovery": {
-    "title": "OpenTypeless Cloud ist vorübergehend nicht verfügbar",
+    "title": "Voice Input MVP Cloud ist vorübergehend nicht verfügbar",
     "sttBody": "Cloud-Spracherkennung nicht verfügbar. Audio wurde nicht erneut gesendet.",
     "llmBody": "KI-Überarbeitung nicht verfügbar. Originaltext wurde beibehalten.",
     "tryAgain": "Erneut versuchen",
@@ -61,7 +61,7 @@
     "openLlmSettings": "Einstellungen"
   },
   "home": {
-    "welcome": "Willkommen bei OpenTypeless",
+    "welcome": "Willkommen bei Voice Input MVP",
     "description": "Halten Sie {{hotkey}} gedrückt, um die Sprachaufnahme zu starten. Ihre Sprache wird transkribiert und optional durch KI geglättet.",
     "totalRecordings": "Gesamtaufnahmen",
     "today": "Heute",
@@ -127,11 +127,11 @@
     },
     "steps": {
       "welcome": "Willkommen",
-      "welcomeSub": "Richten Sie OpenTypeless in wenigen Schritten ein",
+      "welcomeSub": "Richten Sie Voice Input MVP in wenigen Schritten ein",
       "signIn": "Anmelden",
       "signInSub": "Verbinden Sie Ihr Konto, um loszulegen",
       "chooseMode": "Modus wählen",
-      "chooseModeSub": "Wählen Sie, wie Sie OpenTypeless verwenden möchten",
+      "chooseModeSub": "Wählen Sie, wie Sie Voice Input MVP verwenden möchten",
       "speechRecognition": "Spracherkennung",
       "speechRecognitionSub": "Konfigurieren Sie Ihren STT-Dienst",
       "aiPolish": "KI-Glättung",
@@ -196,7 +196,7 @@
       "appWritingModesSub": "Bearbeite Standardmodi fuer E-Mail, Chat, Dokumente und weitere Schreibweisen in Szenen."
     },
     "permissions": {
-      "subtitle": "OpenTypeless fragt nur nach Zugriff, wenn eine Funktion ihn braucht.",
+      "subtitle": "Voice Input MVP fragt nur nach Zugriff, wenn eine Funktion ihn braucht.",
       "microphone": "Mikrofon",
       "microphoneDesc": "Ihre Stimme aufnehmen.",
       "textOutput": "Textausgabe",
@@ -233,6 +233,7 @@
   },
   "capsule": {
     "cancelRecording": "Aufnahme abbrechen",
+    "finishRecording": "Aufnahme beenden",
     "translationTarget": "Übersetzungsziel",
     "translationTargets": "Übersetzungsziele",
     "preparing": "Bereite vor...",
@@ -360,7 +361,7 @@
     "test": "Testen",
     "connectionSuccess": "Verbindung erfolgreich",
     "connectionFailed": "Verbindung fehlgeschlagen",
-    "storedLocally": "Lokal auf Ihrem Gerät gespeichert. Wird niemals an OpenTypeless-Server gesendet.",
+    "storedLocally": "Lokal auf Ihrem Gerät gespeichert. Wird niemals an Voice Input MVP-Server gesendet.",
     "credentialSaveFailed": "API-Schlüssel konnte nicht im OS-Tresor gespeichert werden. {{details}}",
     "sttLanguage": "Sprache",
     "model": "Modell",
@@ -855,7 +856,7 @@
       "unknownUpstream": "Das Limit des eigenen Servers ist unbekannt; ein sicherer Standardwert wird verwendet.",
       "unknownProvider": "Dieser Anbieter ist noch unbekannt; ein sicheres Limit wird verwendet.",
       "productSafety": "Ein vorsichtiges App-Limit für diesen Streaming-Anbieter.",
-      "managedCapability": "Automatisch für OpenTypeless Cloud festgelegt.",
+      "managedCapability": "Automatisch für Voice Input MVP Cloud festgelegt.",
       "encoderFallback": "Der verwaltete Audio-Encoder war nicht verfügbar; für diese Aufnahme galt das kürzere lokale WAV-Sicherheitslimit.",
       "managedFallback": "Cloud-Funktionsdaten fehlen oder sind veraltet; daher gilt das sichere 30-Sekunden-Limit."
     }
@@ -872,7 +873,7 @@
       "siliconflow": "SiliconFlow",
       "appleSpeech": "Apple Speech (Local)",
       "customWhisper": "Local / Custom Whisper",
-      "cloud": "OpenTypeless Cloud"
+      "cloud": "Voice Input MVP Cloud"
     },
     "llm": {
       "zhipu": "Zhipu",
@@ -887,7 +888,7 @@
       "claude": "Claude",
       "ollama": "Ollama (Local)",
       "openrouter": "OpenRouter",
-      "cloud": "OpenTypeless Cloud"
+      "cloud": "Voice Input MVP Cloud"
     }
   }
 }

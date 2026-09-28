@@ -54,6 +54,7 @@ function getSizeForState(
     case 'preparing':
       return { width: 180, height: 36 }
     case 'recording':
+      return { width: 160, height: 36 }
     case 'transcribing':
     case 'polishing':
       return { width: 200, height: 36 }

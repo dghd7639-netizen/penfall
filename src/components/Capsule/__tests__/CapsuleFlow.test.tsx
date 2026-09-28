@@ -72,6 +72,22 @@ describe('Capsule flow states', () => {
     expect(screen.getByText('capsule.preparing')).toBeInTheDocument()
   })
 
+  it('finishes recording only from the check button, not the draggable shell', async () => {
+    useAppStore.setState({ pipelineState: 'recording' })
+    const { container } = render(<Capsule />)
+    const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
+    const pointerUp = new Event('pointerup', { bubbles: true })
+    Object.defineProperty(pointerUp, 'button', { value: 0 })
+    fireEvent(shell, pointerUp)
+    expect(invoke).not.toHaveBeenCalledWith('stop_recording')
+    const finish = screen.getByRole('button', { name: 'capsule.finishRecording' })
+    fireEvent.pointerDown(finish)
+    fireEvent.pointerUp(finish)
+    fireEvent.click(finish)
+    await waitFor(() => expect(invoke).toHaveBeenCalledExactlyOnceWith('stop_recording'))
+    expect(shell.style.width).toBe('160px')
+  })
+
   it('renders transcribing state with partial transcript when available', () => {
     useAppStore.setState({
       pipelineState: 'transcribing',
@@ -172,7 +188,7 @@ describe('Capsule flow states', () => {
     expect(useAppStore.getState().config.translation.active_target).toBe('ja')
   })
 
-  it('keeps the capsule shell at 200 by 36 and closes the target menu on Escape', async () => {
+  it('keeps the capsule shell at 160 by 36 and closes the target menu on Escape', async () => {
     useAppStore.setState({
       pipelineState: 'recording',
       activeVoiceMode: 'translate',
@@ -194,7 +210,7 @@ describe('Capsule flow states', () => {
     )
 
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
-    expect(shell.style.width).toBe('200px')
+    expect(shell.style.width).toBe('160px')
     expect(shell.style.height).toBe('36px')
   })
 })

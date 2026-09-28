@@ -364,7 +364,7 @@ function defaultDictationHotkey(): string {
 }
 
 function defaultDictationHotkeyMode(): HotkeyMode {
-  return isMacPlatform() ? 'toggle' : 'hold'
+  return 'hold'
 }
 
 function defaultAskHotkey(): string {
@@ -578,9 +578,11 @@ function hotkeyConfigFromLegacy(config: AppConfig): HotkeyConfig {
   const ask = config.ask_hotkey.trim()
     ? (bindingFromHotkey(config.ask_hotkey) ?? bindingFromHotkey(defaultAskHotkey()))
     : null
-  const existingTranslate =
-    config.hotkeys?.translate ??
-    (defaultTranslateHotkey() ? bindingFromHotkey(defaultTranslateHotkey()!) : null)
+  const existingTranslate = config.hotkeys
+    ? config.hotkeys.translate
+    : defaultTranslateHotkey()
+      ? bindingFromHotkey(defaultTranslateHotkey()!)
+      : null
   const translateBindings = normalizeBindingList(
     config.hotkeys?.translateBindings?.length
       ? config.hotkeys.translateBindings
@@ -721,7 +723,7 @@ function syncHotkeyConfig(previous: AppConfig, partial: Partial<AppConfig>): App
 }
 
 const defaultConfig: AppConfig = {
-  stt_provider: 'glm-asr',
+  stt_provider: 'aliyun-qwen3-asr',
   stt_api_key: '',
   stt_custom_api_key: '',
   stt_custom_preset: 'speaches',
@@ -729,18 +731,18 @@ const defaultConfig: AppConfig = {
   stt_custom_model: 'Systran/faster-whisper-large-v3',
   stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
   stt_aliyun_qwen_region: 'china-mainland',
-  stt_language: 'multi',
-  llm_provider: 'openrouter',
+  stt_language: 'zh',
+  llm_provider: 'qwen',
   llm_api_key: '',
-  llm_model: 'google/gemini-2.5-flash',
-  llm_base_url: 'https://openrouter.ai/api/v1',
+  llm_model: 'qwen-turbo',
+  llm_base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   polish_enabled: true,
   context_adaptation_enabled: true,
   voice_routing_flags: {
-    draft_insert: true,
-    rewrite_selection: true,
-    translate_selection: true,
-    search: true,
+    draft_insert: false,
+    rewrite_selection: false,
+    translate_selection: false,
+    search: false,
   },
   polish_style: 'clean',
   polish_custom_prompt: '',
@@ -753,17 +755,15 @@ const defaultConfig: AppConfig = {
   target_lang: 'en',
   translation: { targets: ['en'], active_target: 'en' },
   hotkey: defaultDictationHotkey(),
-  ask_hotkey: defaultAskHotkey(),
+  ask_hotkey: '',
   hotkey_mode: defaultDictationHotkeyMode(),
   hotkeys: {
     dictation: bindingFromHotkey(defaultDictationHotkey())!,
-    ask: bindingFromHotkey(defaultAskHotkey()),
-    translate: defaultTranslateHotkey() ? bindingFromHotkey(defaultTranslateHotkey()!) : null,
+    ask: null,
+    translate: null,
     dictationBindings: [bindingFromHotkey(defaultDictationHotkey())!],
-    askBindings: [bindingFromHotkey(defaultAskHotkey())!],
-    translateBindings: defaultTranslateHotkey()
-      ? [bindingFromHotkey(defaultTranslateHotkey()!)!]
-      : [],
+    askBindings: [],
+    translateBindings: [],
     editSelection: null,
     switchScene: null,
     openApp: null,
@@ -777,16 +777,16 @@ const defaultConfig: AppConfig = {
   streaming_insert_enabled: false,
   selected_text_enabled: false,
   theme: 'system',
-  auto_start: true,
+  auto_start: false,
   close_to_tray: true,
   start_minimized: false,
   recording_limit_mode: 'auto',
   custom_recording_limit_seconds: 600,
   max_recording_seconds: 30,
   history_enabled: true,
-  history_retention_days: 0,
+  history_retention_days: 30,
   history_max_entries: 5000,
-  ui_language: 'en',
+  ui_language: 'zh',
   capsule_auto_hide: true,
 }
 

@@ -1,7 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAppStore } from '../../stores/appStore'
-import { useRecording } from '../../hooks/useRecording'
 import { useCapsuleResize } from '../../hooks/useCapsuleResize'
 import { stopAskFlow } from '../../lib/tauri'
 import { CapsuleIdle } from './CapsuleIdle'
@@ -35,6 +34,7 @@ function getCapsuleShellSize(capsuleState: string) {
     case 'ask_thinking':
       return { width: 168, height: 36 }
     case 'recording':
+      return { width: 160, height: 36 }
     case 'transcribing':
     case 'polishing':
     case 'error':
@@ -53,7 +53,6 @@ export function Capsule() {
   const setContextMenuReady = useAppStore((s) => s.setContextMenuReady)
   const translationTargetMenuOpen = useAppStore((s) => s.translationTargetMenuOpen)
   const setTranslationTargetMenuOpen = useAppStore((s) => s.setTranslationTargetMenuOpen)
-  const { stopRecording, isRecording } = useRecording()
 
   const dragStart = useRef<{ x: number; y: number } | null>(null)
   const isDragging = useRef(false)
@@ -101,11 +100,9 @@ export function Capsule() {
         void stopAskFlow().catch((error) => {
           console.error('Failed to stop Ask flow:', error)
         })
-      } else if (isRecording) {
-        stopRecording()
       }
     },
-    [isRecording, pipelineState, stopRecording],
+    [pipelineState],
   )
 
   const handleContextMenu = (e: React.MouseEvent) => {

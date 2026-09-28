@@ -1,4 +1,4 @@
-import { Settings, Mic, Sparkles, BookOpen, Info, LayoutGrid } from 'lucide-react'
+import { Settings, Mic, BookOpen, Info, LayoutGrid } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
@@ -6,13 +6,12 @@ import { spring } from '../../lib/animations'
 const PANES = [
   { id: 'general', labelKey: 'settings.general', icon: Settings },
   { id: 'stt', labelKey: 'settings.speechRecognition', icon: Mic },
-  { id: 'llm', labelKey: 'settings.aiPolish', icon: Sparkles },
   { id: 'dictionary', labelKey: 'settings.dictionary', icon: BookOpen },
   { id: 'scenes', labelKey: 'settings.scenes', icon: LayoutGrid },
   { id: 'about', labelKey: 'settings.about', icon: Info },
 ] as const
 
-export type PaneId = (typeof PANES)[number]['id']
+export type PaneId = (typeof PANES)[number]['id'] | 'llm'
 
 interface Props {
   activePane: PaneId
@@ -52,7 +51,7 @@ export function SettingsSidebar({ activePane, onSelect }: Props) {
             )}
             <span className="relative z-10 flex items-center gap-2.5">
               <Icon size={16} />
-              {t(pane.labelKey)}
+              {pane.id === 'stt' ? '语音与润色' : t(pane.labelKey)}
             </span>
           </motion.button>
         )

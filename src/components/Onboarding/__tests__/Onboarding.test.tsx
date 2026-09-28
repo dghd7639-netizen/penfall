@@ -2,87 +2,96 @@ import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Onboarding } from '../index'
+import { getConfig, saveOnboardingCompleted, updateConfig } from '../../../lib/tauri'
 
 const mockStore = {
-  onboardingStep: 5,
-  setOnboardingStep: vi.fn(),
+  onboardingStep: 0,
+  setOnboardingStep: vi.fn((step: number) => {
+    mockStore.onboardingStep = step
+  }),
   setOnboardingCompleted: vi.fn(),
-  sttTestStatus: 'idle',
-  llmTestStatus: 'idle',
-  onboardingMode: 'cloud',
-  setOnboardingMode: vi.fn(),
-  updateConfig: vi.fn(),
   config: {},
+  setConfig: vi.fn(),
+  setSavedConfig: vi.fn(),
 }
-
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  },
 }))
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}))
-
 vi.mock('../OnboardingLayout', () => ({
-  OnboardingLayout: ({ children, onBack }: { children: React.ReactNode; onBack: () => void }) => (
+  OnboardingLayout: ({
+    children,
+    onNext,
+    onBack,
+    canNext,
+  }: {
+    children: React.ReactNode
+    onNext: () => void
+    onBack: () => void
+    canNext: boolean
+  }) => (
     <div>
-      <button type="button" onClick={onBack}>
-        Back
+      <button onClick={onNext} disabled={!canNext}>
+        Next
       </button>
+      <button onClick={onBack}>Back</button>
       {children}
     </div>
   ),
 }))
-
-vi.mock('../WelcomeStep', () => ({ WelcomeStep: () => <div>Welcome</div> }))
-vi.mock('../AccountStep', () => ({ AccountStep: () => <div>Account</div> }))
-vi.mock('../ModeSelectStep', () => ({ ModeSelectStep: () => <div>Mode</div> }))
-vi.mock('../SttSetupStep', () => ({ SttSetupStep: () => <div>STT</div> }))
-vi.mock('../LlmSetupStep', () => ({ LlmSetupStep: () => <div>LLM</div> }))
+vi.mock('../../Settings/DashscopeSetup', () => ({
+  DashscopeSetup: ({ onSaved }: { onSaved: () => void }) => (
+    <button onClick={onSaved}>Save service</button>
+  ),
+}))
 vi.mock('../PermissionsStep', () => ({ PermissionsStep: () => <div>Permissions</div> }))
-vi.mock('../QuickTestStep', () => ({ QuickTestStep: () => <div>Quick Test</div> }))
-vi.mock('../DoneStep', () => ({ DoneStep: () => <div>Done</div> }))
-
+vi.mock('../QuickTestStep', () => ({ QuickTestStep: () => <div>Actual test</div> }))
 vi.mock('../../../stores/appStore', () => ({
-  useAppStore: (selector: (state: typeof mockStore) => unknown) => selector(mockStore),
+  useAppStore: Object.assign(
+    (selector: (state: typeof mockStore) => unknown) => selector(mockStore),
+    { getState: () => mockStore },
+  ),
 }))
-
-vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
-    selector({ user: { id: 'test-user' } }),
-}))
-
 vi.mock('../../../lib/tauri', () => ({
   updateConfig: vi.fn().mockResolvedValue(undefined),
+  getConfig: vi.fn().mockResolvedValue({}),
   saveOnboardingCompleted: vi.fn().mockResolvedValue(undefined),
 }))
-
 beforeEach(() => {
-  mockStore.onboardingStep = 5
-  mockStore.onboardingMode = 'cloud'
-  mockStore.setOnboardingStep.mockReset()
+  mockStore.onboardingStep = 0
+  vi.clearAllMocks()
+  vi.mocked(updateConfig).mockResolvedValue(undefined)
+  vi.mocked(getConfig).mockResolvedValue({} as never)
+  vi.mocked(saveOnboardingCompleted).mockResolvedValue(undefined)
 })
-
 afterEach(() => cleanup())
-
-describe('Onboarding cloud navigation', () => {
-  it('returns from Permissions to Mode Select because cloud skips provider setup', async () => {
+describe('personal onboarding', () => {
+  it('requires service setup before advancing to permissions', () => {
     render(<Onboarding />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-
-    await waitFor(() => expect(mockStore.setOnboardingStep).toHaveBeenCalledWith(2))
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save service' }))
+    expect(mockStore.setOnboardingStep).toHaveBeenCalledWith(1)
   })
-
-  it('returns from Quick Test to Permissions', async () => {
-    mockStore.onboardingStep = 6
+  it('returns from permissions to service setup', () => {
+    mockStore.onboardingStep = 1
     render(<Onboarding />)
-
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-
-    await waitFor(() => expect(mockStore.setOnboardingStep).toHaveBeenCalledWith(5))
+    expect(mockStore.setOnboardingStep).toHaveBeenCalledWith(0)
+  })
+  it('does not mark onboarding complete after a failed save', async () => {
+    mockStore.onboardingStep = 2
+    vi.mocked(updateConfig).mockRejectedValue(new Error('disk error'))
+    render(<Onboarding />)
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('设置保存失败'))
+    expect(mockStore.setOnboardingCompleted).not.toHaveBeenCalled()
+  })
+  it('completes only after saving and reading back configuration', async () => {
+    mockStore.onboardingStep = 2
+    render(<Onboarding />)
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => expect(mockStore.setOnboardingCompleted).toHaveBeenCalledWith(true))
+    expect(updateConfig).toHaveBeenCalledWith(mockStore.config)
+    expect(getConfig).toHaveBeenCalledOnce()
+    expect(saveOnboardingCompleted).toHaveBeenCalledOnce()
   })
 })

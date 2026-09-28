@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::storage::AppConfig;
 
-const SERVICE_NAME: &str = "OpenTypeless";
+const SERVICE_NAME: &str = "Voice Input MVP";
 const API_KEY_ACCOUNT_SUFFIX: &str = "api_key";
 const STORED_CREDENTIAL_VERSION: u8 = 1;
 const CLOUD_SESSION_NAMESPACE: &str = "session";
@@ -57,6 +57,12 @@ pub struct SystemCredentialVault;
 
 impl SystemCredentialVault {
     fn account(namespace: &str, provider: &str) -> String {
+        // One DashScope credential is shared by ASR and Qwen polish.
+        let (namespace, provider) = if namespace.trim() == "llm" && provider.trim() == "qwen" {
+            ("stt", "aliyun-qwen3-asr")
+        } else {
+            (namespace, provider)
+        };
         format!(
             "{}.{}.{}",
             namespace.trim(),
@@ -315,6 +321,19 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use std::sync::Mutex;
+
+    #[test]
+    fn dashscope_uses_one_vault_entry_for_transcription_and_polish() {
+        assert_eq!(
+            SystemCredentialVault::account("stt", "aliyun-qwen3-asr"),
+            SystemCredentialVault::account("llm", "qwen")
+        );
+        assert_ne!(
+            SystemCredentialVault::account("llm", "openai"),
+            SystemCredentialVault::account("llm", "qwen")
+        );
+        assert_ne!(SERVICE_NAME, "OpenTypeless");
+    }
 
     #[derive(Default)]
     struct MemoryVault {

@@ -12,7 +12,7 @@ import ru from './locales/ru.json'
 import it from './locales/it.json'
 
 const savedLang =
-  typeof localStorage !== 'undefined' ? localStorage.getItem('ui_language') || 'en' : 'en'
+  typeof localStorage !== 'undefined' ? localStorage.getItem('ui_language') || 'zh' : 'zh'
 
 i18n.use(initReactI18next).init({
   resources: {

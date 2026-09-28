@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenTypeless",
+  "productName": "Voice Input MVP",
   "version": "0.1.42",
-  "identifier": "com.opentypeless.app",
+  "identifier": "com.hanbala.voice-input-mvp",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "OpenTypeless",
+        "title": "Voice Input MVP",
         "width": 900,
         "height": 700,
         "minWidth": 720,
@@ -29,7 +29,7 @@
       },
       {
         "label": "capsule",
-        "title": "OpenTypeless Capsule",
+        "title": "Voice Input MVP Capsule",
         "width": 80,
         "height": 80,
         "resizable": false,
@@ -46,7 +46,7 @@
       },
       {
         "label": "ask",
-        "title": "OpenTypeless Ask",
+        "title": "Voice Input MVP Ask",
         "width": 400,
         "height": 220,
         "minWidth": 360,
@@ -63,26 +63,20 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.opentypeless.com https://accounts.google.com https://github.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
     }
   },
   "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/tover0314-w/opentypeless/releases/latest/download/latest.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdBNEFFRjEzN0ZCQTNBMEQKUldRTk9ycC9FKzlLZXVKSFZLNUYxdFZ2Ri9Ya0FRaGsvUEZ1bkJRTDZ6dHZ1emhtZWR6QkprS3kK"
-    },
     "deep-link": {
       "desktop": {
-        "schemes": ["opentypeless"]
+        "schemes": ["voice-input-mvp"]
       }
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

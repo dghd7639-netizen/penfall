@@ -444,6 +444,23 @@ impl AppConfig {
     pub fn new_install_default() -> Self {
         Self {
             capsule_auto_hide: true,
+            auto_start: false,
+            stt_provider: "aliyun-qwen3-asr".to_string(),
+            stt_language: "zh".to_string(),
+            llm_provider: "qwen".to_string(),
+            llm_model: "qwen-turbo".to_string(),
+            llm_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
+            ui_language: "zh".to_string(),
+            hotkey_mode: "hold".to_string(),
+            ask_hotkey: String::new(),
+            hotkeys: HotkeyConfig::from_legacy(default_dictation_hotkey(), "", "hold"),
+            voice_routing_flags: crate::voice_intent::VoiceRoutingFlags {
+                draft_insert: false,
+                rewrite_selection: false,
+                translate_selection: false,
+                search: false,
+            },
+            history_retention_days: 30,
             ..Self::default()
         }
     }
@@ -713,6 +730,22 @@ impl AppConfig {
                 HotkeyConfig::from_legacy(&config.hotkey, &config.ask_hotkey, &config.hotkey_mode);
         } else {
             config.sync_legacy_hotkey_fields_from_typed();
+        }
+        // Older personal builds could restore the upstream Fn+LeftShift binding.
+        // A combo delays bare Fn until release, breaking hold-to-talk.
+        #[cfg(target_os = "macos")]
+        if !config.translate_enabled
+            && config.ask_hotkey.is_empty()
+            && config
+                .hotkeys
+                .translate
+                .as_ref()
+                .and_then(ShortcutBinding::to_hotkey_string)
+                .as_deref()
+                == Some("Fn+LeftShift")
+        {
+            config.hotkeys.translate = None;
+            config.hotkeys.translate_bindings.clear();
         }
         config.normalize_values();
         Ok(config)
@@ -3015,26 +3048,51 @@ mod tests {
     fn app_config_new_install_defaults_capsule_auto_hide_true() {
         let config = AppConfig::new_install_default();
         assert!(config.capsule_auto_hide);
-        assert!(config.auto_start);
+        assert!(!config.auto_start);
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn app_config_new_install_uses_fn_toggle_on_macos() {
+    fn loaded_personal_config_drops_inherited_fn_translation_combo() {
+        let mut value = serde_json::to_value(AppConfig::new_install_default()).unwrap();
+        value["hotkeys"]["translate"] = serde_json::json!({
+            "primary": "LeftShift",
+            "modifiers": ["Fn"]
+        });
+        value["hotkeys"]["translateBindings"] = serde_json::json!([{
+            "primary": "LeftShift",
+            "modifiers": ["Fn"]
+        }]);
+
+        let config = AppConfig::from_stored_value(value).unwrap();
+        assert!(config.hotkeys.translate.is_none());
+        assert!(config.hotkeys.translate_bindings.is_empty());
+        assert_eq!(config.hotkeys.dictation_mode, "hold");
+        let plan = crate::hotkey::hotkey_registration_plan_from_config(&config.hotkeys).unwrap();
+        assert_eq!(plan.native.len(), 1);
+        assert_eq!(
+            plan.native[0].trigger,
+            crate::native_hotkey::NativeHotkeyTrigger::Fn
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn app_config_new_install_uses_fn_hold_on_macos() {
         let config = AppConfig::new_install_default();
         assert_eq!(config.hotkey, "Fn");
         assert_eq!(config.hotkeys.dictation.primary, "Fn");
         assert_eq!(config.hotkeys.dictation.modifiers, Vec::<String>::new());
-        assert_eq!(config.hotkey_mode, "toggle");
-        assert_eq!(config.hotkeys.dictation_mode, "toggle");
-        assert_eq!(config.ask_hotkey, "Fn+Space");
+        assert_eq!(config.hotkey_mode, "hold");
+        assert_eq!(config.hotkeys.dictation_mode, "hold");
+        assert_eq!(config.ask_hotkey, "");
         assert_eq!(
             config
                 .hotkeys
                 .ask
                 .as_ref()
                 .and_then(ShortcutBinding::to_hotkey_string),
-            Some("Fn+Space".to_string())
+            None
         );
         assert_eq!(
             config
@@ -3042,7 +3100,7 @@ mod tests {
                 .translate
                 .as_ref()
                 .and_then(ShortcutBinding::to_hotkey_string),
-            Some("Fn+LeftShift".to_string())
+            None
         );
     }
 
