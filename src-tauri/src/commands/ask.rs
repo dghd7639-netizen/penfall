@@ -1375,6 +1375,7 @@ pub async fn stop_ask_dictation(
 
     let result = async {
         crate::audio::cue::play_record_end();
+        let heard_voice = session.handle.heard_voice();
         session.handle.stop();
         emit_capsule_state(&app, PipelineState::AskThinking);
 
@@ -1414,6 +1415,9 @@ pub async fn stop_ask_dictation(
             .clone()
         {
             return Err(message);
+        }
+        if !heard_voice {
+            return Err("No speech detected. Please try again.".to_string());
         }
 
         let question = validate_ask_question(

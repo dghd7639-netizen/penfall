@@ -1822,13 +1822,15 @@ impl PipelineHandle {
             .unwrap_or_else(|e| e.into_inner()) = selected_text;
 
         // Stop audio capture (this drops the channel, signaling STT task to stop)
-        {
+        let heard_voice = {
             let mut handle = self.audio_handle.lock().unwrap_or_else(|e| e.into_inner());
+            let heard_voice = handle.as_ref().is_none_or(|h| h.heard_voice());
             if let Some(ref mut h) = *handle {
                 h.stop();
             }
             *handle = None;
-        }
+            heard_voice
+        };
         let stt_control = self
             .stt_session
             .lock()
@@ -1904,7 +1906,7 @@ impl PipelineHandle {
         drop(guard);
 
         // ── Phase 1: Wait for STT ──────────────────────────────────────
-        let raw_text = match self.wait_for_stt(stt_control.clone()).await? {
+        let raw_text = match self.wait_for_stt(stt_control.clone(), heard_voice).await? {
             Some(text) => text,
             None => {
                 if let Some(control) = &stt_control {
@@ -2005,7 +2007,11 @@ impl PipelineHandle {
     /// Wait for the STT task to complete and return the transcribed text.
     /// Returns `Ok(Some(text))` on success, `Ok(None)` if aborted or no speech,
     /// or `Err` on failure.
-    async fn wait_for_stt(&self, stt_control: Option<SttTaskControl>) -> Result<Option<String>> {
+    async fn wait_for_stt(
+        &self,
+        stt_control: Option<SttTaskControl>,
+        heard_voice: bool,
+    ) -> Result<Option<String>> {
         if let Some(control) = &stt_control {
             tokio::select! {
                 _ = control.done.notified() => {
@@ -2044,7 +2050,10 @@ impl PipelineHandle {
             .trim()
             .to_string();
 
-        if raw_text.is_empty() {
+        if !heard_voice && !raw_text.is_empty() {
+            tracing::info!("Discarding transcript: the microphone picked up no voice");
+        }
+        if raw_text.is_empty() || !heard_voice {
             let _ = self
                 .app_handle
                 .emit("pipeline:error", no_speech_user_error());

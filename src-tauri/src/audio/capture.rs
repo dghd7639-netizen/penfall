@@ -1,7 +1,16 @@
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
+
+/// Input RMS above this counts as voice. Measured on the user's USB mic: room
+/// noise and key clicks stay below it except for a single ~11 ms buffer, while
+/// even a lone "嗯" stays above it for about 400 ms.
+const VOICE_RMS: f32 = 0.01;
+/// Less voice than this means nobody spoke; Qwen3 ASR still transcribes such
+/// silence as "嗯", so the transcript is discarded.
+const MIN_VOICE_US: u64 = 50_000;
 
 struct CaptureStartupNotifier {
     sender: Option<
@@ -84,12 +93,17 @@ fn audio_channel_capacity(config: &AudioConfig) -> usize {
     AUDIO_CHANNEL_BUFFER_DURATION_MS.div_ceil(chunk_duration_ms) as usize
 }
 
+fn heard_voice(voiced_us: u64) -> bool {
+    voiced_us >= MIN_VOICE_US
+}
+
 /// Handle to control audio capture running on a dedicated thread.
 /// This is Send + Sync safe because it only holds channels and atomic state.
 pub struct AudioCaptureHandle {
     stop_tx: Option<std::sync::mpsc::Sender<()>>,
     startup_waiter: Option<CaptureStartupWaiter>,
     volume: Arc<Mutex<f32>>,
+    voiced_us: Arc<AtomicU64>,
     state: Arc<Mutex<CaptureState>>,
 }
 
@@ -99,10 +113,12 @@ impl AudioCaptureHandle {
         let (audio_tx, audio_rx) = mpsc::channel::<Vec<u8>>(audio_channel_capacity(&config));
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
         let volume = Arc::new(Mutex::new(0.0f32));
+        let voiced_us = Arc::new(AtomicU64::new(0));
         let state = Arc::new(Mutex::new(initial_capture_state()));
         let (mut startup_notifier, startup_waiter) = capture_startup_channel();
 
         let vol_clone = volume.clone();
+        let voiced_clone = voiced_us.clone();
         let state_clone = state.clone();
         let failed_state = state.clone();
 
@@ -113,6 +129,7 @@ impl AudioCaptureHandle {
                 audio_tx,
                 stop_rx,
                 vol_clone,
+                voiced_clone,
                 state_clone,
                 &mut startup_notifier,
             ) {
@@ -129,10 +146,16 @@ impl AudioCaptureHandle {
                 stop_tx: Some(stop_tx),
                 startup_waiter: Some(startup_waiter),
                 volume,
+                voiced_us,
                 state,
             },
             audio_rx,
         ))
+    }
+
+    /// Whether the microphone picked up enough voice for the recording to hold speech.
+    pub fn heard_voice(&self) -> bool {
+        heard_voice(self.voiced_us.load(Ordering::Relaxed))
     }
 
     /// Wait until the platform backend has opened the input stream and
@@ -201,6 +224,7 @@ fn run_capture(
     sender: mpsc::Sender<Vec<u8>>,
     stop_rx: std::sync::mpsc::Receiver<()>,
     volume: Arc<Mutex<f32>>,
+    voiced_us: Arc<AtomicU64>,
     state: Arc<Mutex<CaptureState>>,
     startup_notifier: &mut CaptureStartupNotifier,
 ) -> Result<()> {
@@ -233,6 +257,7 @@ fn run_capture(
     let target_channels = config.channels;
     let samples_per_chunk = (target_rate * config.chunk_duration_ms / 1000) as usize;
     let buffer: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::with_capacity(samples_per_chunk)));
+    let callback_voiced_us = voiced_us.clone();
 
     let stream = device.build_input_stream(
         &stream_config,
@@ -249,6 +274,13 @@ fn run_capture(
             let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
             if let Ok(mut v) = volume.lock() {
                 *v = rms.min(1.0);
+            }
+            if rms > VOICE_RMS {
+                let frames = data.len() as u64 / u64::from(device_channels.max(1));
+                callback_voiced_us.fetch_add(
+                    frames * 1_000_000 / u64::from(device_sample_rate.max(1)),
+                    Ordering::Relaxed,
+                );
             }
 
             // Convert to mono if needed
@@ -306,7 +338,10 @@ fn run_capture(
     // Stream is dropped here, stopping capture
     drop(stream);
     *state.lock().unwrap_or_else(|e| e.into_inner()) = CaptureState::Idle;
-    tracing::info!("Audio capture stopped");
+    tracing::info!(
+        "Audio capture stopped ({} ms of voice)",
+        voiced_us.load(Ordering::Relaxed) / 1000
+    );
     Ok(())
 }
 
@@ -318,6 +353,14 @@ mod tests {
     #[test]
     fn capture_does_not_report_recording_before_the_backend_is_ready() {
         assert_eq!(initial_capture_state(), CaptureState::Starting);
+    }
+
+    #[test]
+    fn a_single_noise_spike_is_not_voice_but_a_short_word_is() {
+        // Observed on the user's mic: silence peaks for one ~11 ms buffer, "嗯" lasts ~384 ms.
+        assert!(!heard_voice(0));
+        assert!(!heard_voice(11_000));
+        assert!(heard_voice(384_000));
     }
 
     #[test]
