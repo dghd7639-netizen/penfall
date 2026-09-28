@@ -183,7 +183,7 @@ function AuthForm() {
               await handleBrowserAuth('verify')
             }}
             disabled={loading || oauthPending === 'browser'}
-            className="px-4 py-2 rounded-[8px] bg-accent text-white text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="px-4 py-2 rounded-[8px] bg-accent text-on-accent text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {loading || oauthPending === 'browser'
               ? t('account.sending', 'Sending...')
@@ -419,7 +419,7 @@ function AuthForm() {
           <button
             type="button"
             onClick={() => handleBrowserAuth('forgot')}
-            className="w-full py-2 rounded-[8px] bg-accent text-white text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity"
+            className="w-full py-2 rounded-[8px] bg-accent text-on-accent text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity"
           >
             {t('account.sendResetLink', 'Send reset link')}
           </button>
@@ -476,7 +476,7 @@ function AuthForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 rounded-[8px] bg-accent text-white text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-2 rounded-[8px] bg-accent text-on-accent text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             {t('account.signIn')}
@@ -486,7 +486,7 @@ function AuthForm() {
         <button
           type="button"
           onClick={() => handleBrowserAuth('signup')}
-          className="w-full py-2 rounded-[8px] bg-accent text-white text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity"
+          className="w-full py-2 rounded-[8px] bg-accent text-on-accent text-[13px] font-medium cursor-pointer border-none hover:opacity-90 transition-opacity"
         >
           {t('account.signUp')}
         </button>
@@ -737,11 +737,11 @@ function AccountDetails() {
         <section
           role="status"
           aria-live="polite"
-          className="rounded-[8px] border border-amber-400/25 bg-amber-500/[0.06] px-2.5 py-2"
+          className="rounded-[8px] border border-border bg-bg-secondary px-2.5 py-2"
           data-testid="subscription-refresh-notice"
         >
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-text-primary" aria-hidden="true" />
             <p className="min-w-0 flex-1 text-[12px] leading-4">
               <span className="font-medium text-text-primary">
                 {subscriptionStale
@@ -759,7 +759,7 @@ function AccountDetails() {
               type="button"
               onClick={() => void refreshSubscription()}
               disabled={subscriptionRefreshLoading}
-              className="h-7 shrink-0 rounded-[6px] border border-amber-400/30 bg-transparent px-2 text-[11px] font-medium text-text-primary transition-colors hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-7 shrink-0 rounded-[6px] border border-border bg-transparent px-2 text-[11px] font-medium text-text-primary transition-colors hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {subscriptionRefreshLoading
                 ? t('account.subscriptionRetrying', 'Checking...')
@@ -930,10 +930,10 @@ function AccountDetails() {
 
       {/* Manage subscription (Pro) */}
       {isCreemPaymentFailed && (
-        <section className="rounded-[10px] border border-amber-400/30 px-3 py-3">
+        <section className="rounded-[10px] border border-border px-3 py-3">
           <div className="flex items-start gap-2.5">
             <span
-              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-text-primary"
               aria-hidden="true"
             />
             <div className="min-w-0 flex-1">
@@ -947,7 +947,7 @@ function AccountDetails() {
             type="button"
             onClick={handleMigrateToStripe}
             disabled={migrationLoading}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[8px] bg-accent py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[8px] bg-accent py-2 text-[13px] font-medium text-on-accent transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {migrationLoading && <Loader2 size={14} className="animate-spin" />}
             {migrationLoading ? t('upgrade.openingCheckout') : t('upgrade.switchToStripe')}

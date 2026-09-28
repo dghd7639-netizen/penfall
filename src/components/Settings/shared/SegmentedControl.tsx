@@ -18,7 +18,7 @@ export function SegmentedControl({ options, value, onChange }: Props) {
           onClick={() => onChange(opt.value)}
           className={`relative flex-1 px-3 py-1.5 text-[13px] rounded-[8px] border-none cursor-pointer transition-colors ${
             value === opt.value
-              ? 'text-text-primary font-medium'
+              ? 'text-on-accent font-medium'
               : 'text-text-secondary hover:text-text-primary bg-transparent'
           }`}
         >

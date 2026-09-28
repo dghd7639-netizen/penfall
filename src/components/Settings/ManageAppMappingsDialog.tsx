@@ -136,7 +136,7 @@ export function ManageAppMappingsDialog({
                   disabled={busyId === mapping.id}
                   onClick={() => void setEnabled(mapping)}
                   className={`relative h-5 w-9 flex-none rounded-full border-none transition-colors disabled:opacity-40 ${
-                    mapping.enabled ? 'bg-accent' : 'bg-border'
+                    mapping.enabled ? 'bg-text-secondary' : 'bg-bg-tertiary'
                   }`}
                 >
                   <span

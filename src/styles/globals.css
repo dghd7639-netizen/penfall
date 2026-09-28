@@ -1,30 +1,31 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Clean neutral palette */
-  --color-bg-primary: #f5f5f5;
-  --color-bg-secondary: #ebebeb;
-  --color-bg-tertiary: #e0e0e0;
-  --color-bg-elevated: #fafafa;
+  /* Black-and-white palette; red is kept only for errors */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f4f4f4;
+  --color-bg-tertiary: #e8e8e8;
+  --color-bg-elevated: #ffffff;
 
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-tertiary: #999999;
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #5c5c5c;
+  --color-text-tertiary: #8f8f8f;
 
-  --color-accent: #2abba7;
-  --color-accent-hover: #22a08e;
-  --color-accent-light: #e6f7f5;
+  --color-accent: #0a0a0a;
+  --color-accent-hover: #333333;
+  --color-accent-light: #efefef;
+  --color-on-accent: #ffffff;
 
-  --color-success: #34c759;
-  --color-warning: #ff9500;
+  --color-success: #0a0a0a;
+  --color-warning: #0a0a0a;
   --color-error: #ff3b30;
 
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-focus: #2abba7;
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-border-focus: #0a0a0a;
 
   /* Jelly palette tokens */
-  --color-jelly-primary: rgba(42, 187, 167, 0.2);
-  --color-jelly-glow: rgba(42, 187, 167, 0.3);
+  --color-jelly-primary: rgba(0, 0, 0, 0.12);
+  --color-jelly-glow: rgba(0, 0, 0, 0.18);
 
   /* Font */
   --font-sans:
@@ -86,21 +87,29 @@ body,
 
 /* ─── Dark Mode ─── */
 .dark {
-  --color-bg-primary: #1a1a1a;
-  --color-bg-secondary: #242424;
-  --color-bg-tertiary: #2e2e2e;
-  --color-bg-elevated: #2a2a2a;
+  --color-bg-primary: #0f0f0f;
+  --color-bg-secondary: #1a1a1a;
+  --color-bg-tertiary: #262626;
+  --color-bg-elevated: #171717;
 
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #707070;
+  --color-text-primary: #f5f5f5;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #737373;
 
-  --color-accent-light: #1a3d37;
+  --color-accent: #f5f5f5;
+  --color-accent-hover: #d4d4d4;
+  --color-accent-light: #262626;
+  --color-on-accent: #0a0a0a;
 
-  --color-border: rgba(255, 255, 255, 0.08);
+  --color-success: #f5f5f5;
+  --color-warning: #f5f5f5;
+  --color-error: #ff453a;
 
-  --color-jelly-primary: rgba(42, 187, 167, 0.25);
-  --color-jelly-glow: rgba(42, 187, 167, 0.35);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-focus: #f5f5f5;
+
+  --color-jelly-primary: rgba(255, 255, 255, 0.14);
+  --color-jelly-glow: rgba(255, 255, 255, 0.2);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
@@ -338,13 +347,10 @@ body,
 
 /* ─── Jelly Nav Active — accent gel indicator ─── */
 .jelly-nav-active {
-  background: linear-gradient(145deg, #2abba7 0%, #22a08e 100%);
-  box-shadow:
-    inset 0 1px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -1px 4px rgba(0, 0, 0, 0.15),
-    0 2px 10px rgba(42, 187, 167, 0.3);
+  background: var(--color-accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   border-radius: 12px;
-  color: white !important;
+  color: var(--color-on-accent) !important;
 }
 
 /* ─── Jelly Capsule — minimal white/grey gel orb ─── */

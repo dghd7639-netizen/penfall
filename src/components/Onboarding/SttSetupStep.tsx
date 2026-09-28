@@ -103,7 +103,7 @@ export function SttSetupStep() {
                 ? !config.stt_custom_base_url.trim() || !config.stt_custom_model.trim()
                 : !config.stt_api_key)
             }
-            className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+            className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
           >
             {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
             {t('onboarding.stt.testButton')}

@@ -137,7 +137,7 @@ export function GeneralPane() {
           />
         </div>
         {platformCapabilities && !platformCapabilities.globalHotkeyReliable && (
-          <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+          <p className="mt-2 rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
             {t('settings.waylandHotkeyLimited')}
           </p>
         )}
@@ -147,7 +147,7 @@ export function GeneralPane() {
           </p>
         )}
         {hotkeyStatusMessage && (
-          <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+          <p className="mt-2 rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
             {hotkeyStatusMessage}
           </p>
         )}
@@ -182,7 +182,7 @@ export function GeneralPane() {
         {config.output_mode === 'clipboard' &&
           platformCapabilities &&
           !platformCapabilities.clipboardAutoPasteReliable && (
-            <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+            <p className="mt-2 rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
               {t('settings.waylandClipboardCopyOnly')}
             </p>
           )}

@@ -91,11 +91,11 @@ export function AccessibilityBanner() {
           transition={{ duration: 0.2 }}
           className="overflow-hidden"
         >
-          <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
+          <div className="flex items-center gap-2 px-4 py-2 bg-bg-secondary border-b border-border">
             {showAccessibility ? (
-              <ShieldAlert size={14} className="text-amber-500 shrink-0" />
+              <ShieldAlert size={14} className="text-text-primary shrink-0" />
             ) : (
-              <Globe2 size={14} className="text-amber-500 shrink-0" />
+              <Globe2 size={14} className="text-text-primary shrink-0" />
             )}
             <span className="text-[12px] text-text-primary flex-1">
               {showAccessibility
@@ -105,7 +105,7 @@ export function AccessibilityBanner() {
             <button
               onClick={showAccessibility ? handleGrant : handleBrowserGrant}
               disabled={requestingBrowserAccess}
-              className="px-3 py-1 text-[11px] font-medium text-white bg-accent rounded-full border-none cursor-pointer hover:bg-accent-hover transition-colors shrink-0"
+              className="px-3 py-1 text-[11px] font-medium text-on-accent bg-accent rounded-full border-none cursor-pointer hover:bg-accent-hover transition-colors shrink-0"
             >
               {requestingBrowserAccess && !showAccessibility && (
                 <Loader2 size={11} className="mr-1 inline animate-spin" />

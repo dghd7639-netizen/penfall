@@ -295,13 +295,13 @@ export function LlmPane() {
               <button
                 type="button"
                 onClick={goUpgrade}
-                className="rounded-[8px] border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover"
+                className="rounded-[8px] border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-on-accent hover:bg-accent-hover"
               >
                 {t('nav.upgrade')}
               </button>
             </div>
           ) : (
-            <p className="text-[12px] text-green-500">{t('settings.llmProActive')}</p>
+            <p className="text-[12px] text-text-primary">{t('settings.llmProActive')}</p>
           )}
         </div>
       )}
@@ -329,7 +329,7 @@ export function LlmPane() {
                 <button
                   onClick={handleTest}
                   disabled={!llmApiKey || llmTestStatus === 'testing'}
-                  className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                 >
                   {llmTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
                   {t('settings.test')}
@@ -395,7 +395,7 @@ export function LlmPane() {
                   type="button"
                   onClick={handleTest}
                   disabled={!config.llm_base_url || llmTestStatus === 'testing'}
-                  className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                 >
                   {llmTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
                   {t('settings.test')}
@@ -485,7 +485,7 @@ export function LlmPane() {
                 )}
               </div>
               {showBrowserAccessHint && (
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-600">
+                <p className="mt-1 text-[11px] leading-relaxed text-text-primary">
                   {t('settings.browserAccessHint')}
                 </p>
               )}

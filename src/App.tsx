@@ -140,7 +140,7 @@ function MainApp() {
         <span className="text-error text-[13px]">无法读取本地数据，请重试。</span>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover transition-colors"
+          className="px-4 py-2 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover transition-colors"
         >
           重试
         </button>

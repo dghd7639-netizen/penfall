@@ -154,7 +154,7 @@ export function DashscopeSetup({ onSaved }: { onSaved?: () => void }) {
           <button
             type="button"
             onClick={() => void save(false)}
-            className="px-4 py-2 rounded-full bg-accent text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-full bg-accent text-on-accent disabled:opacity-50"
           >
             {busy ? '处理中…' : onSaved ? '保存并继续' : '保存服务配置'}
           </button>

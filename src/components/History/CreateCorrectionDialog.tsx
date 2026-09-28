@@ -97,7 +97,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
             type="button"
             onClick={() => void save()}
             disabled={!pattern.trim() || !replacement.trim() || saving}
-            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
+            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-on-accent hover:bg-accent-hover disabled:opacity-40"
           >
             {t('history.saveCorrection')}
           </button>

@@ -200,7 +200,7 @@ export function AppStyleMappingDialog({
             type="button"
             onClick={() => void save()}
             disabled={!canSave}
-            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
+            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-on-accent hover:bg-accent-hover disabled:opacity-40"
           >
             {t('settings.mappingSave')}
           </button>

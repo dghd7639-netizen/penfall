@@ -378,7 +378,7 @@ export function DictionaryPane() {
               type="button"
               onClick={() => void handleAdd()}
               disabled={!word.trim()}
-              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-on-accent hover:bg-accent-hover disabled:opacity-40"
             >
               <Plus size={14} />
               {t('dictionary.add')}
@@ -501,7 +501,7 @@ export function DictionaryPane() {
               onClick={() => void handleAddCorrection()}
               disabled={!pattern.trim() || !replacement.trim()}
               aria-label={t('dictionary.addCorrection')}
-              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-on-accent hover:bg-accent-hover disabled:opacity-40"
             >
               <Plus size={14} />
               {t('dictionary.add')}

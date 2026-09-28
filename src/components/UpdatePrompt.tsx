@@ -90,7 +90,7 @@ export function UpdatePrompt() {
             type="button"
             onClick={installUpdate}
             disabled={installing}
-            className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-accent px-3 text-[13px] font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-[7px] bg-accent px-3 text-[13px] font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-70"
           >
             {installing ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
             {installing

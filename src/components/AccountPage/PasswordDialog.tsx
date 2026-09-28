@@ -184,7 +184,7 @@ export function PasswordDialog({
           <button
             type="submit"
             disabled={!formValid || busy}
-            className="flex min-w-[104px] items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex min-w-[104px] items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
             {actionLabel}

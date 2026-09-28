@@ -126,9 +126,9 @@ function PermissionRow({
   const { t } = useTranslation()
   const stateClass =
     state === 'ready'
-      ? 'bg-green-500/10 text-green-600'
+      ? 'bg-accent text-on-accent'
       : state === 'needed'
-        ? 'bg-amber-500/10 text-amber-600'
+        ? 'bg-bg-tertiary text-text-primary'
         : 'bg-bg-tertiary text-text-tertiary'
   const StateIcon = state === 'ready' ? Check : state === 'needed' ? AlertCircle : null
 

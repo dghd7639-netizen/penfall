@@ -367,13 +367,13 @@ export function SttPane() {
               <button
                 type="button"
                 onClick={goUpgrade}
-                className="rounded-[8px] border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover"
+                className="rounded-[8px] border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-on-accent hover:bg-accent-hover"
               >
                 {t('nav.upgrade')}
               </button>
             </div>
           ) : (
-            <p className="text-[12px] text-green-500">{t('settings.sttProActive')}</p>
+            <p className="text-[12px] text-text-primary">{t('settings.sttProActive')}</p>
           )}
         </div>
       ) : isAppleSpeech ? (
@@ -408,7 +408,7 @@ export function SttPane() {
             <button
               onClick={handleTest}
               disabled={!canTest || sttTestStatus === 'testing'}
-              className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
             >
               {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
               {t('settings.test')}
@@ -589,7 +589,7 @@ export function SttPane() {
               <button
                 onClick={handleTest}
                 disabled={!canTest || sttTestStatus === 'testing'}
-                className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
               >
                 {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
                 {t('settings.test')}
@@ -701,7 +701,7 @@ export function SttPane() {
             )}
             {config.recording_limit_mode === 'custom' &&
               recordingLimit.requestedSeconds !== recordingLimit.effectiveMaxSeconds && (
-                <p className="text-[12px] text-amber-500">
+                <p className="text-[12px] text-text-primary">
                   {t('recordingLimits.corrected', {
                     duration: formatRecordingDuration(recordingLimit.effectiveMaxSeconds, t),
                   })}

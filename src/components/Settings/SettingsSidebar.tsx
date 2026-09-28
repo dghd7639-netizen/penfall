@@ -38,7 +38,7 @@ export function SettingsSidebar({ activePane, onSelect }: Props) {
             transition={spring.jellyGentle}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-[8px] text-[13px] border-none cursor-pointer transition-colors text-left relative ${
               isActive
-                ? 'text-text-primary font-medium'
+                ? 'text-on-accent font-medium'
                 : 'bg-transparent text-text-secondary hover:text-text-primary'
             }`}
           >

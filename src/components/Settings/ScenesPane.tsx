@@ -529,7 +529,9 @@ export function ScenesPane() {
       </section>
 
       {mergeMsg && (
-        <p className={`text-[12px] ${!mergeOk ? 'text-red-500' : 'text-green-500'}`}>{mergeMsg}</p>
+        <p className={`text-[12px] ${!mergeOk ? 'text-red-500' : 'text-text-primary'}`}>
+          {mergeMsg}
+        </p>
       )}
       {saveError && <p className="text-[12px] text-red-500">{saveError}</p>}
     </div>
