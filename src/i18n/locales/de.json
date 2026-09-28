@@ -271,7 +271,9 @@
       "account": "Konto",
       "upgrade": "Upgrade",
       "exit": "Beenden"
-    }
+    },
+    "learnedCorrection": "Zum Wörterbuch hinzugefügt",
+    "undoLearnedCorrection": "Rückgängig"
   },
   "settings": {
     "title": "Einstellungen",

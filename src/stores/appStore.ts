@@ -150,6 +150,12 @@ export interface CorrectionRule {
   enabled: boolean
 }
 
+export interface LearnedCorrection {
+  id: number
+  pattern: string
+  replacement: string
+}
+
 export interface CustomScene {
   id: string
   name: string
@@ -294,6 +300,8 @@ interface AppState {
   setDictionary: (d: DictionaryEntry[]) => void
   correctionRules: CorrectionRule[]
   setCorrectionRules: (rules: CorrectionRule[]) => void
+  learnedCorrections: LearnedCorrection[]
+  setLearnedCorrections: (corrections: LearnedCorrection[]) => void
 
   // Onboarding
   onboardingCompleted: boolean
@@ -832,6 +840,8 @@ export const useAppStore = create<AppState>((set) => ({
   setDictionary: (dictionary) => set({ dictionary }),
   correctionRules: [],
   setCorrectionRules: (correctionRules) => set({ correctionRules }),
+  learnedCorrections: [],
+  setLearnedCorrections: (learnedCorrections) => set({ learnedCorrections }),
 
   onboardingCompleted: false,
   setOnboardingCompleted: (onboardingCompleted) => set({ onboardingCompleted }),

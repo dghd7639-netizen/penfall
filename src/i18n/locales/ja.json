@@ -271,7 +271,9 @@
       "account": "アカウント",
       "upgrade": "アップグレード",
       "exit": "終了"
-    }
+    },
+    "learnedCorrection": "辞書に追加しました",
+    "undoLearnedCorrection": "取り消す"
   },
   "settings": {
     "title": "設定",

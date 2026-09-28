@@ -1067,6 +1067,7 @@ impl PipelineHandle {
 
         // Reset abort flag for new recording
         self.abort_flag.store(false, Ordering::SeqCst);
+        crate::correction_learning::stop_watching();
 
         // Atomic CAS: only one caller can transition Idle → Preparing. Recording is emitted only
         // after audio capture is ready, so the capsule does not tell users to speak too early.
@@ -2859,6 +2860,12 @@ impl PipelineHandle {
             output_outcome.insert_result.chars_inserted
         );
         let insert_result = output_outcome.insert_result.clone();
+        if insert_result.status == output::InsertStatus::Inserted {
+            crate::correction_learning::watch_after_insert(
+                self.app_handle.clone(),
+                text.to_string(),
+            );
+        }
         let _ = self
             .app_handle
             .emit("pipeline:insert_result", &insert_result);

@@ -1974,7 +1974,7 @@ impl DictionaryStore {
         rows.filter_map(|r| r.ok()).collect()
     }
 
-    pub async fn add_correction(&self, pattern: &str, replacement: &str) -> Result<()> {
+    pub async fn add_correction(&self, pattern: &str, replacement: &str) -> Result<i64> {
         let pattern = validate_dictionary_text(pattern, 120, "correction_pattern")?;
         let replacement = validate_dictionary_text(replacement, 120, "correction_replacement")?;
         let identity = normalized_correction_identity(&pattern, &replacement);
@@ -1986,7 +1986,7 @@ impl DictionaryStore {
             "INSERT INTO correction_rules (pattern, replacement, enabled) VALUES (?1, ?2, 1)",
             rusqlite::params![pattern, replacement],
         )?;
-        Ok(())
+        Ok(conn.last_insert_rowid())
     }
 
     pub async fn update_correction(
@@ -2056,7 +2056,7 @@ impl DictionaryStore {
     pub async fn enabled_correction_rules(&self) -> Vec<CorrectionRule> {
         let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = match conn.prepare(
-            "SELECT id, pattern, replacement, enabled FROM correction_rules WHERE enabled = 1 ORDER BY id ASC LIMIT 100",
+            "SELECT id, pattern, replacement, enabled FROM correction_rules WHERE enabled = 1 ORDER BY id DESC LIMIT 100",
         ) {
             Ok(s) => s,
             Err(_) => return Vec::new(),

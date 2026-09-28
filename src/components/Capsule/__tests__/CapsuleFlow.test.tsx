@@ -1,10 +1,12 @@
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
+import { emit } from '@tauri-apps/api/event'
 import { useAppStore } from '../../../stores/appStore'
-import { setActiveTranslationTarget, stopAskFlow } from '../../../lib/tauri'
+import { removeCorrectionRule, setActiveTranslationTarget, stopAskFlow } from '../../../lib/tauri'
 import { Capsule } from '../index'
+import { LEARNED_NOTICE_MS } from '../CapsuleLearned'
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -37,12 +39,18 @@ vi.mock('../../../lib/tauri', () => ({
     targets: ['en', 'ja'],
     active_target: 'ja',
   }),
+  removeCorrectionRule: vi.fn().mockResolvedValue(undefined),
   setCapsuleAutoHide: vi.fn().mockResolvedValue(undefined),
   stopAskFlow: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({
+  emit: vi.fn().mockResolvedValue(undefined),
+  listen: vi.fn().mockResolvedValue(() => {}),
 }))
 
 afterEach(() => {
@@ -74,6 +82,57 @@ describe('Capsule flow states', () => {
     expect(screen.getByRole('button', { name: 'capsule.finishRecording' })).toBeInTheDocument()
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
     expect(shell.style.width).toBe('160px')
+  })
+
+  it('shows learned corrections whose undo removes every rule', async () => {
+    useAppStore.setState({
+      learnedCorrections: [
+        { id: 7, pattern: '同意', replacement: '通义' },
+        { id: 8, pattern: '拓肯', replacement: 'Token' },
+      ],
+    })
+
+    const { container } = render(<Capsule />)
+
+    expect(container.textContent).toContain('同意 → 通义，拓肯 → Token')
+    const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
+    expect(shell.style.width).toBe('220px')
+    fireEvent.click(screen.getByRole('button', { name: 'capsule.undoLearnedCorrection' }))
+    await waitFor(() => expect(useAppStore.getState().learnedCorrections).toEqual([]))
+    expect(removeCorrectionRule).toHaveBeenCalledWith(7)
+    expect(removeCorrectionRule).toHaveBeenCalledWith(8)
+    expect(emit).toHaveBeenCalledWith('dictionary:changed')
+  })
+
+  it('dismisses a learned correction notice on its own and keeps the rule', () => {
+    vi.useFakeTimers()
+    try {
+      useAppStore.setState({
+        learnedCorrections: [{ id: 7, pattern: '同意', replacement: '通义' }],
+      })
+      render(<Capsule />)
+
+      act(() => {
+        vi.advanceTimersByTime(LEARNED_NOTICE_MS)
+      })
+
+      expect(useAppStore.getState().learnedCorrections).toEqual([])
+      expect(removeCorrectionRule).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows recording instead of a learned correction notice once dictation starts', () => {
+    useAppStore.setState({
+      pipelineState: 'recording',
+      learnedCorrections: [{ id: 7, pattern: '同意', replacement: '通义' }],
+    })
+
+    const { container } = render(<Capsule />)
+
+    expect(container.textContent).not.toContain('通义')
+    expect(screen.getByRole('button', { name: 'capsule.finishRecording' })).toBeInTheDocument()
   })
 
   it('finishes recording only from the check button, not the draggable shell', async () => {

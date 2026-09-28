@@ -271,7 +271,9 @@
       "account": "Conta",
       "upgrade": "Atualizar",
       "exit": "Sair"
-    }
+    },
+    "learnedCorrection": "Adicionado ao dicionário",
+    "undoLearnedCorrection": "Desfazer"
   },
   "settings": {
     "title": "Configurações",

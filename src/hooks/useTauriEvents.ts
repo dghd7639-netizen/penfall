@@ -8,11 +8,12 @@ import type {
   AppConfig,
   ContextProfileSummary,
   InsertResult,
+  LearnedCorrection,
   PipelineState,
   RecordingDeadlineSnapshot,
   VoiceMode,
 } from '../stores/appStore'
-import { getHistory } from '../lib/tauri'
+import { getCorrectionRules, getHistory } from '../lib/tauri'
 import { toast } from '../components/toast-service'
 import { capsuleErrorKeyFromPayload, type PipelineErrorPayload } from '../lib/capsuleError'
 import { invalidateCloudSessionOnce } from '../lib/cloud-session'
@@ -91,8 +92,21 @@ export function useTauriEvents() {
     addListener<string>('stt:partial', setPartialTranscript)
     addListener<string>('stt:final', setFinalTranscript)
     addListener<string>('llm:chunk', appendPolishedChunk)
+    const refreshCorrectionRules = () => {
+      getCorrectionRules()
+        .then(useAppStore.getState().setCorrectionRules)
+        .catch((err) => console.error('Failed to refresh correction rules:', err))
+    }
+    addListener<LearnedCorrection[]>('dictionary:learned', (corrections) => {
+      useAppStore.getState().setLearnedCorrections(corrections)
+      refreshCorrectionRules()
+    })
+    addListener<null>('dictionary:changed', refreshCorrectionRules)
     addListener<PipelineState>('pipeline:state', (state) => {
       setPipelineState(state)
+      if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
+        useAppStore.getState().setLearnedCorrections([])
+      }
       if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
         const config = useAppStore.getState().config
         managedRunActive =

@@ -103,6 +103,7 @@ pub async fn add_correction_rule(
     state
         .add_correction(&pattern, &replacement)
         .await
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 

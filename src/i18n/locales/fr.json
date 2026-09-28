@@ -271,7 +271,9 @@
       "account": "Compte",
       "upgrade": "Passer à Pro",
       "exit": "Quitter"
-    }
+    },
+    "learnedCorrection": "Ajouté au dictionnaire",
+    "undoLearnedCorrection": "Annuler"
   },
   "settings": {
     "title": "Paramètres",

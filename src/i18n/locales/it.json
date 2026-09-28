@@ -271,7 +271,9 @@
       "account": "Account",
       "upgrade": "Aggiorna",
       "exit": "Esci"
-    }
+    },
+    "learnedCorrection": "Aggiunto al dizionario",
+    "undoLearnedCorrection": "Annulla"
   },
   "settings": {
     "title": "Impostazioni",

@@ -13,6 +13,7 @@ export interface CapsuleVisibilityInput {
   capsuleExpanded: boolean
   hasError: boolean
   pipelineState: PipelineState
+  learnedNotice?: boolean
 }
 
 export function getCapsuleVisibility({
@@ -22,6 +23,7 @@ export function getCapsuleVisibility({
   capsuleExpanded,
   hasError,
   pipelineState,
+  learnedNotice = false,
 }: CapsuleVisibilityInput): boolean {
   return (
     !capsuleAutoHide ||
@@ -29,6 +31,7 @@ export function getCapsuleVisibility({
     translationTargetMenuOpen ||
     capsuleExpanded ||
     hasError ||
+    learnedNotice ||
     pipelineState !== 'idle'
   )
 }
@@ -43,11 +46,13 @@ function getSizeForState(
   hasError: boolean,
   contextMenuOpen: boolean,
   translationTargetMenuOpen = false,
+  learnedNotice = false,
 ): CapsuleSize {
   if (translationTargetMenuOpen) return { width: 360, height: 180 }
   if (contextMenuOpen) return { width: 220, height: 220 }
   if (hasError) return { width: 200, height: 36 }
   if (expanded) return { width: 220, height: 90 }
+  if (learnedNotice && state === 'idle') return { width: 220, height: 36 }
   switch (state) {
     case 'idle':
       return { width: 36, height: 36 }
@@ -75,6 +80,7 @@ export function useCapsuleResize() {
   const translationTargetMenuOpen = useAppStore((s) => s.translationTargetMenuOpen)
   const setContextMenuReady = useAppStore((s) => s.setContextMenuReady)
   const capsuleAutoHide = useAppStore((s) => s.config.capsule_auto_hide)
+  const learnedNotice = useAppStore((s) => s.learnedCorrections.length > 0)
   const initialized = useRef(false)
   const prevWindowSize = useRef<{ width: number; height: number } | null>(null)
 
@@ -87,6 +93,7 @@ export function useCapsuleResize() {
       hasError,
       contextMenuOpen,
       translationTargetMenuOpen,
+      learnedNotice,
     )
     const windowWidth = size.width + 24
     const windowHeight = size.height + 24
@@ -97,6 +104,7 @@ export function useCapsuleResize() {
       capsuleExpanded,
       hasError,
       pipelineState,
+      learnedNotice,
     })
 
     import('@tauri-apps/api/window')
@@ -172,6 +180,7 @@ export function useCapsuleResize() {
     contextMenuOpen,
     translationTargetMenuOpen,
     capsuleAutoHide,
+    learnedNotice,
     setContextMenuReady,
   ])
 
@@ -181,5 +190,6 @@ export function useCapsuleResize() {
     hasError,
     contextMenuOpen,
     translationTargetMenuOpen,
+    learnedNotice,
   )
 }

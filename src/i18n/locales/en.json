@@ -271,7 +271,9 @@
       "account": "Account",
       "upgrade": "Upgrade",
       "exit": "Exit"
-    }
+    },
+    "learnedCorrection": "Added to dictionary",
+    "undoLearnedCorrection": "Undo"
   },
   "settings": {
     "title": "Settings",

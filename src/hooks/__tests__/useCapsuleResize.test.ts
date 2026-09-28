@@ -26,6 +26,19 @@ describe('getCapsuleVisibility', () => {
     ).toBe(true)
   })
 
+  it('shows idle capsule while a learned correction notice is up', () => {
+    expect(
+      getCapsuleVisibility({
+        capsuleAutoHide: true,
+        contextMenuOpen: false,
+        capsuleExpanded: false,
+        hasError: false,
+        pipelineState: 'idle',
+        learnedNotice: true,
+      }),
+    ).toBe(true)
+  })
+
   it('shows active capsule while recording', () => {
     expect(
       getCapsuleVisibility({

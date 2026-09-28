@@ -271,7 +271,9 @@
       "account": "Аккаунт",
       "upgrade": "Обновить",
       "exit": "Выход"
-    }
+    },
+    "learnedCorrection": "Добавлено в словарь",
+    "undoLearnedCorrection": "Отменить"
   },
   "settings": {
     "title": "Настройки",

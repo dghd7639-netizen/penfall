@@ -9,6 +9,7 @@ import { CapsuleProcessing } from './CapsuleProcessing'
 import { CapsulePolishing } from './CapsulePolishing'
 import { CapsuleComplete } from './CapsuleComplete'
 import { CapsuleError } from './CapsuleError'
+import { CapsuleLearned } from './CapsuleLearned'
 import { CapsuleContextMenu } from './CapsuleContextMenu'
 import { CapsuleAskRecording } from './CapsuleAskRecording'
 import { CapsuleAskThinking } from './CapsuleAskThinking'
@@ -16,10 +17,11 @@ import { TranslateTargetMenu } from './TranslateTargetChip'
 
 const DRAG_THRESHOLD = 5
 
-function getCapsuleState(pipelineState: string, hasError: boolean) {
+function getCapsuleState(pipelineState: string, hasError: boolean, hasLearnedNotice: boolean) {
   if (hasError) return 'error'
   // Audio captured while the STT provider connects is queued, so recording UI can show right away.
   if (pipelineState === 'preparing') return 'recording'
+  if (pipelineState === 'idle' && hasLearnedNotice) return 'learned'
   return pipelineState
 }
 
@@ -27,6 +29,8 @@ function getCapsuleShellSize(capsuleState: string) {
   switch (capsuleState) {
     case 'idle':
       return { width: 36, height: 36 }
+    case 'learned':
+      return { width: 220, height: 36 }
     case 'outputting':
       return { width: 144, height: 36 }
     case 'ask_recording':
@@ -59,7 +63,8 @@ export function Capsule() {
   useCapsuleResize()
 
   const hasError = pipelineError !== null
-  const capsuleState = getCapsuleState(pipelineState, hasError)
+  const hasLearnedNotice = useAppStore((s) => s.learnedCorrections.length > 0)
+  const capsuleState = getCapsuleState(pipelineState, hasError, hasLearnedNotice)
   const capsuleShellSize = getCapsuleShellSize(capsuleState)
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -165,6 +170,7 @@ export function Capsule() {
             {capsuleState === 'ask_recording' && <CapsuleAskRecording />}
             {capsuleState === 'ask_thinking' && <CapsuleAskThinking />}
             {capsuleState === 'error' && <CapsuleError />}
+            {capsuleState === 'learned' && <CapsuleLearned />}
           </motion.div>
         </AnimatePresence>
       </motion.div>

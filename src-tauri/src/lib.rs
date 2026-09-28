@@ -1,6 +1,7 @@
 pub mod app_detector;
 pub mod audio;
 pub mod commands;
+pub mod correction_learning;
 pub mod credentials;
 pub mod dictionary_io;
 pub mod error;
