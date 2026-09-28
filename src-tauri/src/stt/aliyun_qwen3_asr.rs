@@ -110,7 +110,9 @@ impl AliyunQwen3AsrProvider {
             "turn_detection": {
                 "type": "server_vad",
                 "threshold": 0.0,
-                "silence_duration_ms": 400
+                // Each segment ends with "。"; 400 ms split sentences at every
+                // thinking pause, so only a longer silence closes a segment.
+                "silence_duration_ms": 1200
             }
         });
         if let Some(language) = qwen_language(config.language.as_deref()) {

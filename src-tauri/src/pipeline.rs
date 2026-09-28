@@ -199,6 +199,21 @@ fn should_finalize_stt_task(
         && active_session_id.load(Ordering::SeqCst) == task_session_id
 }
 
+/// STT closes every pause-delimited segment with "。" and segments are joined
+/// with a space. Those periods mark pauses, not sentence ends, so they are
+/// dropped before polishing and the model re-punctuates by meaning.
+fn soften_pause_periods(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '。' && chars.peek().is_some_and(|next| next.is_whitespace()) {
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn no_speech_user_error() -> crate::error::UserError {
     crate::error::UserError {
         code: "stt_no_speech_detected".to_string(),
@@ -2218,7 +2233,7 @@ impl PipelineHandle {
         )
         .unwrap_or_default();
         let req = PolishRequest {
-            raw_text: provider_text.to_string(),
+            raw_text: soften_pause_periods(provider_text),
             context: app_ctx.summary(),
             dictionary: dictionary_words,
             correction_rules,
@@ -3438,6 +3453,19 @@ mod tests {
             latch_stt_task_error_if_active(&abort_flag, &active_session_id, &latch, 6, &error,)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn pause_periods_between_segments_are_dropped_before_polishing() {
+        assert_eq!(
+            soften_pause_periods("当我点击。 说完话之后，然后我点击。 结束。"),
+            "当我点击 说完话之后，然后我点击 结束。"
+        );
+        assert_eq!(
+            soften_pause_periods("你能明白吗？ 明白的话告诉我。"),
+            "你能明白吗？ 明白的话告诉我。"
+        );
+        assert_eq!(soften_pause_periods("第一句。第二句。"), "第一句。第二句。");
     }
 
     #[test]
