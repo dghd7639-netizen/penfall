@@ -4,7 +4,6 @@ import { useAppStore } from '../../stores/appStore'
 import { useCapsuleResize } from '../../hooks/useCapsuleResize'
 import { stopAskFlow } from '../../lib/tauri'
 import { CapsuleIdle } from './CapsuleIdle'
-import { CapsulePreparing } from './CapsulePreparing'
 import { CapsuleRecording } from './CapsuleRecording'
 import { CapsuleProcessing } from './CapsuleProcessing'
 import { CapsulePolishing } from './CapsulePolishing'
@@ -19,6 +18,8 @@ const DRAG_THRESHOLD = 5
 
 function getCapsuleState(pipelineState: string, hasError: boolean) {
   if (hasError) return 'error'
+  // Audio captured while the STT provider connects is queued, so recording UI can show right away.
+  if (pipelineState === 'preparing') return 'recording'
   return pipelineState
 }
 
@@ -26,8 +27,6 @@ function getCapsuleShellSize(capsuleState: string) {
   switch (capsuleState) {
     case 'idle':
       return { width: 36, height: 36 }
-    case 'preparing':
-      return { width: 180, height: 36 }
     case 'outputting':
       return { width: 144, height: 36 }
     case 'ask_recording':
@@ -159,7 +158,6 @@ export function Capsule() {
             transition={{ duration: 0.12, ease: [0.2, 0, 0, 1] }}
           >
             {capsuleState === 'idle' && <CapsuleIdle />}
-            {capsuleState === 'preparing' && <CapsulePreparing />}
             {capsuleState === 'recording' && <CapsuleRecording />}
             {capsuleState === 'transcribing' && <CapsuleProcessing />}
             {capsuleState === 'polishing' && <CapsulePolishing />}

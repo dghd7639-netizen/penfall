@@ -64,12 +64,16 @@ describe('Capsule flow states', () => {
     })
   })
 
-  it('renders preparing state', () => {
+  it('shows the recording capsule while preparing instead of a preparing message', () => {
     useAppStore.setState({ pipelineState: 'preparing' })
 
-    render(<Capsule />)
+    const { container } = render(<Capsule />)
 
-    expect(screen.getByText('capsule.preparing')).toBeInTheDocument()
+    expect(screen.queryByText('capsule.preparing')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'capsule.cancelRecording' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'capsule.finishRecording' })).toBeInTheDocument()
+    const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
+    expect(shell.style.width).toBe('160px')
   })
 
   it('finishes recording only from the check button, not the draggable shell', async () => {

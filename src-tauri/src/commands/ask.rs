@@ -1076,7 +1076,13 @@ pub(crate) async fn start_reserved_ask_dictation(
         let (mut handle, mut audio_rx) = AudioCaptureHandle::start(AudioConfig::default())
             .map_err(|e| map_audio_capture_error(&e.to_string()))?;
         let capture_ready_at = match crate::audio::await_recording_startup(
-            handle.wait_until_ready(),
+            async {
+                let ready = handle.wait_until_ready().await;
+                if ready.is_ok() {
+                    crate::audio::cue::play_record_start();
+                }
+                ready
+            },
             provider.connect(&stt_config),
         )
         .await
@@ -1368,6 +1374,7 @@ pub async fn stop_ask_dictation(
     };
 
     let result = async {
+        crate::audio::cue::play_record_end();
         session.handle.stop();
         emit_capsule_state(&app, PipelineState::AskThinking);
 

@@ -237,6 +237,14 @@ fn run_capture(
     let stream = device.build_input_stream(
         &stream_config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            let silence;
+            let data = if super::cue::input_muted() {
+                silence = vec![0.0f32; data.len()];
+                silence.as_slice()
+            } else {
+                data
+            };
+
             // Calculate RMS volume from raw data
             let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
             if let Ok(mut v) = volume.lock() {

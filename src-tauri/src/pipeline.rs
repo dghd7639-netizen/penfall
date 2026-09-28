@@ -1341,7 +1341,13 @@ impl PipelineHandle {
             }
         };
         let startup_result = crate::audio::await_recording_startup(
-            handle.wait_until_ready(),
+            async {
+                let ready = handle.wait_until_ready().await;
+                if ready.is_ok() {
+                    crate::audio::cue::play_record_start();
+                }
+                ready
+            },
             provider.connect(&stt_config),
         )
         .await;
@@ -1767,6 +1773,7 @@ impl PipelineHandle {
         {
             return Ok(());
         }
+        crate::audio::cue::play_record_end();
         self.active_deadline_session_id.store(0, Ordering::SeqCst);
         let _ = self
             .app_handle

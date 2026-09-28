@@ -1,0 +1,309 @@
+//! Recording start/end cues. Assets and timing mirror Typeless 2.8.0; see docs/sound-sources.md.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+use anyhow::{anyhow, bail, ensure, Result};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+const CUE_VOLUME: f32 = 0.4;
+const SAME_DEVICE_START_DELAY: Duration = Duration::from_millis(1200);
+const AIRPODS_START_DELAY: Duration = Duration::from_millis(300);
+const DRAIN_AFTER_LAST_SAMPLE: Duration = Duration::from_millis(100);
+
+static PLAYBACK_GENERATION: AtomicU64 = AtomicU64::new(0);
+static INPUT_MUTED_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// True while a cue that can leak from speakers into the microphone is playing.
+/// Speech recognition otherwise transcribes the chime as "嗯".
+pub fn input_muted() -> bool {
+    INPUT_MUTED_UNTIL
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_some_and(|until| Instant::now() < until)
+}
+
+fn mute_input_for(duration: Duration) {
+    *INPUT_MUTED_UNTIL.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now() + duration);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cue {
+    RecordStart,
+    RecordEnd,
+}
+
+impl Cue {
+    fn wav(self) -> &'static [u8] {
+        match self {
+            Cue::RecordStart => include_bytes!("../../sounds/record-start.wav"),
+            Cue::RecordEnd => include_bytes!("../../sounds/record-end.wav"),
+        }
+    }
+
+    fn pcm(self) -> Result<&'static Pcm> {
+        static START: OnceLock<Result<Pcm, String>> = OnceLock::new();
+        static END: OnceLock<Result<Pcm, String>> = OnceLock::new();
+        let cell = match self {
+            Cue::RecordStart => &START,
+            Cue::RecordEnd => &END,
+        };
+        cell.get_or_init(|| decode_wav(self.wav()).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(|e| anyhow!("{e}"))
+    }
+}
+
+/// Plays the start cue after the Bluetooth hand-off delay Typeless uses.
+pub fn play_record_start() {
+    std::thread::spawn(|| {
+        let host = cpal::default_host();
+        let input = host.default_input_device().and_then(|d| d.name().ok());
+        let output = host.default_output_device().and_then(|d| d.name().ok());
+        let delay = start_delay(input.as_deref(), output.as_deref());
+        std::thread::sleep(delay);
+        // A delay means a headset: little leaks into the mic, and the user may already be talking.
+        play_blocking(Cue::RecordStart, delay.is_zero());
+    });
+}
+
+pub fn play_record_end() {
+    std::thread::spawn(|| play_blocking(Cue::RecordEnd, true));
+}
+
+fn start_delay(input: Option<&str>, output: Option<&str>) -> Duration {
+    let Some(output) = output.filter(|name| !name.is_empty()) else {
+        return Duration::ZERO;
+    };
+    let same_device = input
+        .filter(|name| !name.is_empty())
+        .is_some_and(|input| input.contains(output) || output.contains(input));
+    if same_device {
+        SAME_DEVICE_START_DELAY
+    } else if output.to_lowercase().contains("airpods") {
+        AIRPODS_START_DELAY
+    } else {
+        Duration::ZERO
+    }
+}
+
+fn play_blocking(cue: Cue, mute_input: bool) {
+    // A newer cue silences any cue still playing, like Typeless's stop-all-then-play.
+    let generation = PLAYBACK_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    if let Err(error) = play_until_done(cue, generation, mute_input) {
+        tracing::warn!("Failed to play {cue:?} cue: {error}");
+    }
+}
+
+fn play_until_done(cue: Cue, generation: u64, mute_input: bool) -> Result<()> {
+    let pcm = cue.pcm()?;
+    let device = cpal::default_host()
+        .default_output_device()
+        .ok_or_else(|| anyhow!("No output device available"))?;
+    let config = device.default_output_config()?.config();
+    let samples: Arc<[f32]> = render(
+        pcm,
+        config.sample_rate.0,
+        usize::from(config.channels),
+        CUE_VOLUME,
+    )
+    .into();
+    let duration = Duration::from_secs_f64(
+        samples.len() as f64 / f64::from(config.channels) / f64::from(config.sample_rate.0),
+    );
+
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+    let mut position = 0usize;
+    let mut finished = false;
+    let callback_samples = samples.clone();
+    let stream = device.build_output_stream(
+        &config,
+        move |out: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            let superseded = PLAYBACK_GENERATION.load(Ordering::SeqCst) != generation;
+            for sample in out.iter_mut() {
+                *sample = match callback_samples.get(position) {
+                    Some(value) if !superseded => {
+                        position += 1;
+                        *value
+                    }
+                    _ => 0.0,
+                };
+            }
+            if !finished && (superseded || position >= callback_samples.len()) {
+                finished = true;
+                let _ = done_tx.send(());
+            }
+        },
+        |error| tracing::warn!("Cue output stream error: {error}"),
+        None,
+    )?;
+    stream.play()?;
+    if mute_input {
+        mute_input_for(duration);
+    }
+    let _ = done_rx.recv_timeout(duration + Duration::from_secs(1));
+    std::thread::sleep(DRAIN_AFTER_LAST_SAMPLE);
+    Ok(())
+}
+
+#[derive(Debug)]
+struct Pcm {
+    sample_rate: u32,
+    channels: u16,
+    samples: Vec<f32>,
+}
+
+fn decode_wav(bytes: &[u8]) -> Result<Pcm> {
+    ensure!(
+        bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE",
+        "not a RIFF/WAVE file"
+    );
+    let mut format = None;
+    let mut position = 12;
+    while position + 8 <= bytes.len() {
+        let id = &bytes[position..position + 4];
+        let len = u32::from_le_bytes(bytes[position + 4..position + 8].try_into()?) as usize;
+        let body_start = position + 8;
+        let body = bytes
+            .get(body_start..body_start + len)
+            .ok_or_else(|| anyhow!("truncated WAV chunk"))?;
+        match id {
+            b"fmt " => {
+                ensure!(body.len() >= 16, "short fmt chunk");
+                let tag = u16::from_le_bytes([body[0], body[1]]);
+                let channels = u16::from_le_bytes([body[2], body[3]]);
+                let sample_rate = u32::from_le_bytes(body[4..8].try_into()?);
+                let bits = u16::from_le_bytes([body[14], body[15]]);
+                ensure!(
+                    tag == 1 && bits == 16 && channels > 0 && sample_rate > 0,
+                    "unsupported WAV format (tag {tag}, {bits}-bit, {channels} ch)"
+                );
+                format = Some((channels, sample_rate));
+            }
+            b"data" => {
+                let (channels, sample_rate) =
+                    format.ok_or_else(|| anyhow!("WAV data chunk precedes fmt chunk"))?;
+                let samples = body
+                    .chunks_exact(2)
+                    .map(|s| f32::from(i16::from_le_bytes([s[0], s[1]])) / 32768.0)
+                    .collect();
+                return Ok(Pcm {
+                    sample_rate,
+                    channels,
+                    samples,
+                });
+            }
+            _ => {}
+        }
+        position = body_start + len + (len & 1);
+    }
+    bail!("WAV file has no data chunk")
+}
+
+/// Converts the cue to the output device's rate and channel layout, applying `volume`.
+fn render(pcm: &Pcm, out_rate: u32, out_channels: usize, volume: f32) -> Vec<f32> {
+    let in_channels = usize::from(pcm.channels);
+    let in_frames = pcm.samples.len() / in_channels;
+    if in_frames == 0 || out_channels == 0 || out_rate == 0 {
+        return Vec::new();
+    }
+    let at = |frame: usize, channel: usize| {
+        pcm.samples[frame.min(in_frames - 1) * in_channels + channel.min(in_channels - 1)]
+    };
+    let step = f64::from(pcm.sample_rate) / f64::from(out_rate);
+    let out_frames = (in_frames as u64 * u64::from(out_rate) / u64::from(pcm.sample_rate)) as usize;
+    let mut out = Vec::with_capacity(out_frames * out_channels);
+    for frame in 0..out_frames {
+        let source = frame as f64 * step;
+        let index = source as usize;
+        let frac = (source - index as f64) as f32;
+        let sample = |channel| at(index, channel) * (1.0 - frac) + at(index + 1, channel) * frac;
+        let (left, right) = (sample(0), sample(1));
+        for channel in 0..out_channels {
+            let value = match (out_channels, channel) {
+                (1, _) => (left + right) * 0.5,
+                (_, 0) => left,
+                (_, 1) => right,
+                _ => 0.0,
+            };
+            out.push(value * volume);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_cues_decode_as_stereo_48k() {
+        for cue in [Cue::RecordStart, Cue::RecordEnd] {
+            let pcm = cue.pcm().unwrap();
+            assert_eq!((pcm.channels, pcm.sample_rate), (2, 48_000), "{cue:?}");
+            assert_eq!(pcm.samples.len(), 84_480 / 2, "{cue:?}");
+        }
+    }
+
+    #[test]
+    fn start_delay_matches_typeless_device_rules() {
+        assert_eq!(
+            start_delay(Some("AirPods Pro"), Some("AirPods Pro")),
+            SAME_DEVICE_START_DELAY
+        );
+        assert_eq!(
+            start_delay(Some("MacBook Pro Microphone"), Some("AirPods Pro")),
+            AIRPODS_START_DELAY
+        );
+        assert_eq!(
+            start_delay(Some("MacBook Pro Microphone"), Some("MacBook Pro Speakers")),
+            Duration::ZERO
+        );
+        assert_eq!(start_delay(Some("AirPods"), None), Duration::ZERO);
+        assert_eq!(start_delay(None, Some("AirPods")), AIRPODS_START_DELAY);
+    }
+
+    #[test]
+    fn render_applies_volume_without_resampling_at_source_rate() {
+        let pcm = Pcm {
+            sample_rate: 48_000,
+            channels: 2,
+            samples: vec![0.5, -0.5, 1.0, -1.0],
+        };
+        assert_eq!(render(&pcm, 48_000, 2, 0.4), vec![0.2, -0.2, 0.4, -0.4]);
+    }
+
+    #[test]
+    fn render_maps_stereo_to_mono_and_extra_channels() {
+        let pcm = Pcm {
+            sample_rate: 48_000,
+            channels: 2,
+            samples: vec![0.5, -0.5],
+        };
+        assert_eq!(render(&pcm, 48_000, 1, 1.0), vec![0.0]);
+        assert_eq!(render(&pcm, 48_000, 4, 1.0), vec![0.5, -0.5, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn render_resamples_to_the_output_rate() {
+        let pcm = Cue::RecordStart.pcm().unwrap();
+        let out = render(pcm, 44_100, 2, 1.0);
+        assert_eq!(out.len() / 2, 21_120 * 44_100 / 48_000);
+    }
+
+    #[test]
+    fn input_mute_lasts_only_for_the_cue_duration() {
+        mute_input_for(Duration::from_millis(50));
+        assert!(input_muted());
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(!input_muted());
+    }
+
+    #[test]
+    fn decode_rejects_non_pcm16() {
+        let mut wav = Cue::RecordEnd.wav().to_vec();
+        wav[34] = 24;
+        assert!(decode_wav(&wav).is_err());
+    }
+}

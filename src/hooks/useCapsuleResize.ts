@@ -52,7 +52,6 @@ function getSizeForState(
     case 'idle':
       return { width: 36, height: 36 }
     case 'preparing':
-      return { width: 180, height: 36 }
     case 'recording':
       return { width: 160, height: 36 }
     case 'transcribing':

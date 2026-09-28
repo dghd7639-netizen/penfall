@@ -1,4 +1,5 @@
 pub mod capture;
+pub mod cue;
 
 pub use capture::{AudioCaptureHandle, AudioConfig, CaptureState};
 
