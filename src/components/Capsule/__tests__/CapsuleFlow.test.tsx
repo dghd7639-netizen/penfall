@@ -8,19 +8,27 @@ import { removeCorrectionRule, setActiveTranslationTarget, stopAskFlow } from '.
 import { Capsule } from '../index'
 import { LEARNED_NOTICE_MS } from '../CapsuleLearned'
 
-vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: new Proxy(
-    {},
-    {
-      get:
-        (_target, tag: string) =>
-        ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
-          React.createElement(tag, props, children),
-    },
-  ),
-  useReducedMotion: () => true,
-}))
+vi.mock('framer-motion', () => {
+  // Cache per tag so motion.div keeps one component identity across renders, like the real library.
+  const components = new Map<string, React.FC<React.HTMLAttributes<HTMLElement>>>()
+  return {
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    motion: new Proxy(
+      {},
+      {
+        get: (_target, tag: string) => {
+          if (!components.has(tag)) {
+            components.set(tag, ({ children, ...props }) =>
+              React.createElement(tag, props, children),
+            )
+          }
+          return components.get(tag)
+        },
+      },
+    ),
+    useReducedMotion: () => true,
+  }
+})
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -29,7 +37,8 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('../../../hooks/useCapsuleResize', () => ({
-  useCapsuleResize: () => ({ width: 200, height: 36 }),
+  DICTATION_WIDTH: 160,
+  useCapsuleResize: () => ({ width: 160, height: 36 }),
 }))
 
 vi.mock('../../../lib/tauri', () => ({
@@ -82,6 +91,39 @@ describe('Capsule flow states', () => {
     expect(screen.getByRole('button', { name: 'capsule.finishRecording' })).toBeInTheDocument()
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
     expect(shell.style.width).toBe('160px')
+  })
+
+  it('keeps one progress fill running from transcribing through polishing', () => {
+    useAppStore.setState({ pipelineState: 'transcribing' })
+    render(<Capsule />)
+    const fill = screen.getByTestId('capsule-progress')
+    expect(screen.getByText('capsule.transcribing')).toBeInTheDocument()
+
+    act(() => {
+      useAppStore.setState({ pipelineState: 'polishing' })
+    })
+
+    expect(screen.getByTestId('capsule-progress')).toBe(fill)
+    expect(screen.getByText('capsule.thinking')).toBeInTheDocument()
+  })
+
+  it('keeps the capsule the same length from recording through completion', () => {
+    useAppStore.setState({ pipelineState: 'recording' })
+    const { container } = render(<Capsule />)
+    const shell = () => container.querySelector('.jelly-capsule-active') as HTMLElement
+
+    for (const pipelineState of ['recording', 'transcribing', 'polishing', 'outputting'] as const) {
+      act(() => {
+        useAppStore.setState({ pipelineState })
+      })
+      expect(shell().style.width, pipelineState).toBe('160px')
+    }
+  })
+
+  it('shows no progress fill while recording', () => {
+    useAppStore.setState({ pipelineState: 'recording' })
+    render(<Capsule />)
+    expect(screen.queryByTestId('capsule-progress')).not.toBeInTheDocument()
   })
 
   it('shows learned corrections whose undo removes every rule', async () => {

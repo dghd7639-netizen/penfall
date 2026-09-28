@@ -6,6 +6,9 @@ interface CapsuleSize {
   height: number
 }
 
+/** Width shared by every dictation state so the capsule never changes length mid-run. */
+export const DICTATION_WIDTH = 160
+
 export interface CapsuleVisibilityInput {
   capsuleAutoHide: boolean
   contextMenuOpen: boolean
@@ -50,7 +53,7 @@ function getSizeForState(
 ): CapsuleSize {
   if (translationTargetMenuOpen) return { width: 360, height: 180 }
   if (contextMenuOpen) return { width: 220, height: 220 }
-  if (hasError) return { width: 200, height: 36 }
+  if (hasError) return { width: DICTATION_WIDTH, height: 36 }
   if (expanded) return { width: 220, height: 90 }
   if (learnedNotice && state === 'idle') return { width: 220, height: 36 }
   switch (state) {
@@ -58,12 +61,10 @@ function getSizeForState(
       return { width: 36, height: 36 }
     case 'preparing':
     case 'recording':
-      return { width: 160, height: 36 }
     case 'transcribing':
     case 'polishing':
-      return { width: 200, height: 36 }
     case 'outputting':
-      return { width: 144, height: 36 }
+      return { width: DICTATION_WIDTH, height: 36 }
     case 'ask_recording':
     case 'ask_thinking':
       return { width: 168, height: 36 }

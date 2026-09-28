@@ -10,12 +10,16 @@ import { CapsulePolishing } from './CapsulePolishing'
 import { CapsuleComplete } from './CapsuleComplete'
 import { CapsuleError } from './CapsuleError'
 import { CapsuleLearned } from './CapsuleLearned'
+import { CapsuleProgressFill } from './CapsuleProgressFill'
+import { DICTATION_WIDTH } from '../../hooks/useCapsuleResize'
 import { CapsuleContextMenu } from './CapsuleContextMenu'
 import { CapsuleAskRecording } from './CapsuleAskRecording'
 import { CapsuleAskThinking } from './CapsuleAskThinking'
 import { TranslateTargetMenu } from './TranslateTargetChip'
 
 const DRAG_THRESHOLD = 5
+// Rendered outside the keyed content so the fill keeps going across these states.
+const PROGRESS_STATES = new Set(['transcribing', 'polishing', 'outputting'])
 
 function getCapsuleState(pipelineState: string, hasError: boolean, hasLearnedNotice: boolean) {
   if (hasError) return 'error'
@@ -31,17 +35,16 @@ function getCapsuleShellSize(capsuleState: string) {
       return { width: 36, height: 36 }
     case 'learned':
       return { width: 220, height: 36 }
-    case 'outputting':
-      return { width: 144, height: 36 }
     case 'ask_recording':
     case 'ask_thinking':
       return { width: 168, height: 36 }
+    // One width for the whole dictation run so the capsule never jumps.
     case 'recording':
-      return { width: 160, height: 36 }
     case 'transcribing':
     case 'polishing':
+    case 'outputting':
     case 'error':
-      return { width: 200, height: 36 }
+      return { width: DICTATION_WIDTH, height: 36 }
     default:
       return { width: 36, height: 36 }
   }
@@ -153,6 +156,9 @@ export function Capsule() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
+        {PROGRESS_STATES.has(capsuleState) && (
+          <CapsuleProgressFill done={capsuleState === 'outputting'} />
+        )}
         <AnimatePresence mode="sync" initial={false}>
           <motion.div
             key={capsuleState}
