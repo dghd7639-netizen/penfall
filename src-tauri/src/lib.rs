@@ -176,6 +176,28 @@ fn should_restore_main_window_on_reopen(_has_visible_windows: bool) -> bool {
     true
 }
 
+/// Clicking the capsule (e.g. the undo button) must not activate the app: activation raises
+/// every app window, so the main window would jump in front of what the user is working in.
+#[cfg(target_os = "macos")]
+fn prevent_capsule_activation(window: &tauri::WebviewWindow) {
+    use objc2::runtime::{AnyObject, Bool, Sel};
+    use objc2::{msg_send, sel};
+
+    let Ok(ptr) = window.ns_window() else { return };
+    let ns_window = ptr as *mut AnyObject;
+    let selector: Sel = sel!(_setPreventsActivation:);
+    // SAFETY: `ns_window` is the live NSWindow of the capsule; the private selector is only
+    // sent after checking that this macOS version implements it.
+    unsafe {
+        let responds: Bool = msg_send![ns_window, respondsToSelector: selector];
+        if responds.as_bool() {
+            let _: () = msg_send![ns_window, _setPreventsActivation: Bool::YES];
+        } else {
+            tracing::warn!("NSWindow does not support _setPreventsActivation:");
+        }
+    }
+}
+
 fn restore_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -914,6 +936,11 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("ask") {
                     window.open_devtools();
                 }
+            }
+
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("capsule") {
+                prevent_capsule_activation(&window);
             }
 
             let app_handle = app.handle().clone();

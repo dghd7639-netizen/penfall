@@ -273,7 +273,8 @@
       "exit": "Salir"
     },
     "learnedCorrection": "Añadido al diccionario",
-    "undoLearnedCorrection": "Deshacer"
+    "undoLearnedCorrection": "Deshacer",
+    "undoneLearnedCorrection": "Deshecho"
   },
   "settings": {
     "title": "Configuración",

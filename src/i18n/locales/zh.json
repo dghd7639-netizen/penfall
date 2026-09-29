@@ -273,7 +273,8 @@
       "exit": "退出"
     },
     "learnedCorrection": "已加入词典",
-    "undoLearnedCorrection": "撤销"
+    "undoLearnedCorrection": "撤销",
+    "undoneLearnedCorrection": "已撤销"
   },
   "settings": {
     "title": "设置",

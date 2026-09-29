@@ -140,7 +140,7 @@ describe('Capsule flow states', () => {
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
     expect(shell.style.width).toBe('220px')
     fireEvent.click(screen.getByRole('button', { name: 'capsule.undoLearnedCorrection' }))
-    await waitFor(() => expect(useAppStore.getState().learnedCorrections).toEqual([]))
+    await waitFor(() => expect(container.textContent).toContain('capsule.undoneLearnedCorrection'))
     expect(removeCorrectionRule).toHaveBeenCalledWith(7)
     expect(removeCorrectionRule).toHaveBeenCalledWith(8)
     expect(emit).toHaveBeenCalledWith('dictionary:changed')

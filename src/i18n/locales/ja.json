@@ -273,7 +273,8 @@
       "exit": "終了"
     },
     "learnedCorrection": "辞書に追加しました",
-    "undoLearnedCorrection": "取り消す"
+    "undoLearnedCorrection": "取り消す",
+    "undoneLearnedCorrection": "取り消しました"
   },
   "settings": {
     "title": "設定",

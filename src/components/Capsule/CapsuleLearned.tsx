@@ -5,18 +5,23 @@ import { removeCorrectionRule } from '../../lib/tauri'
 import { useAppStore } from '../../stores/appStore'
 
 export const LEARNED_NOTICE_MS = 5000
+export const UNDONE_NOTICE_MS = 1500
 
 export function CapsuleLearned() {
   const { t } = useTranslation()
   const corrections = useAppStore((s) => s.learnedCorrections)
   const setLearnedCorrections = useAppStore((s) => s.setLearnedCorrections)
   const [busy, setBusy] = useState(false)
+  const [undone, setUndone] = useState(false)
 
   useEffect(() => {
     if (corrections.length === 0) return
-    const timer = setTimeout(() => setLearnedCorrections([]), LEARNED_NOTICE_MS)
+    const timer = setTimeout(
+      () => setLearnedCorrections([]),
+      undone ? UNDONE_NOTICE_MS : LEARNED_NOTICE_MS,
+    )
     return () => clearTimeout(timer)
-  }, [corrections, setLearnedCorrections])
+  }, [corrections, undone, setLearnedCorrections])
 
   if (corrections.length === 0) return null
 
@@ -26,7 +31,7 @@ export function CapsuleLearned() {
     try {
       await Promise.all(corrections.map((c) => removeCorrectionRule(c.id)))
       await emit('dictionary:changed')
-      setLearnedCorrections([])
+      setUndone(true)
     } catch (err) {
       console.error('Failed to undo learned corrections:', err)
       setBusy(false)
@@ -35,6 +40,14 @@ export function CapsuleLearned() {
 
   const stopPointerPropagation = (e: React.PointerEvent) => {
     e.stopPropagation()
+  }
+
+  if (undone) {
+    return (
+      <div className="relative z-10 flex items-center justify-center h-9 px-3.5">
+        <p className="text-[12px] text-white/90">{t('capsule.undoneLearnedCorrection')}</p>
+      </div>
+    )
   }
 
   return (

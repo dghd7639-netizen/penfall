@@ -273,7 +273,8 @@
       "exit": "종료"
     },
     "learnedCorrection": "사전에 추가됨",
-    "undoLearnedCorrection": "실행 취소"
+    "undoLearnedCorrection": "실행 취소",
+    "undoneLearnedCorrection": "취소됨"
   },
   "settings": {
     "title": "설정",

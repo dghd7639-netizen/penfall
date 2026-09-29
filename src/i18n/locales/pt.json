@@ -273,7 +273,8 @@
       "exit": "Sair"
     },
     "learnedCorrection": "Adicionado ao dicionário",
-    "undoLearnedCorrection": "Desfazer"
+    "undoLearnedCorrection": "Desfazer",
+    "undoneLearnedCorrection": "Desfeito"
   },
   "settings": {
     "title": "Configurações",

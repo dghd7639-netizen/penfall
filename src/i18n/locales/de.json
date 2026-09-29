@@ -273,7 +273,8 @@
       "exit": "Beenden"
     },
     "learnedCorrection": "Zum Wörterbuch hinzugefügt",
-    "undoLearnedCorrection": "Rückgängig"
+    "undoLearnedCorrection": "Rückgängig",
+    "undoneLearnedCorrection": "Rückgängig gemacht"
   },
   "settings": {
     "title": "Einstellungen",

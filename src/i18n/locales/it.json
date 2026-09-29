@@ -273,7 +273,8 @@
       "exit": "Esci"
     },
     "learnedCorrection": "Aggiunto al dizionario",
-    "undoLearnedCorrection": "Annulla"
+    "undoLearnedCorrection": "Annulla",
+    "undoneLearnedCorrection": "Annullato"
   },
   "settings": {
     "title": "Impostazioni",

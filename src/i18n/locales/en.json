@@ -273,7 +273,8 @@
       "exit": "Exit"
     },
     "learnedCorrection": "Added to dictionary",
-    "undoLearnedCorrection": "Undo"
+    "undoLearnedCorrection": "Undo",
+    "undoneLearnedCorrection": "Undone"
   },
   "settings": {
     "title": "Settings",

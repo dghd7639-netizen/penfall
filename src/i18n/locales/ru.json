@@ -273,7 +273,8 @@
       "exit": "Выход"
     },
     "learnedCorrection": "Добавлено в словарь",
-    "undoLearnedCorrection": "Отменить"
+    "undoLearnedCorrection": "Отменить",
+    "undoneLearnedCorrection": "Отменено"
   },
   "settings": {
     "title": "Настройки",
