@@ -40,6 +40,10 @@ pub struct AliyunQwen3AsrProvider {
     pending_audio: Vec<u8>,
     completed_item_ids: HashSet<String>,
     url_override: Option<String>,
+    appended_audio_bytes: usize,
+    /// Latest live transcript (confirmed text + stash) of each segment still
+    /// waiting for its final, in speaking order.
+    unfinished_segments: Vec<(String, String)>,
 }
 
 impl Default for AliyunQwen3AsrProvider {
@@ -55,6 +59,8 @@ impl AliyunQwen3AsrProvider {
             pending_audio: Vec::with_capacity(AUDIO_CHUNK_BYTES),
             completed_item_ids: HashSet::new(),
             url_override: None,
+            appended_audio_bytes: 0,
+            unfinished_segments: Vec::new(),
         }
     }
 
@@ -135,6 +141,7 @@ impl AliyunQwen3AsrProvider {
     }
 
     async fn append_audio(&mut self, audio: &[u8]) -> Result<(), AppError> {
+        self.appended_audio_bytes += audio.len();
         let ws = self
             .ws
             .as_mut()
@@ -156,6 +163,42 @@ impl AliyunQwen3AsrProvider {
         }
         let audio = std::mem::take(&mut self.pending_audio);
         self.append_audio(&audio).await
+    }
+
+    /// Keeps each segment's live transcript until its final arrives, so a final
+    /// that never comes (slow network, early close) does not drop the words.
+    fn track_segment(&mut self, message: &str) {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(message) else {
+            return;
+        };
+        // Without an id a live transcript cannot be matched to its final.
+        let Some(item_id) = value["item_id"].as_str().filter(|id| !id.is_empty()) else {
+            return;
+        };
+        match value["type"].as_str() {
+            Some("conversation.item.input_audio_transcription.text") => {
+                let text = format!(
+                    "{}{}",
+                    value["text"].as_str().unwrap_or_default(),
+                    value["stash"].as_str().unwrap_or_default()
+                );
+                if text.trim().is_empty() {
+                    return;
+                }
+                match self
+                    .unfinished_segments
+                    .iter_mut()
+                    .find(|(id, _)| id == item_id)
+                {
+                    Some((_, latest)) => *latest = text,
+                    None => self.unfinished_segments.push((item_id.to_string(), text)),
+                }
+            }
+            Some("conversation.item.input_audio_transcription.completed") => {
+                self.unfinished_segments.retain(|(id, _)| id != item_id);
+            }
+            _ => {}
+        }
     }
 
     async fn wait_for_session_event(
@@ -270,6 +313,32 @@ fn completed_item_id(message: &str) -> Option<String> {
         .filter(|item_id| !item_id.is_empty())
 }
 
+/// Summarises a server event for diagnostics without logging any transcript text.
+fn describe_server_message(message: &str) -> String {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(message) else {
+        return format!("unparseable message ({} bytes)", message.len());
+    };
+    let kind = value["type"].as_str().unwrap_or("<no type>");
+    let chars = |field: &str| value[field].as_str().map_or(0, |text| text.chars().count());
+    match kind {
+        "conversation.item.input_audio_transcription.text" => format!(
+            "{kind} (item {}, text {} chars, stash {} chars)",
+            value["item_id"].as_str().unwrap_or("?"),
+            chars("text"),
+            chars("stash")
+        ),
+        "conversation.item.input_audio_transcription.completed" => format!(
+            "{kind} (item {}, {} chars)",
+            value["item_id"].as_str().unwrap_or("?"),
+            chars("transcript")
+        ),
+        "error" | "conversation.item.input_audio_transcription.failed" => {
+            format!("{kind}: {}", value["error"])
+        }
+        _ => kind.to_string(),
+    }
+}
+
 fn map_connect_error(error: WsError) -> AppError {
     match error {
         WsError::Http(response) if response.status() == 401 || response.status() == 403 => {
@@ -298,6 +367,8 @@ impl SttProvider for AliyunQwen3AsrProvider {
         self.ws = Some(ws);
         self.pending_audio.clear();
         self.completed_item_ids.clear();
+        self.appended_audio_bytes = 0;
+        self.unfinished_segments.clear();
         self.wait_for_session_event(|event| matches!(event, ServerEvent::SessionCreated))
             .await?;
         self.send_session_update(config).await?;
@@ -317,12 +388,15 @@ impl SttProvider for AliyunQwen3AsrProvider {
     }
 
     async fn recv_transcript(&mut self) -> Result<Option<TranscriptEvent>, AppError> {
-        let ws = match &mut self.ws {
-            Some(ws) => ws,
-            None => return Ok(None),
+        let Some(ws) = self.ws.as_mut() else {
+            // Closed: never resolve, so the caller's select! keeps serving audio and abort
+            // instead of spinning on an ended stream.
+            return std::future::pending().await;
         };
         match ws.next().await {
             Some(Ok(Message::Text(text))) => {
+                tracing::debug!("Qwen3 ASR event: {}", describe_server_message(&text));
+                self.track_segment(&text);
                 let item_id = completed_item_id(&text);
                 match parse_server_message(&text)? {
                     ServerEvent::Transcript(TranscriptEvent::Final { text, confidence }) => {
@@ -337,7 +411,19 @@ impl SttProvider for AliyunQwen3AsrProvider {
                     _ => Ok(None),
                 }
             }
-            Some(Ok(Message::Close(_))) | None => Ok(None),
+            Some(Ok(Message::Close(frame))) => {
+                tracing::warn!(
+                    "Qwen3 ASR server closed the session mid-recording: {:?}",
+                    frame
+                );
+                self.ws = None;
+                Ok(None)
+            }
+            None => {
+                tracing::warn!("Qwen3 ASR stream ended mid-recording");
+                self.ws = None;
+                Ok(None)
+            }
             Some(Err(error)) => Ok(Some(TranscriptEvent::Error {
                 message: error.to_string(),
             })),
@@ -348,8 +434,15 @@ impl SttProvider for AliyunQwen3AsrProvider {
     async fn disconnect(&mut self) -> Result<Option<String>, AppError> {
         self.flush_pending_audio().await?;
         let Some(mut ws) = self.ws.take() else {
+            tracing::warn!("Qwen3 ASR disconnect without a connection");
             return Ok(None);
         };
+        let finish_started = tokio::time::Instant::now();
+        tracing::info!(
+            "Qwen3 ASR finishing: {:.1}s of audio sent, {} segment(s) completed so far",
+            self.appended_audio_bytes as f64 / 32_000.0,
+            self.completed_item_ids.len()
+        );
         Self::send_json(
             &mut ws,
             serde_json::json!({
@@ -365,6 +458,8 @@ impl SttProvider for AliyunQwen3AsrProvider {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             match tokio::time::timeout(remaining, ws.next()).await {
                 Ok(Some(Ok(Message::Text(text)))) => {
+                    tracing::debug!("Qwen3 ASR finish event: {}", describe_server_message(&text));
+                    self.track_segment(&text);
                     let item_id = completed_item_id(&text);
                     match parse_server_message(&text)? {
                         ServerEvent::SessionFinished => break,
@@ -382,13 +477,38 @@ impl SttProvider for AliyunQwen3AsrProvider {
                         _ => {}
                     }
                 }
-                Ok(Some(Ok(Message::Close(_)))) | Ok(None) | Err(_) => break,
+                Ok(Some(Ok(Message::Close(frame)))) => {
+                    tracing::warn!("Qwen3 ASR closed before session.finished: {:?}", frame);
+                    break;
+                }
+                Ok(None) => {
+                    tracing::warn!("Qwen3 ASR stream ended before session.finished");
+                    break;
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        "Qwen3 ASR gave no session.finished within {}s",
+                        FINISH_RESPONSE_TIMEOUT.as_secs()
+                    );
+                    break;
+                }
                 Ok(Some(Ok(_))) => {}
                 Ok(Some(Err(error))) => return Err(AppError::Network(error.to_string())),
             }
         }
         let _ = ws.close(None).await;
-        tracing::info!("Aliyun Qwen3 ASR disconnected");
+        if !self.unfinished_segments.is_empty() {
+            tracing::warn!(
+                "Qwen3 ASR kept the live transcript of {} segment(s) that never got a final",
+                self.unfinished_segments.len()
+            );
+            final_texts.extend(self.unfinished_segments.drain(..).map(|(_, text)| text));
+        }
+        tracing::info!(
+            "Aliyun Qwen3 ASR disconnected after {}ms with {} final segment(s)",
+            finish_started.elapsed().as_millis(),
+            final_texts.len()
+        );
         Ok((!final_texts.is_empty()).then(|| final_texts.join(" ")))
     }
 
@@ -571,6 +691,110 @@ mod tests {
         assert_eq!(
             provider.disconnect().await.unwrap().as_deref(),
             Some("hello world")
+        );
+        server.await.unwrap();
+    }
+
+    async fn accept_session(
+        listener: TcpListener,
+    ) -> tokio_tungstenite::WebSocketStream<tokio::net::TcpStream> {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = accept_async(stream).await.unwrap();
+        ws.send(Message::Text(
+            serde_json::json!({ "type": "session.created" }).to_string(),
+        ))
+        .await
+        .unwrap();
+        ws.next().await.unwrap().unwrap();
+        ws.send(Message::Text(
+            serde_json::json!({ "type": "session.updated" }).to_string(),
+        ))
+        .await
+        .unwrap();
+        ws
+    }
+
+    fn partial(item_id: &str, text: &str, stash: &str) -> Message {
+        Message::Text(
+            serde_json::json!({
+                "type": "conversation.item.input_audio_transcription.text",
+                "item_id": item_id,
+                "text": text,
+                "stash": stash
+            })
+            .to_string(),
+        )
+    }
+
+    fn completed(item_id: &str, transcript: &str) -> Message {
+        Message::Text(
+            serde_json::json!({
+                "type": "conversation.item.input_audio_transcription.completed",
+                "item_id": item_id,
+                "transcript": transcript
+            })
+            .to_string(),
+        )
+    }
+
+    #[tokio::test]
+    async fn keeps_the_live_transcript_when_the_final_never_arrives() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut ws = accept_session(listener).await;
+            ws.next().await.unwrap().unwrap(); // audio
+            ws.send(partial("item-1", "今天", "天气")).await.unwrap();
+            ws.next().await.unwrap().unwrap(); // session.finish
+            ws.send(partial("item-1", "今天天气", "不错"))
+                .await
+                .unwrap();
+            ws.close(None).await.unwrap();
+        });
+
+        let mut provider = AliyunQwen3AsrProvider::with_url(format!("ws://{address}"));
+        provider.connect(&test_config(Some("zh"))).await.unwrap();
+        provider.send_audio(&[1; 3200]).await.unwrap();
+        assert!(matches!(
+            provider.recv_transcript().await.unwrap(),
+            Some(TranscriptEvent::Partial { .. })
+        ));
+        assert_eq!(
+            provider.disconnect().await.unwrap().as_deref(),
+            Some("今天天气不错")
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn adds_the_unfinished_segment_after_the_completed_ones() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut ws = accept_session(listener).await;
+            ws.next().await.unwrap().unwrap(); // audio
+            ws.send(partial("item-1", "第一句", "")).await.unwrap();
+            ws.send(completed("item-1", "第一句。")).await.unwrap();
+            ws.send(partial("item-2", "第二", "句")).await.unwrap();
+            ws.next().await.unwrap().unwrap(); // session.finish
+            ws.close(None).await.unwrap();
+        });
+
+        let mut provider = AliyunQwen3AsrProvider::with_url(format!("ws://{address}"));
+        provider.connect(&test_config(Some("zh"))).await.unwrap();
+        provider.send_audio(&[1; 3200]).await.unwrap();
+        let mut finals = Vec::new();
+        for _ in 0..3 {
+            if let Some(TranscriptEvent::Final { text, .. }) =
+                provider.recv_transcript().await.unwrap()
+            {
+                finals.push(text);
+            }
+        }
+        assert_eq!(finals, ["第一句。"]);
+        assert_eq!(
+            provider.disconnect().await.unwrap().as_deref(),
+            Some("第二句")
         );
         server.await.unwrap();
     }

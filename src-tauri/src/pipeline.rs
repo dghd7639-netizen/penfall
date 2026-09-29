@@ -1965,6 +1965,11 @@ impl PipelineHandle {
             .await;
         let final_text = polish_outcome.final_text;
         let llm_elapsed = polish_outcome.llm_elapsed;
+        tracing::info!(
+            "Polished {} transcript chars into {} chars",
+            raw_text.chars().count(),
+            final_text.chars().count()
+        );
 
         // ── Phase 3: Timing, history, cleanup ──────────────────────────
         let total_elapsed = stop_start.elapsed();
@@ -2069,6 +2074,11 @@ impl PipelineHandle {
             tracing::info!("Discarding transcript: the microphone picked up no voice");
         }
         if raw_text.is_empty() || !heard_voice {
+            tracing::info!(
+                "Reporting no speech (transcript {} chars, heard voice: {})",
+                raw_text.chars().count(),
+                heard_voice
+            );
             let _ = self
                 .app_handle
                 .emit("pipeline:error", no_speech_user_error());
