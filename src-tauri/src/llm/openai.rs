@@ -116,11 +116,10 @@ impl LlmProvider for OpenAiProvider {
                 &config.api_key,
             )
             .json(&body)
-            .timeout(protocol::request_timeout(
-                &config.provider,
-                &config.base_url,
-                &config.model,
-            ))
+            .timeout(
+                protocol::request_timeout(&config.provider, &config.base_url, &config.model)
+                    + protocol::transcript_time_budget(&req.raw_text),
+            )
             .send()
             .await
             {

@@ -135,6 +135,14 @@ pub fn request_timeout(provider: &str, base_url: &str, model: &str) -> Duration 
     }
 }
 
+/// The request timeout also covers streaming the reply, so a long dictation
+/// (up to ten minutes) gets extra time for the model to write the text back.
+pub fn transcript_time_budget(transcript: &str) -> Duration {
+    // Well below the model's output speed, so only a stalled reply times out.
+    const CHARS_PER_SECOND: u64 = 50;
+    Duration::from_secs(transcript.chars().count() as u64 / CHARS_PER_SECOND)
+}
+
 fn normalize_anthropic_model(model: &str) -> String {
     let model = model
         .trim()
@@ -402,6 +410,16 @@ mod tests {
                 "gemini-2.5-flash"
             ),
             Duration::from_secs(30)
+        );
+    }
+
+    #[test]
+    fn long_transcripts_get_time_to_stream_their_polished_text() {
+        assert_eq!(transcript_time_budget("今天天气不错"), Duration::ZERO);
+        // About ten minutes of dictation.
+        assert_eq!(
+            transcript_time_budget(&"字".repeat(3000)),
+            Duration::from_secs(60)
         );
     }
 
