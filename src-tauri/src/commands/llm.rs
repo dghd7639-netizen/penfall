@@ -120,6 +120,7 @@ pub async fn test_llm_connection(
         false,
     );
 
+    let client = crate::llm::client_for(&base_url, &client);
     let request = client.post(&url).header("Content-Type", "application/json");
     let resp = crate::llm::protocol::apply_auth_headers(request, &provider, &base_url, &api_key)
         .json(&body)
@@ -165,6 +166,7 @@ pub async fn fetch_llm_models(
 
     let url = crate::llm::protocol::models_endpoint(&provider, &base_url)?;
 
+    let client = crate::llm::client_for(&base_url, &client);
     let resp = build_fetch_models_request(&client, &provider, &base_url, &api_key, &url)
         .timeout(std::time::Duration::from_secs(10))
         .send()
@@ -364,6 +366,7 @@ pub async fn bench_llm_connection(
     );
 
     let t0 = std::time::Instant::now();
+    let client = crate::llm::client_for(&base_url, &client);
     let request = client.post(&url).header("Content-Type", "application/json");
     let resp = crate::llm::protocol::apply_auth_headers(request, &provider, &base_url, &api_key)
         .json(&body)

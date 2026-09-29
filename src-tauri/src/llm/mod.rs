@@ -11,6 +11,35 @@ use serde::{Deserialize, Serialize};
 use crate::app_detector::types::ContextProfileSummary;
 use crate::error::AppError;
 
+/// Requests to Alibaba Cloud (DashScope) bypass the system proxy: it is reachable directly
+/// from mainland China, and a global-mode proxy only adds latency (or blocks it).
+fn is_direct_host(base_url: &str) -> bool {
+    url::Url::parse(base_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+        .is_some_and(|host| host == "aliyuncs.com" || host.ends_with(".aliyuncs.com"))
+}
+
+/// The HTTP client to use for `base_url`: a proxy-free one for Alibaba Cloud hosts, the shared
+/// (system-proxy aware) one for everything else.
+pub fn client_for(base_url: &str, shared: &reqwest::Client) -> reqwest::Client {
+    static DIRECT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    if !is_direct_host(base_url) {
+        return shared.clone();
+    }
+    DIRECT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .no_proxy()
+                .pool_max_idle_per_host(2)
+                .tcp_keepalive(std::time::Duration::from_secs(30))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| shared.clone())
+        })
+        .clone()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub provider: String,
@@ -297,5 +326,27 @@ mod context_prompt_contract_tests {
         let thought_fixture: serde_json::Value =
             serde_json::from_str(include_str!("../../tests/fixtures/thought_aware.json")).unwrap();
         assert_eq!(thought_fixture["fixtures"].as_array().unwrap().len(), 10);
+    }
+}
+
+#[cfg(test)]
+mod direct_host_tests {
+    use super::is_direct_host;
+
+    #[test]
+    fn only_alibaba_cloud_hosts_skip_the_proxy() {
+        assert!(is_direct_host(
+            "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        ));
+        assert!(is_direct_host(
+            "https://llm-abc.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+        ));
+        assert!(is_direct_host(
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        ));
+        assert!(!is_direct_host("https://api.openai.com/v1"));
+        assert!(!is_direct_host("https://evil-aliyuncs.com/v1"));
+        assert!(!is_direct_host("https://aliyuncs.com.evil.example/v1"));
+        assert!(!is_direct_host("not a url"));
     }
 }

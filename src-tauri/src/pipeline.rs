@@ -2198,7 +2198,10 @@ impl PipelineHandle {
             max_tokens: 4096,
             temperature: 0.3,
         };
-        let provider = llm::create_provider(&config.llm_provider, Some(self.shared_client.clone()));
+        let provider = llm::create_provider(
+            &config.llm_provider,
+            Some(llm::client_for(&config.llm_base_url, &self.shared_client)),
+        );
 
         let streaming_strategy = provider_plan
             .allow_streaming
@@ -2914,7 +2917,7 @@ impl PipelineHandle {
 
     async fn pre_warm_endpoint(&self, endpoint: &str, managed_cloud: bool) {
         tracing::debug!("Pre-warming HTTP connection to {}", endpoint);
-        let request = self.shared_client.head(endpoint);
+        let request = llm::client_for(endpoint, &self.shared_client).head(endpoint);
         let request = if managed_cloud {
             crate::with_desktop_client_version(request)
         } else {
