@@ -563,12 +563,14 @@ describe('Settings tab 切换', () => {
     expect(screen.queryByText('settings.hotkeyInvalid')).toBeNull()
   })
 
-  it('shows one shared DashScope setup for transcription and polish', () => {
+  it('shows every speech provider and an independent polish model on one page', () => {
     renderSettings()
     clickSidebarItem('语音与润色')
-    expect(screen.getByText('DashScope API Key')).toBeDefined()
-    expect(screen.getByText('阿里云 Qwen3 实时识别')).toBeDefined()
-    expect(screen.getByText('启用 Qwen 轻度润色')).toBeDefined()
+    expect(screen.getByText('providers.stt.deepgram')).toBeDefined()
+    expect(screen.getByText('providers.stt.aliyunQwen3Asr')).toBeDefined()
+    expect(screen.getByText('providers.llm.openai')).toBeDefined()
+    expect(screen.queryByText('providers.llm.cloud')).toBeNull()
+    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
   })
 
   it('点击 Dictionary 后显示词典输入框 placeholder', () => {
@@ -596,7 +598,7 @@ describe('Settings tab 切换', () => {
   it('switches between shared service setup and general settings', () => {
     renderSettings()
     clickSidebarItem('语音与润色')
-    expect(screen.getByText('DashScope API Key')).toBeDefined()
+    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
     clickSidebarItem('settings.general')
     expect(screen.getByText('settings.hotkey')).toBeDefined()
   })
@@ -604,10 +606,10 @@ describe('Settings tab 切换', () => {
   it('leaves service settings when navigating to scenes', () => {
     renderSettings()
     clickSidebarItem('语音与润色')
-    expect(screen.getByText('DashScope API Key')).toBeDefined()
+    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
     clickSidebarItem('settings.scenes')
     expect(screen.getByText('scenes.myScenes')).toBeDefined()
-    expect(screen.queryByText('DashScope API Key')).toBeNull()
+    expect(screen.queryByText('settings.enableAiPolish')).toBeNull()
   })
 
   it('切换 tab 后 title bar 更新', () => {
@@ -959,7 +961,7 @@ describe('Settings 动画结构', () => {
   it('renders the service pane after changing tabs', () => {
     renderSettings()
     clickSidebarItem('语音与润色')
-    expect(screen.getByText('DashScope API Key')).toBeDefined()
+    expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
   })
 })
 

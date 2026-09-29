@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
 import { SettingsSidebar, type PaneId } from './SettingsSidebar'
 import { GeneralPane } from './GeneralPane'
-import { DashscopeSetup } from './DashscopeSetup'
+import { SttPane } from './SttPane'
+import { LlmPane } from './LlmPane'
 import { DictionaryPane } from './DictionaryPane'
 import { ScenesPane } from './ScenesPane'
 import { AboutPane } from './AboutPane'
@@ -76,7 +77,12 @@ export function Settings() {
               transition={{ duration: 0.1, ease: 'easeOut' }}
             >
               {activePane === 'general' && <GeneralPane />}
-              {(activePane === 'stt' || activePane === 'llm') && <DashscopeSetup />}
+              {(activePane === 'stt' || activePane === 'llm') && (
+                <div className="space-y-10">
+                  <SttPane />
+                  <LlmPane />
+                </div>
+              )}
               {activePane === 'dictionary' && <DictionaryPane />}
               {activePane === 'scenes' && <ScenesPane />}
               {activePane === 'about' && <AboutPane />}
@@ -87,7 +93,7 @@ export function Settings() {
 
       {/* Dirty bar */}
       <AnimatePresence>
-        {isDirty && activePane !== 'stt' && activePane !== 'llm' && <DirtyBar />}
+        {isDirty && <DirtyBar />}
       </AnimatePresence>
     </div>
   )

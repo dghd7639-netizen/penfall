@@ -273,7 +273,7 @@ export function LlmPane() {
           }}
           className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
         >
-          {LLM_PROVIDERS.map((p) => (
+          {LLM_PROVIDERS.filter((p) => p.value !== 'cloud').map((p) => (
             <option key={p.value} value={p.value}>
               {t(p.labelKey)}
             </option>
