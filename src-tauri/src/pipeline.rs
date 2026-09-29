@@ -1083,6 +1083,7 @@ impl PipelineHandle {
         // Reset abort flag for new recording
         self.abort_flag.store(false, Ordering::SeqCst);
         crate::correction_learning::stop_watching();
+        crate::correction_learning::prepare_frontmost_app();
 
         // Atomic CAS: only one caller can transition Idle → Preparing. Recording is emitted only
         // after audio capture is ready, so the capsule does not tell users to speak too early.

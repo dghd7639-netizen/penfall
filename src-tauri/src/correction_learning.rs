@@ -4,7 +4,8 @@ use serde::Serialize;
 use std::ops::Range;
 
 const MAX_EDIT_CHARS: usize = 12;
-const MAX_CORRECTIONS: usize = 2;
+/// Each edited phrase becomes its own rule; more than this in one pass reads as a rewrite.
+const MAX_CORRECTIONS: usize = 8;
 const MAX_DIFF_CHARS: usize = 1_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,12 +27,22 @@ struct Hunk {
     new: Range<usize>,
 }
 
-/// Compares the dictated text with how it read just before the field was sent.
-/// Up to two replacements of a couple of words count; rewrites, deletions and
-/// added content do not.
+/// Compares the dictated text with how it reads now. Every replaced phrase becomes its own
+/// correction; rewrites, deletions and added content do not.
+#[cfg(test)]
 fn detect_corrections(baseline: &str, inserted: &str, edited: &str) -> Vec<Correction> {
+    detect_with_region(baseline, inserted, edited).0
+}
+
+/// Like [`detect_corrections`], also returning how the dictated part reads in `edited`, so a
+/// later pass only counts edits made after this one.
+fn detect_with_region(
+    baseline: &str,
+    inserted: &str,
+    edited: &str,
+) -> (Vec<Correction>, Option<String>) {
     let Some(start) = baseline.rfind(inserted) else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
     let (lead, tail) = (&baseline[..start], &baseline[start + inserted.len()..]);
     // Only the dictated part is compared; the text around it must be untouched.
@@ -39,18 +50,20 @@ fn detect_corrections(baseline: &str, inserted: &str, edited: &str) -> Vec<Corre
         .strip_prefix(lead)
         .and_then(|rest| rest.strip_suffix(tail))
     else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
+    let region_text = Some(region.to_string());
     let old: Vec<char> = inserted.chars().collect();
     let new: Vec<char> = region.chars().collect();
     if old == new || old.len() > MAX_DIFF_CHARS || new.len() > MAX_DIFF_CHARS {
-        return Vec::new();
+        return (Vec::new(), region_text);
     }
 
     let hunks = diff_hunks(&old, &new);
     let changed: usize = hunks.iter().map(|h| h.old.len()).sum();
-    if changed * 2 > old.len().max(4) {
-        return Vec::new();
+    // Most of the sentence replaced: a rewrite, not a set of corrections.
+    if changed * 10 > old.len().max(4) * 7 {
+        return (Vec::new(), region_text);
     }
 
     let mut hunks = merge_same_word_hunks(hunks, &old, &new);
@@ -60,7 +73,7 @@ fn detect_corrections(baseline: &str, inserted: &str, edited: &str) -> Vec<Corre
         .filter(|h| !h.old.is_empty() && !h.new.is_empty())
         .collect();
     if replacements.len() > MAX_CORRECTIONS {
-        return Vec::new();
+        return (Vec::new(), region_text);
     }
 
     let mut corrections = Vec::new();
@@ -70,7 +83,7 @@ fn detect_corrections(baseline: &str, inserted: &str, edited: &str) -> Vec<Corre
         let (pattern, replacement) = (pattern.trim(), replacement.trim());
         if pattern.chars().count() > MAX_EDIT_CHARS || replacement.chars().count() > MAX_EDIT_CHARS
         {
-            return Vec::new();
+            return (Vec::new(), region_text);
         }
         let has_content = |s: &str| s.chars().any(char::is_alphanumeric);
         if pattern == replacement
@@ -87,7 +100,7 @@ fn detect_corrections(baseline: &str, inserted: &str, edited: &str) -> Vec<Corre
             replacement: replacement.to_string(),
         });
     }
-    corrections
+    (corrections, region_text)
 }
 
 /// Character-level LCS diff, returned as the changed ranges.
@@ -214,11 +227,11 @@ fn looks_like_ime_composition(pattern: &str, replacement: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c == '\'' || c == ' ')
 }
 
-pub use platform::{stop_watching, watch_after_insert};
+pub use platform::{prepare_frontmost_app, stop_watching, watch_after_insert};
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{detect_corrections, Correction, LearnedCorrection};
+    use super::{detect_with_region, Correction, LearnedCorrection};
     use crate::storage::DictionaryStore;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{Duration, Instant};
@@ -226,13 +239,25 @@ mod platform {
 
     const SETTLE_AFTER_INSERT: Duration = Duration::from_millis(400);
     const POLL_INTERVAL: Duration = Duration::from_millis(100);
-    const WATCH_FOR: Duration = Duration::from_secs(300);
+    /// How long the text must stay unchanged before it counts as a finished edit.
+    const EDIT_SETTLE: Duration = Duration::from_secs(3);
+    /// Stops following a field that nobody has touched for this long.
+    const WATCH_IDLE_LIMIT: Duration = Duration::from_secs(300);
     const MAX_FIELD_CHARS: usize = 20_000;
+    const FOCUS_ATTEMPTS: usize = 8;
+    const FOCUS_RETRY_INTERVAL: Duration = Duration::from_millis(250);
 
     static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
 
     pub fn stop_watching() {
         WATCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Chromium browsers and Electron apps only build their accessibility tree once an
+    /// assistive client asks for it, so the focused text field is invisible until then.
+    /// Asking as recording starts gives the tree time to appear before the text lands.
+    pub fn prepare_frontmost_app() {
+        std::thread::spawn(ax::enable_frontmost_app_accessibility);
     }
 
     /// Follows the focused text field after dictated text lands in it, and learns
@@ -242,7 +267,22 @@ mod platform {
         std::thread::spawn(move || {
             let active = || WATCH_GENERATION.load(Ordering::SeqCst) == generation;
             std::thread::sleep(SETTLE_AFTER_INSERT);
-            let Some(field) = ax::focused_element() else {
+            // A freshly enabled accessibility tree can take a moment to expose the field.
+            let mut field = None;
+            for attempt in 0..FOCUS_ATTEMPTS {
+                if attempt > 0 {
+                    std::thread::sleep(FOCUS_RETRY_INTERVAL);
+                    if !active() {
+                        return;
+                    }
+                }
+                ax::enable_frontmost_app_accessibility();
+                field = ax::focused_element(attempt + 1 == FOCUS_ATTEMPTS);
+                if field.is_some() {
+                    break;
+                }
+            }
+            let Some(field) = field else {
                 return;
             };
             let role = field.string_attribute("AXRole").unwrap_or_default();
@@ -250,7 +290,10 @@ mod platform {
                 return;
             }
             let Some(baseline) = field.string_attribute("AXValue") else {
-                tracing::info!("Correction watch skipped: focused {role} exposes no text");
+                tracing::info!(
+                    "Correction watch skipped: focused {role} exposes no text ({})",
+                    ax::frontmost_app_description()
+                );
                 return;
             };
             if baseline.chars().count() > MAX_FIELD_CHARS || !baseline.contains(&inserted) {
@@ -263,36 +306,70 @@ mod platform {
             }
             tracing::info!("Correction watch started on {role}");
 
+            // Learn as the user edits: once the field has stayed unchanged for a while, compare
+            // it with the last learned state, then carry on until it is sent or closed.
+            let mut baseline = baseline;
+            let mut inserted = inserted;
             let mut last_text = baseline.clone();
-            let deadline = Instant::now() + WATCH_FOR;
+            let mut evaluated_text = baseline.clone();
+            let mut last_change = Instant::now();
+            let mut learned_total = 0usize;
             let outcome = loop {
                 std::thread::sleep(POLL_INTERVAL);
                 if !active() {
-                    return;
+                    // A new dictation started: settle what has been edited so far.
+                    break "superseded";
                 }
-                if Instant::now() >= deadline {
-                    tracing::info!("Correction watch timed out before the text was sent");
-                    return;
+                if last_change.elapsed() >= WATCH_IDLE_LIMIT {
+                    break "timed out";
                 }
                 match field.string_attribute("AXValue") {
                     Some(value) if value.trim().is_empty() => break "sent",
-                    Some(value) => last_text = value,
+                    Some(value) => {
+                        if value != last_text {
+                            last_text = value;
+                            last_change = Instant::now();
+                        } else if last_change.elapsed() >= EDIT_SETTLE
+                            && last_text != evaluated_text
+                        {
+                            evaluated_text = last_text.clone();
+                            learned_total +=
+                                learn_from_edits(&app, &mut baseline, &mut inserted, &last_text);
+                        }
+                    }
                     None => break "closed",
                 }
             };
 
-            let corrections = detect_corrections(&baseline, &inserted, &last_text);
-            tracing::info!(
-                "Correction watch ended (field {outcome}); {} correction(s) found",
-                corrections.len()
-            );
-            if !corrections.is_empty() {
-                save_and_announce(&app, corrections);
+            if last_text != evaluated_text {
+                learned_total += learn_from_edits(&app, &mut baseline, &mut inserted, &last_text);
             }
+            tracing::info!(
+                "Correction watch ended ({outcome}); {learned_total} correction(s) found"
+            );
         });
     }
 
-    fn save_and_announce(app: &tauri::AppHandle, corrections: Vec<Correction>) {
+    /// Learns from the edits made since the last pass and moves the baseline forward.
+    /// Returns how many new rules were saved.
+    fn learn_from_edits(
+        app: &tauri::AppHandle,
+        baseline: &mut String,
+        inserted: &mut String,
+        current: &str,
+    ) -> usize {
+        let (corrections, region) = detect_with_region(baseline, inserted, current);
+        if corrections.is_empty() {
+            return 0;
+        }
+        if let Some(region) = region {
+            *baseline = current.to_string();
+            *inserted = region;
+        }
+        save_and_announce(app, corrections)
+    }
+
+    fn save_and_announce(app: &tauri::AppHandle, corrections: Vec<Correction>) -> usize {
         let store = app.state::<DictionaryStore>();
         let mut learned = Vec::new();
         for correction in corrections {
@@ -309,13 +386,12 @@ mod platform {
                 Err(error) => tracing::warn!("Failed to save learned correction: {error}"),
             }
         }
+        let count = learned.len();
         if !learned.is_empty() {
-            tracing::info!(
-                "Learned {} correction rule(s) from user edits",
-                learned.len()
-            );
+            tracing::info!("Learned {count} correction rule(s) from user edits");
             let _ = app.emit("dictionary:learned", learned);
         }
+        count
     }
 
     mod ax {
@@ -342,6 +418,12 @@ mod platform {
                 value: *mut CFTypeRef,
             ) -> i32;
             fn AXUIElementGetTypeID() -> usize;
+            fn AXUIElementSetAttributeValue(
+                element: AXUIElementRef,
+                attribute: CFTypeRef,
+                value: CFTypeRef,
+            ) -> i32;
+            fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> i32;
         }
 
         #[link(name = "CoreFoundation", kind = "framework")]
@@ -358,6 +440,7 @@ mod platform {
             fn CFStringGetLength(string: CFTypeRef) -> isize;
             fn CFStringGetCharacters(string: CFTypeRef, range: CFRange, buffer: *mut u16);
             fn CFRelease(cf: CFTypeRef);
+            static kCFBooleanTrue: CFTypeRef;
         }
 
         /// An owned AXUIElement; AX calls on it are safe from any thread.
@@ -371,7 +454,54 @@ mod platform {
             }
         }
 
-        pub fn focused_element() -> Option<Element> {
+        /// Turns on the accessibility tree of the frontmost app (Chromium, Electron).
+        /// Harmless for apps that already expose one.
+        pub fn enable_frontmost_app_accessibility() {
+            unsafe {
+                let system = AXUIElementCreateSystemWide();
+                if system.is_null() {
+                    return;
+                }
+                let app = copy_attribute(system, "AXFocusedApplication");
+                CFRelease(system);
+                let Ok(app) = app else { return };
+                if CFGetTypeID(app) == AXUIElementGetTypeID() {
+                    let attribute = cf_string("AXManualAccessibility");
+                    if !attribute.is_null() {
+                        AXUIElementSetAttributeValue(app, attribute, kCFBooleanTrue);
+                        CFRelease(attribute);
+                    }
+                }
+                CFRelease(app);
+            }
+        }
+
+        /// The frontmost app's process id, for diagnostics.
+        pub fn frontmost_app_description() -> String {
+            unsafe {
+                let system = AXUIElementCreateSystemWide();
+                if system.is_null() {
+                    return "app unknown".to_string();
+                }
+                let app = copy_attribute(system, "AXFocusedApplication");
+                CFRelease(system);
+                let Ok(app) = app else {
+                    return "app unknown".to_string();
+                };
+                let mut pid = 0i32;
+                let described = if CFGetTypeID(app) == AXUIElementGetTypeID()
+                    && AXUIElementGetPid(app, &mut pid) == K_AX_ERROR_SUCCESS
+                {
+                    format!("pid {pid}")
+                } else {
+                    "app unknown".to_string()
+                };
+                CFRelease(app);
+                described
+            }
+        }
+
+        pub fn focused_element(log_failure: bool) -> Option<Element> {
             unsafe {
                 let system = AXUIElementCreateSystemWide();
                 if system.is_null() {
@@ -383,9 +513,12 @@ mod platform {
                     Ok(focused) => focused,
                     Err(code) => {
                         // WeChat 4 exposes no focus or text at all (AX error -25212).
-                        tracing::info!(
-                            "Correction watch skipped: no focused element (AX error {code})"
-                        );
+                        if log_failure {
+                            tracing::info!(
+                                "Correction watch skipped: no focused element (AX error {code}, {})",
+                                frontmost_app_description()
+                            );
+                        }
                         return None;
                     }
                 };
@@ -454,6 +587,8 @@ mod platform {
     pub fn stop_watching() {}
 
     pub fn watch_after_insert(_app: tauri::AppHandle, _inserted: String) {}
+
+    pub fn prepare_frontmost_app() {}
 }
 
 #[cfg(test)]
@@ -490,9 +625,34 @@ mod tests {
     }
 
     #[test]
-    fn ignores_three_or_more_replacements() {
+    fn learns_each_of_three_replacements_as_its_own_phrase() {
         let text = "请把同意、拓肯和克劳德这几个词都记下来";
-        assert!(learn(text, text, "请把通义、Token和Claude这几个词都记下来").is_empty());
+        assert_eq!(
+            learn(text, text, "请把通义、Token和Claude这几个词都记下来"),
+            vec![
+                pair("同意", "通义"),
+                pair("拓肯", "Token"),
+                pair("克劳德", "Claude")
+            ]
+        );
+    }
+
+    #[test]
+    fn tracks_the_edited_region_so_later_passes_only_see_new_edits() {
+        let text = "我们用同意千问和拓肯来做识别";
+        let (first, region) = detect_with_region(text, text, "我们用通义千问和拓肯来做识别");
+        assert_eq!(first.len(), 1);
+        let region = region.unwrap();
+        let (second, _) = detect_with_region(
+            "我们用通义千问和拓肯来做识别",
+            &region,
+            "我们用通义千问和Token来做识别",
+        );
+        assert_eq!(second.len(), 1);
+        assert_eq!(
+            (second[0].pattern.as_str(), second[0].replacement.as_str()),
+            ("拓肯", "Token")
+        );
     }
 
     #[test]
