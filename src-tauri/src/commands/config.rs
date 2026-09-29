@@ -150,6 +150,7 @@ fn hotkey_runtime_config_changed(previous: &storage::AppConfig, next: &storage::
         || previous.ask_hotkey != next.ask_hotkey
         || previous.hotkey_mode != next.hotkey_mode
         || previous.hotkeys != next.hotkeys
+        || previous.dictation_mouse_button != next.dictation_mouse_button
 }
 
 fn provider_connection_config_changed(

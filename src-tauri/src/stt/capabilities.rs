@@ -197,7 +197,8 @@ fn static_provider_capability(provider_id: &str) -> SttRecordingCapability {
             RecordingLimitSource::UnknownUpstream,
             "recordingLimits.reasons.unknownUpstream",
         ),
-        "deepgram" | "assemblyai" | "volcengine-doubao" | "aliyun-qwen3-asr" => capability(
+        "deepgram" | "assemblyai" | "volcengine-doubao" | "aliyun-qwen3-asr"
+        | "aliyun-qwen-audio" => capability(
             provider_id,
             SttTransport::Streaming,
             600,
@@ -466,6 +467,13 @@ mod tests {
             ),
             (
                 "aliyun-qwen3-asr",
+                SttTransport::Streaming,
+                600,
+                3600,
+                RecordingLimitSource::ProductSafety,
+            ),
+            (
+                "aliyun-qwen-audio",
                 SttTransport::Streaming,
                 600,
                 3600,

@@ -9,6 +9,7 @@ pub mod hotkey;
 #[cfg(target_os = "linux")]
 mod linux_x11;
 pub mod llm;
+pub mod mouse_hotkey;
 pub mod native_hotkey;
 pub mod output;
 pub mod pipeline;
@@ -996,6 +997,7 @@ pub fn run() {
                     .unwrap_or_default(),
             ))));
             app.manage(native_hotkey::NativeHotkeyRuntime::default());
+            app.manage(mouse_hotkey::MouseHotkeyRuntime::default());
             let hotkey_registration_error = Arc::new(Mutex::new(None));
             app.manage(HotkeyRegistrationError(hotkey_registration_error.clone()));
             let hotkey_supervisor = hotkey::HotkeySupervisor::default();
@@ -1298,6 +1300,7 @@ pub fn run() {
             commands::misc::pause_hotkey,
             commands::misc::resume_hotkey,
             commands::misc::refresh_tray_labels,
+            commands::misc::capture_mouse_button,
             commands::misc::get_platform_capabilities,
             commands::misc::get_hotkey_registration_error,
             commands::misc::get_hotkey_status,

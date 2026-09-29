@@ -207,6 +207,20 @@ fn register_configured_shortcuts_guarded(
         )?;
     }
 
+    if let Some(mouse_runtime) = app.try_state::<crate::mouse_hotkey::MouseHotkeyRuntime>() {
+        let handle = app.clone();
+        mouse_runtime.install(
+            config.dictation_mouse_button,
+            Arc::new(move |state| {
+                crate::hotkey::handle_hotkey_role_event(
+                    handle.clone(),
+                    crate::hotkey::HotkeyRole::Dictation,
+                    state,
+                );
+            }),
+        )?;
+    }
+
     if let Some(role_cache) = app.try_state::<HotkeyRoleCache>() {
         *role_cache.0.lock().unwrap_or_else(|e| e.into_inner()) = plan;
     }
@@ -858,6 +872,16 @@ fn probe_clipboard_write_restore() -> ProbeResult {
 
 fn current_diagnostics_timestamp() -> String {
     chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
+}
+
+/// Waits up to 10 seconds for the user to press an extra mouse button and returns its number.
+#[tauri::command]
+pub async fn capture_mouse_button() -> Result<u8, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        crate::mouse_hotkey::capture_next_button(std::time::Duration::from_secs(10))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

@@ -1,4 +1,5 @@
 pub mod aliyun_qwen3_asr;
+pub mod aliyun_qwen_audio;
 pub mod apple_speech;
 pub mod assemblyai;
 pub mod capabilities;
@@ -68,6 +69,18 @@ pub trait SttProvider: Send + Sync {
     fn name(&self) -> &str;
 }
 
+/// The `SttConfig::provider_region` value for the configured provider, if it needs one.
+pub fn provider_region_setting(config: &crate::storage::AppConfig) -> Option<String> {
+    match config.stt_provider.as_str() {
+        aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER => Some(config.stt_aliyun_qwen_region.clone()),
+        aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => Some(aliyun_qwen_audio::region_setting(
+            &config.stt_aliyun_qwen_region,
+            &config.stt_aliyun_workspace_id,
+        )),
+        _ => None,
+    }
+}
+
 pub fn create_provider(
     provider_name: &str,
     custom_whisper_config: Option<WhisperCompatConfig>,
@@ -86,6 +99,9 @@ pub fn create_provider(
         }
         "assemblyai" => Ok(Box::new(assemblyai::AssemblyAiProvider::new())),
         "deepgram" => Ok(Box::new(deepgram::DeepgramProvider::new())),
+        aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => {
+            Ok(Box::new(aliyun_qwen_audio::AliyunQwenAudioProvider::new()))
+        }
         aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER => {
             Ok(Box::new(aliyun_qwen3_asr::AliyunQwen3AsrProvider::new()))
         }

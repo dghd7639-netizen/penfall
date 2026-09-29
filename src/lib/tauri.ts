@@ -643,3 +643,7 @@ export async function saveOnboardingCompleted(): Promise<void> {
     console.error('Failed to persist onboarding state:', e)
   }
 }
+
+export function captureMouseButton(): Promise<number> {
+  return invoke('capture_mouse_button')
+}

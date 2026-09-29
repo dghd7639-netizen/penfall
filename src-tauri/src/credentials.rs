@@ -58,7 +58,9 @@ pub struct SystemCredentialVault;
 impl SystemCredentialVault {
     fn account(namespace: &str, provider: &str) -> String {
         // One DashScope credential is shared by ASR and Qwen polish.
-        let (namespace, provider) = if namespace.trim() == "llm" && provider.trim() == "qwen" {
+        let (namespace, provider) = if (namespace.trim() == "llm" && provider.trim() == "qwen")
+            || (namespace.trim() == "stt" && provider.trim() == "aliyun-qwen-audio")
+        {
             ("stt", "aliyun-qwen3-asr")
         } else {
             (namespace, provider)
@@ -327,6 +329,10 @@ mod tests {
         assert_eq!(
             SystemCredentialVault::account("stt", "aliyun-qwen3-asr"),
             SystemCredentialVault::account("llm", "qwen")
+        );
+        assert_eq!(
+            SystemCredentialVault::account("stt", "aliyun-qwen-audio"),
+            SystemCredentialVault::account("stt", "aliyun-qwen3-asr")
         );
         assert_ne!(
             SystemCredentialVault::account("llm", "openai"),

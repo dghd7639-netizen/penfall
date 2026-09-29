@@ -101,6 +101,32 @@ async fn check_volcengine_doubao_connection(
     Ok(())
 }
 
+async fn check_aliyun_qwen_audio_connection(
+    api_key: &str,
+    provider_region: Option<String>,
+) -> Result<(), String> {
+    let mut provider = stt::aliyun_qwen_audio::AliyunQwenAudioProvider::new();
+    let config = stt::SttConfig {
+        api_key: api_key.to_string(),
+        language: Some("zh".to_string()),
+        smart_format: true,
+        sample_rate: 16_000,
+        resource_id: None,
+        operation_id: None,
+        managed_audio: None,
+        provider_region,
+    };
+    provider
+        .connect(&config)
+        .await
+        .map_err(|error| error.to_string())?;
+    provider
+        .disconnect()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 async fn check_aliyun_qwen3_connection(
     api_key: &str,
     region: Option<String>,
@@ -217,6 +243,10 @@ fn build_remote_stt_diagnostics(
             stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER => (
                 Some(stt::aliyun_qwen3_asr::qwen_realtime_url(provider_region).to_string()),
                 Some("qwen3-asr-flash-realtime".to_string()),
+            ),
+            stt::aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => (
+                stt::aliyun_qwen_audio::endpoint_url(provider_region).ok(),
+                Some(stt::aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_MODEL.to_string()),
             ),
             _ => (None, None),
         }
@@ -338,7 +368,8 @@ fn build_stt_provider_diagnostics(
         "deepgram"
         | "assemblyai"
         | stt::volcengine::VOLCENGINE_DOUBAO_PROVIDER
-        | stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER => {
+        | stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER
+        | stt::aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => {
             build_remote_stt_diagnostics(provider, api_key, provider_region)
         }
         _ if stt::config::build_known_whisper_config(provider).is_some() => {
@@ -482,6 +513,11 @@ pub async fn test_stt_connection(
                 .await
                 .is_ok())
         }
+        stt::aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => Ok(
+            check_aliyun_qwen_audio_connection(&api_key, provider_region)
+                .await
+                .is_ok(),
+        ),
         stt::config::APPLE_SPEECH_PROVIDER => {
             let authorization = stt::apple_speech::request_apple_speech_authorization()
                 .map_err(|e| e.to_string())?;
@@ -809,6 +845,11 @@ pub async fn bench_stt_connection(
         stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER => {
             let t0 = std::time::Instant::now();
             check_aliyun_qwen3_connection(&api_key, provider_region).await?;
+            Ok(t0.elapsed().as_millis() as u32)
+        }
+        stt::aliyun_qwen_audio::ALIYUN_QWEN_AUDIO_PROVIDER => {
+            let t0 = std::time::Instant::now();
+            check_aliyun_qwen_audio_connection(&api_key, provider_region).await?;
             Ok(t0.elapsed().as_millis() as u32)
         }
         stt::config::APPLE_SPEECH_PROVIDER => {

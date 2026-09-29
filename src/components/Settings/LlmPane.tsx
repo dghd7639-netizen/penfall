@@ -53,6 +53,8 @@ export function LlmPane() {
   const models = useAppStore((s) => s.llmModels)
   const setModels = useAppStore((s) => s.setLlmModels)
   const [fetchingModels, setFetchingModels] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [testErrorMessage, setTestErrorMessage] = useState<string | null>(null)
   const [credentialErrorMessage, setCredentialErrorMessage] = useState<string | null>(null)
   const [polishAdvancedOpen, setPolishAdvancedOpen] = useState(hasCustomPolishConfig)
@@ -166,15 +168,24 @@ export function LlmPane() {
   )
 
   const doFetchModels = useCallback(
-    async (apiKey: string, provider: string, baseUrl: string) => {
-      if (!baseUrl) return
+    async (apiKey: string, provider: string, baseUrl: string, manual = false) => {
+      if (!baseUrl) return false
       setFetchingModels(true)
+      if (manual) setModelsError(null)
       try {
         const list = await fetchLlmModels(apiKey, provider, baseUrl)
         setModels(list)
-      } catch {
-        // Do not clear existing cache on failure — avoids infinite retry loop
-        // (clearing would re-trigger the useEffect that checks models.length > 0)
+        setModelsError(null)
+        if (manual) setModelMenuOpen(true)
+        return true
+      } catch (error) {
+        // Keep any cached list: clearing it would re-trigger the auto-fetch effect below.
+        if (manual) {
+          setModelsError(
+            error instanceof Error ? error.message : typeof error === 'string' ? error : '',
+          )
+        }
+        return false
       } finally {
         setFetchingModels(false)
       }
@@ -221,6 +232,10 @@ export function LlmPane() {
       console.log('[LLM Test] Received latency:', ms, 'type:', typeof ms)
       setLlmLatencyMs(ms)
       setLlmTestStatus('success')
+      // A working connection is the moment to offer the provider's models.
+      if (models.length === 0) {
+        void doFetchModels(llmApiKey, config.llm_provider, config.llm_base_url, true)
+      }
     } catch (err) {
       console.error('[LLM Test] Error:', err)
       setTestErrorMessage(err instanceof Error ? err.message : typeof err === 'string' ? err : null)
@@ -343,7 +358,6 @@ export function LlmPane() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <input
-                  list="llm-model-list"
                   value={config.llm_model}
                   onChange={(e) => {
                     updateConfig({ llm_model: e.target.value })
@@ -353,14 +367,25 @@ export function LlmPane() {
                   placeholder={t('settings.llmModelPlaceholder')}
                   className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
                 />
-                <datalist id="llm-model-list">
-                  {models.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
               </div>
+              {models.length > 0 && (
+                <button
+                  type="button"
+                  aria-expanded={modelMenuOpen}
+                  onClick={() => setModelMenuOpen((open) => !open)}
+                  className="px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-secondary cursor-pointer hover:border-border-focus transition-colors flex items-center gap-1.5"
+                >
+                  {t('settings.modelsAvailable', { count: models.length })}
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${modelMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              )}
               <button
-                onClick={() => doFetchModels(llmApiKey, config.llm_provider, config.llm_base_url)}
+                onClick={() =>
+                  void doFetchModels(llmApiKey, config.llm_provider, config.llm_base_url, true)
+                }
                 disabled={fetchingModels || !config.llm_base_url || (requiresApiKey && !llmApiKey)}
                 className="px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-secondary cursor-pointer hover:border-border-focus disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                 title={t('settings.fetchModels')}
@@ -368,10 +393,39 @@ export function LlmPane() {
                 <RefreshCw size={14} className={fetchingModels ? 'animate-spin' : ''} />
               </button>
             </div>
-            {models.length > 0 && (
-              <p className="text-[11px] text-text-tertiary mt-1">
-                {t('settings.modelsAvailable', { count: models.length })}
-              </p>
+            {modelMenuOpen && models.length > 0 && (
+              <ul
+                role="listbox"
+                className="mt-2 max-h-60 overflow-y-auto rounded-[10px] border border-border bg-bg-secondary py-1"
+              >
+                {models.map((m) => (
+                  <li key={m} role="option" aria-selected={m === config.llm_model}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateConfig({ llm_model: m })
+                        setLlmTestStatus('idle')
+                        setLlmLatencyMs(null)
+                        setTestErrorMessage(null)
+                        setModelMenuOpen(false)
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-[13px] cursor-pointer border-none bg-transparent hover:bg-bg-tertiary ${
+                        m === config.llm_model
+                          ? 'text-text-primary font-medium'
+                          : 'text-text-secondary'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {modelsError !== null && (
+              <div className="flex items-start gap-1 text-[12px] text-error mt-2">
+                <XCircle size={13} className="mt-[1px] flex-shrink-0" />
+                <span>{modelsError || t('settings.connectionFailed')}</span>
+              </div>
             )}
           </FormField>
 

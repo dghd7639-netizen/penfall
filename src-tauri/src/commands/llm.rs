@@ -154,7 +154,7 @@ pub async fn fetch_llm_models(
         return Ok(vec![]);
     }
     if !crate::llm::has_usable_provider_credentials(&provider, &api_key) {
-        return Ok(vec![]);
+        return Err("Enter the API key first.".to_string());
     }
 
     // Validate base_url is a proper HTTP(S) URL
@@ -172,7 +172,10 @@ pub async fn fetch_llm_models(
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Ok(vec![]);
+        return Err(format!(
+            "The provider's model list request failed (HTTP {}).",
+            resp.status().as_u16()
+        ));
     }
 
     let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -196,6 +199,9 @@ pub async fn fetch_llm_models(
     }
 
     models.sort();
+    if models.is_empty() {
+        return Err("The provider returned no models.".to_string());
+    }
     Ok(models)
 }
 

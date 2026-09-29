@@ -337,6 +337,7 @@ mod platform {
         user_info: *mut c_void,
     ) -> CgEventRef;
 
+    #[allow(clashing_extern_declarations)]
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         fn CGEventTapCreate(

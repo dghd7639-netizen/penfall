@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode, ShortcutBinding } from '../../stores/appStore'
-import { getPlatformCapabilities, getHotkeyStatus, resumeHotkey } from '../../lib/tauri'
+import {
+  captureMouseButton,
+  getPlatformCapabilities,
+  getHotkeyStatus,
+  resumeHotkey,
+} from '../../lib/tauri'
 import type { HotkeyStatus } from '../../lib/tauri'
 import { SegmentedControl } from './shared/SegmentedControl'
 import { Toggle } from './shared/Toggle'
@@ -164,6 +169,8 @@ export function GeneralPane() {
         />
       </Section>
 
+      <MouseButtonSection />
+
       <Section title={t('settings.outputMode')}>
         <SegmentedControl
           options={[
@@ -241,6 +248,68 @@ export function GeneralPane() {
         )}
       </div>
     </div>
+  )
+}
+
+function mouseButtonLabel(button: number) {
+  if (button === 2) return '鼠标中键'
+  if (button === 3) return '鼠标侧键（后退）'
+  if (button === 4) return '鼠标侧键（前进）'
+  return `鼠标按键 ${button + 1}`
+}
+
+function MouseButtonSection() {
+  const config = useAppStore((s) => s.config)
+  const updateConfig = useAppStore((s) => s.updateConfig)
+  const [capturing, setCapturing] = useState(false)
+  const [error, setError] = useState('')
+
+  async function capture() {
+    setCapturing(true)
+    setError('')
+    try {
+      updateConfig({ dictation_mouse_button: await captureMouseButton() })
+    } catch {
+      setError('没有检测到鼠标按键。请授予辅助功能权限后，在 10 秒内按下鼠标中键或侧键。')
+    } finally {
+      setCapturing(false)
+    }
+  }
+
+  return (
+    <Section title="鼠标按键">
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className="min-w-[8rem] rounded-[8px] border border-border bg-bg-secondary px-3 py-1.5">
+          {capturing
+            ? '请按下鼠标按键…'
+            : config.dictation_mouse_button
+              ? mouseButtonLabel(config.dictation_mouse_button)
+              : '未设置'}
+        </span>
+        <button
+          type="button"
+          disabled={capturing}
+          onClick={() => void capture()}
+          className="rounded-[8px] border border-border px-3 py-1.5 hover:border-border-focus disabled:opacity-50"
+        >
+          {config.dictation_mouse_button ? '重新录制' : '录制按键'}
+        </button>
+        {config.dictation_mouse_button > 0 && (
+          <button
+            type="button"
+            onClick={() => updateConfig({ dictation_mouse_button: 0 })}
+            className="rounded-[8px] border border-border px-3 py-1.5 hover:border-border-focus"
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <p className="text-[12px] text-text-tertiary mt-2">
+        用鼠标中键或侧键开始 /
+        结束听写，规则与上面的听写方式一致。该按键的原有功能（如浏览器后退）会被占用。
+      </p>
+      {error && <p className="text-[12px] text-error mt-2">{error}</p>}
+    </Section>
   )
 }
 

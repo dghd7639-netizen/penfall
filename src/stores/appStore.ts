@@ -17,6 +17,7 @@ export type SttProvider =
   | 'deepgram'
   | 'assemblyai'
   | 'aliyun-qwen3-asr'
+  | 'aliyun-qwen-audio'
   | 'volcengine-doubao'
   | 'glm-asr'
   | 'openai-whisper'
@@ -203,6 +204,7 @@ export interface AppConfig {
   stt_custom_model: string
   stt_volcengine_resource_id: string
   stt_aliyun_qwen_region: AliyunQwenRegion
+  stt_aliyun_workspace_id: string
   stt_language: string
   llm_provider: LlmProvider
   llm_api_key: string
@@ -245,6 +247,8 @@ export interface AppConfig {
   history_max_entries: number
   ui_language: string
   capsule_auto_hide: boolean
+  /** Extra mouse button (2 middle, 3 back, 4 forward, ...) that starts/stops dictation; 0 = off. */
+  dictation_mouse_button: number
 }
 
 export type TestStatus = 'idle' | 'testing' | 'success' | 'error'
@@ -739,6 +743,7 @@ const defaultConfig: AppConfig = {
   stt_custom_model: 'Systran/faster-whisper-large-v3',
   stt_volcengine_resource_id: 'volc.seedasr.sauc.duration',
   stt_aliyun_qwen_region: 'china-mainland',
+  stt_aliyun_workspace_id: '',
   stt_language: 'zh',
   llm_provider: 'qwen',
   llm_api_key: '',
@@ -796,6 +801,7 @@ const defaultConfig: AppConfig = {
   history_max_entries: 5000,
   ui_language: 'zh',
   capsule_auto_hide: true,
+  dictation_mouse_button: 0,
 }
 
 export const useAppStore = create<AppState>((set) => ({

@@ -1284,9 +1284,7 @@ impl PipelineHandle {
                 &config_data,
                 chrono::Utc::now().timestamp(),
             ),
-            provider_region: (config_data.stt_provider
-                == stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_PROVIDER)
-                .then(|| config_data.stt_aliyun_qwen_region.clone()),
+            provider_region: stt::provider_region_setting(&config_data),
         };
         let managed_cloud_session_token =
             (config_data.stt_provider == "cloud").then(|| stt_config.api_key.clone());

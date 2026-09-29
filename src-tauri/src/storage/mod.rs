@@ -338,6 +338,8 @@ pub struct AppConfig {
     pub stt_custom_model: String,
     pub stt_volcengine_resource_id: String,
     pub stt_aliyun_qwen_region: String,
+    /// Workspace ID for the Qwen-Audio streaming endpoint host.
+    pub stt_aliyun_workspace_id: String,
     pub llm_provider: String,
     pub llm_api_key: String,
     pub llm_model: String,
@@ -379,6 +381,8 @@ pub struct AppConfig {
     pub history_max_entries: u32,
     pub ui_language: String,
     pub capsule_auto_hide: bool,
+    /// Extra mouse button (2 middle, 3 back, 4 forward, ...) that starts and stops dictation; 0 = off.
+    pub dictation_mouse_button: u8,
 }
 
 impl Default for AppConfig {
@@ -395,6 +399,7 @@ impl Default for AppConfig {
                 .to_string(),
             stt_aliyun_qwen_region:
                 crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND.to_string(),
+            stt_aliyun_workspace_id: String::new(),
             llm_provider: "openrouter".to_string(),
             llm_api_key: String::new(),
             llm_model: "google/gemini-2.5-flash".to_string(),
@@ -436,6 +441,7 @@ impl Default for AppConfig {
             history_max_entries: DEFAULT_HISTORY_MAX_ENTRIES,
             ui_language: "en".to_string(),
             capsule_auto_hide: false,
+            dictation_mouse_button: 0,
         }
     }
 }
@@ -574,6 +580,12 @@ impl AppConfig {
     }
 
     pub(crate) fn normalize_values(&mut self) {
+        self.stt_aliyun_workspace_id = self.stt_aliyun_workspace_id.trim().to_string();
+        if self.dictation_mouse_button != 0
+            && !crate::mouse_hotkey::is_valid_button(self.dictation_mouse_button)
+        {
+            self.dictation_mouse_button = 0;
+        }
         if !matches!(
             self.stt_aliyun_qwen_region.as_str(),
             crate::stt::aliyun_qwen3_asr::ALIYUN_QWEN3_ASR_REGION_CHINA_MAINLAND

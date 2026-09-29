@@ -58,6 +58,7 @@ export function SttPane() {
   const isCustomWhisper = config.stt_provider === CUSTOM_WHISPER_PROVIDER
   const isVolcengineDoubao = config.stt_provider === 'volcengine-doubao'
   const isAliyunQwen3 = config.stt_provider === 'aliyun-qwen3-asr'
+  const isAliyunQwenAudio = config.stt_provider === 'aliyun-qwen-audio'
   const credentialProvider = isCustomWhisper ? CUSTOM_WHISPER_PROVIDER : config.stt_provider
   const legacyApiKey = isCustomWhisper ? config.stt_custom_api_key : config.stt_api_key
   const volcengineResourceId =
@@ -211,14 +212,16 @@ export function SttPane() {
           undefined,
           volcengineResourceId,
         )
-      } else if (isAliyunQwen3) {
+      } else if (isAliyunQwen3 || isAliyunQwenAudio) {
         ms = await benchSttConnection(
           apiKeyDraft,
           config.stt_provider,
           undefined,
           undefined,
           undefined,
-          config.stt_aliyun_qwen_region,
+          isAliyunQwenAudio
+            ? `${config.stt_aliyun_qwen_region}/${config.stt_aliyun_workspace_id.trim()}`
+            : config.stt_aliyun_qwen_region,
         )
       } else {
         ms = await benchSttConnection(apiKeyDraft, config.stt_provider)
@@ -543,7 +546,7 @@ export function SttPane() {
             </FormField>
           )}
 
-          {isAliyunQwen3 && (
+          {(isAliyunQwen3 || isAliyunQwenAudio) && (
             <FormField label={t('settings.aliyunQwenRegion')}>
               <select
                 aria-label={t('settings.aliyunQwenRegion')}
@@ -564,6 +567,28 @@ export function SttPane() {
               </select>
               <p className="text-[11px] text-text-tertiary mt-1.5">
                 {t('settings.aliyunQwenRegionHint')}
+              </p>
+            </FormField>
+          )}
+
+          {isAliyunQwenAudio && (
+            <FormField label={t('settings.aliyunWorkspaceId')}>
+              <input
+                aria-label={t('settings.aliyunWorkspaceId')}
+                value={config.stt_aliyun_workspace_id}
+                onChange={(e) => {
+                  updateConfig({ stt_aliyun_workspace_id: e.target.value })
+                  setSttTestStatus('idle')
+                  setSttLatencyMs(null)
+                  setTestErrorMessage(null)
+                }}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="llm-xxxxxxxx"
+                className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+              />
+              <p className="text-[11px] text-text-tertiary mt-1.5">
+                {t('settings.aliyunWorkspaceIdHint')}
               </p>
             </FormField>
           )}
