@@ -11,16 +11,25 @@ use serde::{Deserialize, Serialize};
 use crate::app_detector::types::ContextProfileSummary;
 use crate::error::AppError;
 
-/// Requests to Alibaba Cloud (DashScope) bypass the system proxy: it is reachable directly
-/// from mainland China, and a global-mode proxy only adds latency (or blocks it).
+/// Requests to Alibaba Cloud (DashScope) and to this machine bypass the system proxy: Alibaba
+/// Cloud is reachable directly from mainland China, and a global-mode proxy only adds latency
+/// (or answers with an empty 502 for a local gateway it cannot reach).
 fn is_direct_host(base_url: &str) -> bool {
     url::Url::parse(base_url)
         .ok()
         .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-        .is_some_and(|host| host == "aliyuncs.com" || host.ends_with(".aliyuncs.com"))
+        .is_some_and(|host| {
+            host == "aliyuncs.com"
+                || host.ends_with(".aliyuncs.com")
+                || host == "localhost"
+                || host.ends_with(".localhost")
+                || host == "127.0.0.1"
+                || host == "[::1]"
+                || host == "::1"
+        })
 }
 
-/// The HTTP client to use for `base_url`: a proxy-free one for Alibaba Cloud hosts, the shared
+/// The HTTP client to use for `base_url`: a proxy-free one for Alibaba Cloud and local hosts, the shared
 /// (system-proxy aware) one for everything else.
 pub fn client_for(base_url: &str, shared: &reqwest::Client) -> reqwest::Client {
     static DIRECT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
@@ -344,7 +353,11 @@ mod direct_host_tests {
         assert!(is_direct_host(
             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
         ));
+        assert!(is_direct_host("http://localhost:10100/v1/chat/completions"));
+        assert!(is_direct_host("http://127.0.0.1:10100/v1"));
+        assert!(is_direct_host("http://[::1]:10100/v1"));
         assert!(!is_direct_host("https://api.openai.com/v1"));
+        assert!(!is_direct_host("https://localhost.evil.example/v1"));
         assert!(!is_direct_host("https://evil-aliyuncs.com/v1"));
         assert!(!is_direct_host("https://aliyuncs.com.evil.example/v1"));
         assert!(!is_direct_host("not a url"));
