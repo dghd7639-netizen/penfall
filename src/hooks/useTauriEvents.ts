@@ -98,7 +98,13 @@ export function useTauriEvents() {
         .catch((err) => console.error('Failed to refresh correction rules:', err))
     }
     addListener<LearnedCorrection[]>('dictionary:learned', (corrections) => {
-      useAppStore.getState().setLearnedCorrections(corrections)
+      // Queue behind any notice still showing; each correction gets its own capsule.
+      const { learnedCorrections, setLearnedCorrections } = useAppStore.getState()
+      const queued = new Set(learnedCorrections.map((c) => c.id))
+      setLearnedCorrections([
+        ...learnedCorrections,
+        ...corrections.filter((c) => !queued.has(c.id)),
+      ])
       refreshCorrectionRules()
     })
     addListener<null>('dictionary:changed', refreshCorrectionRules)

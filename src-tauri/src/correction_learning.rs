@@ -227,11 +227,20 @@ fn looks_like_ime_composition(pattern: &str, replacement: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c == '\'' || c == ' ')
 }
 
+/// Normalize browser text serialization without merging words or collapsing paragraphs.
+fn normalize_text(text: &str) -> String {
+    text.replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .replace('\u{00a0}', " ")
+        .trim_end_matches('\n')
+        .to_string()
+}
+
 pub use platform::{prepare_frontmost_app, stop_watching, watch_after_insert};
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{detect_with_region, Correction, LearnedCorrection};
+    use super::{detect_with_region, normalize_text, Correction, LearnedCorrection};
     use crate::storage::DictionaryStore;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{Duration, Instant};
@@ -267,44 +276,52 @@ mod platform {
         std::thread::spawn(move || {
             let active = || WATCH_GENERATION.load(Ordering::SeqCst) == generation;
             std::thread::sleep(SETTLE_AFTER_INSERT);
-            // A freshly enabled accessibility tree can take a moment to expose the field.
-            let mut field = None;
+            if !active() {
+                return;
+            }
+            let inserted = normalize_text(&inserted);
+            if inserted.trim().is_empty() {
+                return;
+            }
+            // Resolve the app independently of AX: Chromium may not have an AX tree yet.
+            let Some(target) = ax::FrontmostApp::get() else {
+                tracing::info!("Correction watch skipped: no frontmost app (bundle unknown)");
+                return;
+            };
+            target.enable_accessibility();
+            let mut matched = None;
             for attempt in 0..FOCUS_ATTEMPTS {
                 if attempt > 0 {
                     std::thread::sleep(FOCUS_RETRY_INTERVAL);
-                    if !active() {
-                        return;
-                    }
                 }
-                ax::enable_frontmost_app_accessibility();
-                field = ax::focused_element(attempt + 1 == FOCUS_ATTEMPTS);
-                if field.is_some() {
-                    break;
+                if !active() {
+                    return;
+                }
+                // Retry text readiness too, not just the existence of a focus object.
+                match target.focused_field(&inserted) {
+                    Ok(found) => {
+                        matched = Some(found);
+                        break;
+                    }
+                    Err(reason) if attempt + 1 == FOCUS_ATTEMPTS => {
+                        tracing::info!(
+                            "Correction watch skipped: {reason} (pid {}, bundle {})",
+                            target.pid,
+                            target.bundle_id
+                        );
+                    }
+                    Err(_) => {}
                 }
             }
-            let Some(field) = field else {
+            let Some((field, baseline)) = matched else {
                 return;
             };
             let role = field.string_attribute("AXRole").unwrap_or_default();
-            if role == "AXSecureTextField" {
-                return;
-            }
-            let Some(baseline) = field.string_attribute("AXValue") else {
-                tracing::info!(
-                    "Correction watch skipped: focused {role} exposes no text ({})",
-                    ax::frontmost_app_description()
-                );
-                return;
-            };
-            if baseline.chars().count() > MAX_FIELD_CHARS || !baseline.contains(&inserted) {
-                tracing::info!(
-                    "Correction watch skipped: focused {role} text ({} chars) does not contain the dictated text ({} chars)",
-                    baseline.chars().count(),
-                    inserted.chars().count()
-                );
-                return;
-            }
-            tracing::info!("Correction watch started on {role}");
+            tracing::info!(
+                "Correction watch started on {role} (pid {}, bundle {})",
+                target.pid,
+                target.bundle_id
+            );
 
             // Learn as the user edits: once the field has stayed unchanged for a while, compare
             // it with the last learned state, then carry on until it is sent or closed.
@@ -323,8 +340,11 @@ mod platform {
                 if last_change.elapsed() >= WATCH_IDLE_LIMIT {
                     break "timed out";
                 }
-                match field.string_attribute("AXValue") {
+                match field.text().map(|value| normalize_text(&value)) {
                     Some(value) if value.trim().is_empty() => break "sent",
+                    Some(value) if value.chars().count() > MAX_FIELD_CHARS => {
+                        break "field too large"
+                    }
                     Some(value) => {
                         if value != last_text {
                             last_text = value;
@@ -383,7 +403,7 @@ mod platform {
                     replacement: correction.replacement,
                 }),
                 Err(error) if error.to_string() == "correction_duplicate" => {}
-                Err(error) => tracing::warn!("Failed to save learned correction: {error}"),
+                Err(_) => tracing::warn!("Failed to save learned correction"),
             }
         }
         let count = learned.len();
@@ -395,6 +415,9 @@ mod platform {
     }
 
     mod ax {
+        use super::{normalize_text, MAX_FIELD_CHARS};
+        use objc2::{class, msg_send, rc::autoreleasepool, runtime::AnyObject};
+        use std::collections::VecDeque;
         use std::ffi::c_void;
 
         type CFTypeRef = *const c_void;
@@ -407,11 +430,20 @@ mod platform {
         }
 
         const K_AX_ERROR_SUCCESS: i32 = 0;
+        const K_AX_VALUE_CF_RANGE_TYPE: u32 = 4;
+        const K_CF_NUMBER_SINT64_TYPE: isize = 4;
         const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
 
         #[link(name = "ApplicationServices", kind = "framework")]
         extern "C" {
-            fn AXUIElementCreateSystemWide() -> AXUIElementRef;
+            fn AXUIElementCreateApplication(pid: i32) -> AXUIElementRef;
+            fn AXUIElementCopyParameterizedAttributeValue(
+                element: AXUIElementRef,
+                attribute: CFTypeRef,
+                parameter: CFTypeRef,
+                value: *mut CFTypeRef,
+            ) -> i32;
+            fn AXValueCreate(value_type: u32, value: *const c_void) -> CFTypeRef;
             fn AXUIElementCopyAttributeValue(
                 element: AXUIElementRef,
                 attribute: CFTypeRef,
@@ -423,7 +455,6 @@ mod platform {
                 attribute: CFTypeRef,
                 value: CFTypeRef,
             ) -> i32;
-            fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> i32;
         }
 
         #[link(name = "CoreFoundation", kind = "framework")]
@@ -436,6 +467,14 @@ mod platform {
                 is_external_representation: u8,
             ) -> CFTypeRef;
             fn CFStringGetTypeID() -> usize;
+            fn CFAttributedStringGetTypeID() -> usize;
+            fn CFAttributedStringGetString(value: CFTypeRef) -> CFTypeRef;
+            fn CFNumberGetTypeID() -> usize;
+            fn CFNumberGetValue(number: CFTypeRef, number_type: isize, value: *mut c_void) -> u8;
+            fn CFArrayGetTypeID() -> usize;
+            fn CFArrayGetCount(array: CFTypeRef) -> isize;
+            fn CFArrayGetValueAtIndex(array: CFTypeRef, index: isize) -> CFTypeRef;
+            fn CFRetain(value: CFTypeRef) -> CFTypeRef;
             fn CFGetTypeID(cf: CFTypeRef) -> usize;
             fn CFStringGetLength(string: CFTypeRef) -> isize;
             fn CFStringGetCharacters(string: CFTypeRef, range: CFRange, buffer: *mut u16);
@@ -454,104 +493,240 @@ mod platform {
             }
         }
 
-        /// Turns on the accessibility tree of the frontmost app (Chromium, Electron).
-        /// Harmless for apps that already expose one.
-        pub fn enable_frontmost_app_accessibility() {
-            unsafe {
-                let system = AXUIElementCreateSystemWide();
-                if system.is_null() {
-                    return;
-                }
-                let app = copy_attribute(system, "AXFocusedApplication");
-                CFRelease(system);
-                let Ok(app) = app else { return };
-                if CFGetTypeID(app) == AXUIElementGetTypeID() {
-                    let attribute = cf_string("AXManualAccessibility");
-                    if !attribute.is_null() {
-                        AXUIElementSetAttributeValue(app, attribute, kCFBooleanTrue);
-                        CFRelease(attribute);
-                    }
-                }
-                CFRelease(app);
-            }
+        pub struct FrontmostApp {
+            element: Element,
+            pub pid: i32,
+            pub bundle_id: String,
         }
 
-        /// The frontmost app's process id, for diagnostics.
-        pub fn frontmost_app_description() -> String {
-            unsafe {
-                let system = AXUIElementCreateSystemWide();
-                if system.is_null() {
-                    return "app unknown".to_string();
-                }
-                let app = copy_attribute(system, "AXFocusedApplication");
-                CFRelease(system);
-                let Ok(app) = app else {
-                    return "app unknown".to_string();
-                };
-                let mut pid = 0i32;
-                let described = if CFGetTypeID(app) == AXUIElementGetTypeID()
-                    && AXUIElementGetPid(app, &mut pid) == K_AX_ERROR_SUCCESS
-                {
-                    format!("pid {pid}")
-                } else {
-                    "app unknown".to_string()
-                };
-                CFRelease(app);
-                described
-            }
-        }
-
-        pub fn focused_element(log_failure: bool) -> Option<Element> {
-            unsafe {
-                let system = AXUIElementCreateSystemWide();
-                if system.is_null() {
-                    return None;
-                }
-                let focused = copy_attribute(system, "AXFocusedUIElement");
-                CFRelease(system);
-                let focused = match focused {
-                    Ok(focused) => focused,
-                    Err(code) => {
-                        // WeChat 4 exposes no focus or text at all (AX error -25212).
-                        if log_failure {
-                            tracing::info!(
-                                "Correction watch skipped: no focused element (AX error {code}, {})",
-                                frontmost_app_description()
-                            );
-                        }
+        impl FrontmostApp {
+            pub fn get() -> Option<Self> {
+                autoreleasepool(|_| unsafe {
+                    let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+                    let app: *mut AnyObject = msg_send![workspace, frontmostApplication];
+                    if app.is_null() {
                         return None;
                     }
-                };
-                if CFGetTypeID(focused) != AXUIElementGetTypeID() {
-                    CFRelease(focused);
-                    return None;
+                    let pid: i32 = msg_send![app, processIdentifier];
+                    if pid <= 0 {
+                        return None;
+                    }
+                    let bundle: *mut AnyObject = msg_send![app, bundleIdentifier];
+                    let bundle_id = if bundle.is_null() {
+                        "unknown".to_string()
+                    } else {
+                        read_string(bundle.cast()).unwrap_or_else(|| "unknown".to_string())
+                    };
+                    let element = AXUIElementCreateApplication(pid);
+                    if element.is_null() {
+                        return None;
+                    }
+                    Some(Self {
+                        element: Element(element),
+                        pid,
+                        bundle_id,
+                    })
+                })
+            }
+
+            /// Asks the app to build its accessibility tree. `AXManualAccessibility` (Electron,
+            /// Chromium) has no side effects; `AXEnhancedUserInterface` also works in older
+            /// Chromium builds but slows window animations and window managers, so it is only
+            /// used when the app does not support the first one.
+            pub fn enable_accessibility(&self) {
+                const K_AX_ERROR_ATTRIBUTE_UNSUPPORTED: i32 = -25205;
+                unsafe {
+                    for name in ["AXManualAccessibility", "AXEnhancedUserInterface"] {
+                        let attribute = cf_string(name);
+                        if attribute.is_null() {
+                            continue;
+                        }
+                        let code =
+                            AXUIElementSetAttributeValue(self.element.0, attribute, kCFBooleanTrue);
+                        CFRelease(attribute);
+                        tracing::debug!(
+                            "Correction AX enable {name}: AX error {code} (pid {}, bundle {})",
+                            self.pid,
+                            self.bundle_id
+                        );
+                        if code != K_AX_ERROR_ATTRIBUTE_UNSUPPORTED {
+                            break;
+                        }
+                    }
                 }
-                Some(Element(focused))
+            }
+
+            pub fn focused_field(&self, inserted: &str) -> Result<(Element, String), String> {
+                let focused = self
+                    .element
+                    .element_attribute("AXFocusedUIElement")
+                    .map_err(|code| format!("no focused element (AX error {code})"))?;
+                let role = focused.string_attribute("AXRole").unwrap_or_default();
+                let mut reason = format!("focused {role} exposes no matching text");
+                let mut queue = VecDeque::from([(focused, 0)]);
+                let mut visited = 0;
+                // ponytail: bounded focused-subtree search; add targeted traversal if real
+                // editors exceed 128 nodes / 8 levels. Never search unrelated windows.
+                while let Some((element, depth)) = queue.pop_front() {
+                    visited += 1;
+                    let role = element.string_attribute("AXRole").unwrap_or_default();
+                    let subrole = element.string_attribute("AXSubrole").unwrap_or_default();
+                    if role == "AXSecureTextField" || subrole == "AXSecureTextField" {
+                        continue;
+                    }
+                    if matches!(role.as_str(), "AXTextArea" | "AXTextField" | "AXWebArea") {
+                        if let Some(text) = element.text() {
+                            let count = text.chars().count();
+                            let text = normalize_text(&text);
+                            if count <= MAX_FIELD_CHARS && text.contains(inserted) {
+                                return Ok((element, text));
+                            }
+                            reason = format!(
+                                "{role} text ({count} chars) exceeds limit or does not contain dictated text ({} chars)",
+                                inserted.chars().count()
+                            );
+                        }
+                    }
+                    if visited >= 128 {
+                        break;
+                    }
+                    if depth < 8 {
+                        for child in element.children(128 - visited - queue.len()) {
+                            queue.push_back((child, depth + 1));
+                        }
+                    }
+                }
+                Err(reason)
+            }
+        }
+
+        pub fn enable_frontmost_app_accessibility() {
+            if let Some(app) = FrontmostApp::get() {
+                app.enable_accessibility();
             }
         }
 
         impl Element {
+            fn element_attribute(&self, name: &str) -> Result<Element, i32> {
+                unsafe {
+                    let value = copy_attribute(self.0, name)?;
+                    if CFGetTypeID(value) == AXUIElementGetTypeID() {
+                        Ok(Element(value))
+                    } else {
+                        CFRelease(value);
+                        Err(-1)
+                    }
+                }
+            }
+
+            fn children(&self, limit: usize) -> Vec<Element> {
+                unsafe {
+                    let Ok(array) = copy_attribute(self.0, "AXChildren") else {
+                        return Vec::new();
+                    };
+                    let mut children = Vec::new();
+                    if CFGetTypeID(array) == CFArrayGetTypeID() {
+                        for index in 0..CFArrayGetCount(array).min(limit as isize) {
+                            let child = CFArrayGetValueAtIndex(array, index);
+                            if !child.is_null() && CFGetTypeID(child) == AXUIElementGetTypeID() {
+                                children.push(Element(CFRetain(child)));
+                            }
+                        }
+                    }
+                    CFRelease(array);
+                    children
+                }
+            }
+
             pub fn string_attribute(&self, name: &str) -> Option<String> {
                 unsafe {
                     let value = copy_attribute(self.0, name).ok()?;
-                    if CFGetTypeID(value) != CFStringGetTypeID() {
-                        CFRelease(value);
-                        return None;
-                    }
-                    let length = CFStringGetLength(value);
-                    let mut buffer = vec![0u16; length.max(0) as usize];
-                    CFStringGetCharacters(
-                        value,
-                        CFRange {
-                            location: 0,
-                            length,
-                        },
-                        buffer.as_mut_ptr(),
-                    );
+                    let text = read_string(value);
                     CFRelease(value);
-                    Some(String::from_utf16_lossy(&buffer))
+                    text
                 }
             }
+
+            pub fn text(&self) -> Option<String> {
+                let value = self.string_attribute("AXValue");
+                if value.as_ref().is_some_and(|text| !text.is_empty()) {
+                    return value;
+                }
+                // A selection is only a fragment (often a zero-length caret). Read the
+                // entire UTF-16 range so moving the caret cannot look like a text edit.
+                self.range_text().or(value)
+            }
+
+            fn range_text(&self) -> Option<String> {
+                unsafe {
+                    let number = copy_attribute(self.0, "AXNumberOfCharacters").ok()?;
+                    let mut length = 0i64;
+                    let valid = CFGetTypeID(number) == CFNumberGetTypeID()
+                        && CFNumberGetValue(
+                            number,
+                            K_CF_NUMBER_SINT64_TYPE,
+                            (&mut length as *mut i64).cast(),
+                        ) != 0;
+                    CFRelease(number);
+                    // AX ranges use UTF-16 code units, including surrogate pairs.
+                    if !valid || !(0..=(MAX_FIELD_CHARS * 2) as i64).contains(&length) {
+                        return None;
+                    }
+                    let range = CFRange {
+                        location: 0,
+                        length: length as isize,
+                    };
+                    let parameter =
+                        AXValueCreate(K_AX_VALUE_CF_RANGE_TYPE, (&range as *const CFRange).cast());
+                    if parameter.is_null() {
+                        return None;
+                    }
+                    let attribute = cf_string("AXStringForRange");
+                    if attribute.is_null() {
+                        CFRelease(parameter);
+                        return None;
+                    }
+                    let mut value = std::ptr::null();
+                    let status = AXUIElementCopyParameterizedAttributeValue(
+                        self.0, attribute, parameter, &mut value,
+                    );
+                    CFRelease(attribute);
+                    CFRelease(parameter);
+                    let text = if status == K_AX_ERROR_SUCCESS && !value.is_null() {
+                        read_string(value)
+                    } else {
+                        None
+                    };
+                    if !value.is_null() {
+                        CFRelease(value);
+                    }
+                    text
+                }
+            }
+        }
+
+        unsafe fn read_string(value: CFTypeRef) -> Option<String> {
+            let string = if CFGetTypeID(value) == CFAttributedStringGetTypeID() {
+                CFAttributedStringGetString(value)
+            } else if CFGetTypeID(value) == CFStringGetTypeID() {
+                value
+            } else {
+                return None;
+            };
+            let length = CFStringGetLength(string);
+            if !(0..=(MAX_FIELD_CHARS * 2) as isize).contains(&length) {
+                return None;
+            }
+            let mut buffer = vec![0u16; length as usize];
+            CFStringGetCharacters(
+                string,
+                CFRange {
+                    location: 0,
+                    length,
+                },
+                buffer.as_mut_ptr(),
+            );
+            Some(String::from_utf16_lossy(&buffer))
         }
 
         unsafe fn cf_string(text: &str) -> CFTypeRef {
@@ -579,6 +754,40 @@ mod platform {
                 code => Err(code),
             }
         }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            #[link(name = "CoreFoundation", kind = "framework")]
+            extern "C" {
+                fn CFAttributedStringCreate(
+                    allocator: *const c_void,
+                    text: CFTypeRef,
+                    attributes: CFTypeRef,
+                ) -> CFTypeRef;
+            }
+
+            #[test]
+            fn reads_plain_and_attributed_utf16_text_and_rejects_non_text() {
+                unsafe {
+                    let text = "中文🙂\nAsk Cloud";
+                    let plain = cf_string(text);
+                    assert!(!plain.is_null());
+                    let attributed =
+                        CFAttributedStringCreate(std::ptr::null(), plain, std::ptr::null());
+                    assert!(!attributed.is_null());
+                    assert_eq!(read_string(plain).as_deref(), Some(text));
+                    assert_eq!(read_string(attributed).as_deref(), Some(text));
+                    assert_eq!(read_string(kCFBooleanTrue), None);
+                    CFRelease(attributed);
+                    CFRelease(plain);
+                    let oversized = cf_string(&"x".repeat(MAX_FIELD_CHARS * 2 + 1));
+                    assert_eq!(read_string(oversized), None);
+                    CFRelease(oversized);
+                }
+            }
+        }
     }
 }
 
@@ -604,6 +813,45 @@ mod tests {
 
     fn pair(pattern: &str, replacement: &str) -> (String, String) {
         (pattern.to_string(), replacement.to_string())
+    }
+
+    #[test]
+    fn normalizes_browser_serialization_without_collapsing_content() {
+        assert_eq!(normalize_text("A\u{a0}B\r\nC\rD\n\n"), "A B\nC\nD");
+        assert_eq!(normalize_text("  A  B\tC\n\nD "), "  A  B\tC\n\nD ");
+        assert_eq!(normalize_text("中文🙂 e\u{301}"), "中文🙂 e\u{301}");
+        assert_eq!(normalize_text("\r\n"), "");
+    }
+
+    #[test]
+    fn learns_with_normalized_baseline_insert_and_poll_text() {
+        let inserted = "Ask Cloud\r\nto review it\n";
+        let baseline = "前缀：Ask\u{a0}Cloud\nto review it\n\n";
+        let edited = "前缀：Ask Claude\r\nto review it\n";
+        assert!(!baseline.contains(inserted)); // The old watch rejected this field.
+        assert_eq!(
+            learn(
+                &normalize_text(baseline),
+                &normalize_text(inserted),
+                &normalize_text(edited)
+            ),
+            vec![pair("Cloud", "Claude")]
+        );
+        assert!(learn(
+            &normalize_text(baseline),
+            &normalize_text(inserted),
+            &normalize_text("前缀：Ask Cloud\r\nto review it\n")
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn normalized_region_still_rejects_edits_outside_dictation() {
+        let baseline = normalize_text("Hello Tom. Ask\u{a0}Cloud to review it\n");
+        let inserted = normalize_text("Ask Cloud to review it\r\n");
+        let edited = normalize_text("Hello Tim. Ask Claude to review it\n");
+        assert!(learn(&baseline, &inserted, &edited).is_empty());
+        assert!(!normalize_text("some other field").contains(&inserted));
     }
 
     #[test]

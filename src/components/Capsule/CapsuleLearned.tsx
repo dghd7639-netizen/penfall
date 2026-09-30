@@ -1,39 +1,46 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { emit } from '@tauri-apps/api/event'
 import { removeCorrectionRule } from '../../lib/tauri'
 import { useAppStore } from '../../stores/appStore'
+import type { LearnedCorrection } from '../../stores/appStore'
 
 export const LEARNED_NOTICE_MS = 5000
 export const UNDONE_NOTICE_MS = 1500
 
+/** Learned corrections are shown one at a time, each with its own undo. */
 export function CapsuleLearned() {
+  const current = useAppStore((s) => s.learnedCorrections[0])
+  if (!current) return null
+  // Keyed so every correction starts with a fresh timer and undo state.
+  return <LearnedNotice key={current.id} correction={current} />
+}
+
+function LearnedNotice({ correction }: { correction: LearnedCorrection }) {
   const { t } = useTranslation()
-  const corrections = useAppStore((s) => s.learnedCorrections)
-  const setLearnedCorrections = useAppStore((s) => s.setLearnedCorrections)
   const [busy, setBusy] = useState(false)
   const [undone, setUndone] = useState(false)
 
   useEffect(() => {
-    if (corrections.length === 0) return
     const timer = setTimeout(
-      () => setLearnedCorrections([]),
+      () => {
+        const { learnedCorrections, setLearnedCorrections } = useAppStore.getState()
+        setLearnedCorrections(learnedCorrections.filter((c) => c.id !== correction.id))
+      },
       undone ? UNDONE_NOTICE_MS : LEARNED_NOTICE_MS,
     )
     return () => clearTimeout(timer)
-  }, [corrections, undone, setLearnedCorrections])
-
-  if (corrections.length === 0) return null
+  }, [correction.id, undone])
 
   const handleUndo = async (e: React.MouseEvent) => {
     e.stopPropagation()
     setBusy(true)
     try {
-      await Promise.all(corrections.map((c) => removeCorrectionRule(c.id)))
+      await removeCorrectionRule(correction.id)
       await emit('dictionary:changed')
       setUndone(true)
     } catch (err) {
-      console.error('Failed to undo learned corrections:', err)
+      console.error('Failed to undo learned correction:', err)
       setBusy(false)
     }
   }
@@ -56,14 +63,9 @@ export function CapsuleLearned() {
       title={t('capsule.learnedCorrection')}
     >
       <p className="flex-1 min-w-0 truncate text-[12px] text-white/90">
-        {corrections.map((c, i) => (
-          <Fragment key={c.id}>
-            {i > 0 && <span className="text-white/40">，</span>}
-            <span className="text-white/55">{c.pattern}</span>
-            <span className="text-white/40"> → </span>
-            {c.replacement}
-          </Fragment>
-        ))}
+        <span className="text-white/55">{correction.pattern}</span>
+        <span className="text-white/40"> → </span>
+        {correction.replacement}
       </p>
       <button
         onPointerDown={stopPointerPropagation}

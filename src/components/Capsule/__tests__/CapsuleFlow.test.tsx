@@ -126,7 +126,7 @@ describe('Capsule flow states', () => {
     expect(screen.queryByTestId('capsule-progress')).not.toBeInTheDocument()
   })
 
-  it('shows learned corrections whose undo removes every rule', async () => {
+  it('shows learned corrections one at a time, each with its own undo', async () => {
     useAppStore.setState({
       learnedCorrections: [
         { id: 7, pattern: '同意', replacement: '通义' },
@@ -136,14 +136,19 @@ describe('Capsule flow states', () => {
 
     const { container } = render(<Capsule />)
 
-    expect(container.textContent).toContain('同意 → 通义，拓肯 → Token')
+    expect(container.textContent).toContain('同意 → 通义')
+    expect(container.textContent).not.toContain('拓肯')
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
     expect(shell.style.width).toBe('220px')
     fireEvent.click(screen.getByRole('button', { name: 'capsule.undoLearnedCorrection' }))
     await waitFor(() => expect(container.textContent).toContain('capsule.undoneLearnedCorrection'))
     expect(removeCorrectionRule).toHaveBeenCalledWith(7)
-    expect(removeCorrectionRule).toHaveBeenCalledWith(8)
+    expect(removeCorrectionRule).not.toHaveBeenCalledWith(8)
     expect(emit).toHaveBeenCalledWith('dictionary:changed')
+    await waitFor(() => expect(container.textContent).toContain('拓肯 → Token'), {
+      timeout: 3000,
+    })
+    expect(useAppStore.getState().learnedCorrections.map((c) => c.id)).toEqual([8])
   })
 
   it('dismisses a learned correction notice on its own and keeps the rule', () => {
