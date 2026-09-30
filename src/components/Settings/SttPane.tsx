@@ -59,6 +59,7 @@ export function SttPane() {
   const isVolcengineDoubao = config.stt_provider === 'volcengine-doubao'
   const isAliyunQwen3 = config.stt_provider === 'aliyun-qwen3-asr'
   const isAliyunQwenAudio = config.stt_provider === 'aliyun-qwen-audio'
+  const isAliyun = isAliyunQwen3 || isAliyunQwenAudio
   const credentialProvider = isCustomWhisper ? CUSTOM_WHISPER_PROVIDER : config.stt_provider
   const legacyApiKey = isCustomWhisper ? config.stt_custom_api_key : config.stt_api_key
   const volcengineResourceId =
@@ -325,7 +326,8 @@ export function SttPane() {
     <div className="space-y-5">
       <FormField label={t('settings.provider')}>
         <select
-          value={config.stt_provider}
+          // Both Alibaba Cloud models sit under the single "Alibaba Cloud" entry.
+          value={isAliyunQwenAudio ? 'aliyun-qwen3-asr' : config.stt_provider}
           onChange={(e) => {
             const provider = e.target.value as typeof config.stt_provider
             updateConfig({
@@ -546,7 +548,27 @@ export function SttPane() {
             </FormField>
           )}
 
-          {(isAliyunQwen3 || isAliyunQwenAudio) && (
+          {isAliyun && (
+            <FormField label={t('settings.aliyunModel')}>
+              <select
+                aria-label={t('settings.aliyunModel')}
+                value={config.stt_provider}
+                onChange={(e) => {
+                  updateConfig({ stt_provider: e.target.value as typeof config.stt_provider })
+                  setSttTestStatus('idle')
+                  setSttLatencyMs(null)
+                  setTestErrorMessage(null)
+                  setCredentialErrorMessage(null)
+                }}
+                className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+              >
+                <option value="aliyun-qwen3-asr">{t('settings.aliyunModelQwen3')}</option>
+                <option value="aliyun-qwen-audio">{t('settings.aliyunModelQwenAudio')}</option>
+              </select>
+            </FormField>
+          )}
+
+          {isAliyun && (
             <FormField label={t('settings.aliyunQwenRegion')}>
               <select
                 aria-label={t('settings.aliyunQwenRegion')}

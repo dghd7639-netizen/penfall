@@ -191,15 +191,13 @@ vi.mock('../../../lib/tauri', () => ({
   testLlmConnection: vi.fn().mockResolvedValue(true),
   readCredential: vi.fn().mockResolvedValue(null),
   setCredential: vi.fn().mockResolvedValue(undefined),
-  getCredentialStatus: vi
-    .fn()
-    .mockResolvedValue({
-      namespace: 'stt',
-      provider: 'aliyun-qwen3-asr',
-      hasSecret: false,
-      storage: 'os-vault',
-      updatedAt: null,
-    }),
+  getCredentialStatus: vi.fn().mockResolvedValue({
+    namespace: 'stt',
+    provider: 'aliyun-qwen3-asr',
+    hasSecret: false,
+    storage: 'os-vault',
+    updatedAt: null,
+  }),
   fetchLlmModels: vi.fn().mockResolvedValue(['gpt-4o', 'gpt-3.5-turbo']),
   getLlmModelCapability: vi.fn().mockResolvedValue('unknown'),
   addDictionaryEntry: vi.fn().mockResolvedValue(undefined),
@@ -567,7 +565,8 @@ describe('Settings tab 切换', () => {
     renderSettings()
     clickSidebarItem('语音与润色')
     expect(screen.getByText('providers.stt.deepgram')).toBeDefined()
-    expect(screen.getByText('providers.stt.aliyunQwen3Asr')).toBeDefined()
+    expect(screen.getByText('providers.stt.aliyun')).toBeDefined()
+    expect(screen.queryByText('providers.stt.aliyunQwenAudio')).toBeNull()
     expect(screen.getByText('providers.llm.openai')).toBeDefined()
     expect(screen.queryByText('providers.llm.cloud')).toBeNull()
     expect(screen.getByText('settings.enableAiPolish')).toBeDefined()

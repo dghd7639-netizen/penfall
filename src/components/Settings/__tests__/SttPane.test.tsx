@@ -78,7 +78,11 @@ vi.mock('react-i18next', () => ({
         'settings.aliyunQwenRegionInternational': 'International (Singapore)',
         'settings.aliyunQwenRegionHint':
           'Use the region where your DashScope API key was created. Keys are region-specific.',
-        'providers.stt.aliyunQwen3Asr': 'Aliyun Qwen3 Realtime ASR',
+        'providers.stt.aliyun': 'Alibaba Cloud',
+        'settings.aliyunModel': 'Model',
+        'settings.aliyunModelQwen3': 'Qwen3 Realtime ASR',
+        'settings.aliyunModelQwenAudio': 'Qwen-Audio 3.0 Streaming ASR',
+        'settings.aliyunWorkspaceId': 'Workspace ID',
         'providers.stt.volcengineDoubao': 'Volcengine Doubao Realtime ASR',
         'providers.stt.appleSpeech': 'Apple Speech (Local)',
       }
@@ -237,11 +241,33 @@ describe('SttPane', () => {
       )
     })
 
-    it('lists Aliyun Qwen3 realtime ASR as an STT provider', () => {
+    it('lists one Alibaba Cloud provider whose model is chosen separately', () => {
       render(<SttPane />)
-      expect(screen.getByRole('option', { name: 'Aliyun Qwen3 Realtime ASR' })).toHaveValue(
-        'aliyun-qwen3-asr',
-      )
+      expect(screen.getByRole('option', { name: 'Alibaba Cloud' })).toHaveValue('aliyun-qwen3-asr')
+      expect(screen.queryByRole('option', { name: /Qwen-Audio/ })).toBeNull()
+    })
+
+    it('offers both Alibaba Cloud models and switches between them', () => {
+      mockAppStore.config.stt_provider = 'aliyun-qwen3-asr'
+      render(<SttPane />)
+
+      const model = screen.getByLabelText('Model')
+      expect(model).toHaveValue('aliyun-qwen3-asr')
+      expect(screen.queryByLabelText('Workspace ID')).toBeNull()
+
+      fireEvent.change(model, { target: { value: 'aliyun-qwen-audio' } })
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        stt_provider: 'aliyun-qwen-audio',
+      })
+    })
+
+    it('keeps Alibaba Cloud selected and asks for a Workspace ID for Qwen-Audio 3.0', () => {
+      mockAppStore.config.stt_provider = 'aliyun-qwen-audio'
+      render(<SttPane />)
+
+      expect(screen.getByRole('option', { name: 'Alibaba Cloud' })).toHaveValue('aliyun-qwen3-asr')
+      expect(screen.getByLabelText('Model')).toHaveValue('aliyun-qwen-audio')
+      expect(screen.getByLabelText('Workspace ID')).toBeInTheDocument()
     })
 
     it('shows a persisted Beijing or Singapore region selector for Aliyun Qwen3', () => {
