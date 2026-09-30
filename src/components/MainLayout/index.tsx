@@ -2,6 +2,7 @@ import { Home, Settings, History } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRoute, type Route } from '../../lib/router'
 import { AccessibilityBanner } from './AccessibilityBanner'
+import { BrandMark } from '../BrandMark'
 const navItems: { id: Route; labelKey: string; icon: typeof Home }[] = [
   { id: 'home', labelKey: 'nav.home', icon: Home },
   { id: 'settings', labelKey: 'nav.settings', icon: Settings },
@@ -13,9 +14,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="w-full h-full flex bg-bg-primary text-text-primary">
       <aside className="w-[180px] flex flex-col border-r border-border jelly-surface-flat shrink-0">
-        <div className="px-5 pt-6 pb-5" data-tauri-drag-region>
-          <h1 className="text-[15px] font-semibold">Voice Input MVP</h1>
-          <p className="text-[12px] text-text-tertiary mt-1">中文语音输入</p>
+        <div className="px-5 pt-6 pb-5 flex items-center gap-2.5" data-tauri-drag-region>
+          <BrandMark size={30} className="shrink-0 pointer-events-none" />
+          <div className="min-w-0 pointer-events-none">
+            <h1 className="text-[15px] font-semibold leading-tight">Voice Input MVP</h1>
+            <p className="text-[12px] text-text-tertiary mt-0.5">中文语音输入</p>
+          </div>
         </div>
         <nav className="flex-1 px-3 space-y-1" aria-label={t('nav.mainNavigation')}>
           {navItems.map(({ id, labelKey, icon: Icon }) => (

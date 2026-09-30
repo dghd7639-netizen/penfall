@@ -1028,14 +1028,21 @@ pub fn run() {
                 tray::build_tray_menu(&app_handle, false, true, initial_config.capsule_auto_hide)
                     .map_err(|e| anyhow::anyhow!("Failed to build tray menu: {}", e))?;
 
+            // macOS menu bars get a single-colour template icon the system tints for light
+            // and dark mode; other platforms keep the full-colour app icon.
+            #[cfg(target_os = "macos")]
+            let tray_icon =
+                tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
+            #[cfg(not(target_os = "macos"))]
+            let tray_icon = app
+                .default_window_icon()
+                .expect("default window icon missing")
+                .clone();
             let tray = TrayIconBuilder::new()
-                .icon(
-                    app.default_window_icon()
-                        .expect("default window icon missing")
-                        .clone(),
-                )
+                .icon(tray_icon)
+                .icon_as_template(cfg!(target_os = "macos"))
                 .menu(&tray_menu)
-                .tooltip("OpenTypeless")
+                .tooltip("Voice Input MVP")
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);

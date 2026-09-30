@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { useAppStore } from '../../stores/appStore'
 import { APP_NAME, APP_VERSION, APP_REPO_URL, UI_LANGUAGES } from '../../lib/constants'
+import { BrandMark } from '../BrandMark'
 
 export function AboutPane() {
   const { t } = useTranslation()
@@ -24,6 +25,7 @@ export function AboutPane() {
     <div className="space-y-5 text-[13px]">
       {/* Header */}
       <div className="text-center py-6">
+        <BrandMark size={72} className="mx-auto mb-3" />
         <h2 className="text-[22px] font-semibold text-text-primary">{APP_NAME}</h2>
         <p className="text-text-secondary mt-1 text-[13px]">{APP_VERSION}</p>
       </div>

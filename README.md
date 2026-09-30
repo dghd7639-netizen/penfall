@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="OpenTypeless Logo" />
+  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="Voice Input MVP Logo" />
 </p>
 
 <h1 align="center">OpenTypeless</h1>
