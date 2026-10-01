@@ -99,12 +99,7 @@ function AuthForm() {
   const [mode, setMode] = useState<AuthMode>('auth')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const {
-    signIn,
-    loading,
-    error,
-    emailVerificationPending,
-  } = useAuthStore()
+  const { signIn, loading, error, emailVerificationPending } = useAuthStore()
   const [localError, setLocalError] = useState<string | null>(null)
   const [oauthPending, setOauthPending] = useState<'google' | 'github' | 'browser' | null>(null)
   const { t, i18n } = useTranslation()
@@ -131,11 +126,9 @@ function AuthForm() {
       setOauthPending('browser')
       setLocalError(null)
       useAuthStore.setState({ error: null })
-      await openUrl(await createDesktopWebAuthURL(
-        browserMode,
-        EMAIL_VERIFICATION_STATE_TTL_MS,
-        authLocale,
-      ))
+      await openUrl(
+        await createDesktopWebAuthURL(browserMode, EMAIL_VERIFICATION_STATE_TTL_MS, authLocale),
+      )
     } catch (error) {
       clearOAuthState()
       setOauthPending(null)
@@ -741,7 +734,10 @@ function AccountDetails() {
           data-testid="subscription-refresh-notice"
         >
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-text-primary" aria-hidden="true" />
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-text-primary"
+              aria-hidden="true"
+            />
             <p className="min-w-0 flex-1 text-[12px] leading-4">
               <span className="font-medium text-text-primary">
                 {subscriptionStale

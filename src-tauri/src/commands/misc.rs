@@ -209,7 +209,10 @@ fn register_configured_shortcuts_guarded(
 
     if let Some(mouse_runtime) = app.try_state::<crate::mouse_hotkey::MouseHotkeyRuntime>() {
         let handle = app.clone();
-        mouse_runtime.install(
+        // The mouse button is an optional extra. If its event tap cannot start (usually missing
+        // Accessibility permission) the keyboard shortcuts must still register and settings
+        // must still save, so this only warns.
+        if let Err(error) = mouse_runtime.install(
             config.dictation_mouse_button,
             Arc::new(move |state| {
                 crate::hotkey::handle_hotkey_role_event(
@@ -218,7 +221,9 @@ fn register_configured_shortcuts_guarded(
                     state,
                 );
             }),
-        )?;
+        ) {
+            tracing::warn!("Mouse button shortcut unavailable: {error}");
+        }
     }
 
     if let Some(role_cache) = app.try_state::<HotkeyRoleCache>() {

@@ -92,9 +92,7 @@ export function Settings() {
       </div>
 
       {/* Dirty bar */}
-      <AnimatePresence>
-        {isDirty && <DirtyBar />}
-      </AnimatePresence>
+      <AnimatePresence>{isDirty && <DirtyBar />}</AnimatePresence>
     </div>
   )
 }
