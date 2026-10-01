@@ -2,60 +2,69 @@ import { useEffect, useRef } from 'react'
 import { useReducedMotion } from 'framer-motion'
 import { useAppStore } from '../../stores/appStore'
 
-const BAR_COUNT = 7
-const MIN_HEIGHT = 3
-const MAX_HEIGHT = 16
+const WIDTH = 64
+const HEIGHT = 20
+const POINTS = 24
+const MID = HEIGHT / 2
+const MAX_SWING = 8
 
+/** Zig-zags around the centre line; each point swings further the louder that moment was. */
+function tracePath(values: number[]): string {
+  const step = WIDTH / (values.length - 1)
+  return values
+    .map((value, i) => {
+      const y = MID + (i % 2 === 0 ? -value : value) * MAX_SWING
+      return `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(2)} ${y.toFixed(2)}`
+    })
+    .join(' ')
+}
+
+/**
+ * Live input level drawn as a scrolling line: the microphone volume is sampled over time and
+ * the line swings further from the centre the louder you speak.
+ */
 export function Waveform() {
-  const barsRef = useRef<(HTMLDivElement | null)[]>([])
-  const rafRef = useRef<number>(0)
+  const pathRef = useRef<SVGPathElement | null>(null)
+  const history = useRef<number[]>(Array.from({ length: POINTS }, () => 0))
   const reduced = useReducedMotion()
 
   useEffect(() => {
+    const path = pathRef.current
+    if (!path) return
     if (reduced) {
-      // Static bars at mid-height when reduced motion is preferred
-      barsRef.current.forEach((bar) => {
-        if (!bar) return
-        bar.style.height = `${(MIN_HEIGHT + MAX_HEIGHT) / 2}px`
-        bar.style.opacity = '0.7'
-      })
+      path.setAttribute('d', `M0 ${MID} L${WIDTH} ${MID}`)
       return
     }
 
-    const animate = () => {
-      const volume = useAppStore.getState().audioVolume
-      barsRef.current.forEach((bar, i) => {
-        if (!bar) return
-        const offset = Math.sin(Date.now() / 200 + i * 0.9) * 0.15
-        const normalized = Math.max(0, Math.min(1, volume + offset))
-        const height = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * normalized
-        const opacity = Math.max(0.5, normalized)
-        bar.style.height = `${height}px`
-        bar.style.opacity = `${opacity}`
-      })
-      rafRef.current = requestAnimationFrame(animate)
+    let frame = 0
+    let last = 0
+    const animate = (now: number) => {
+      // About 24 samples per second keeps the line calm instead of jittery.
+      if (now - last >= 42) {
+        last = now
+        const volume = useAppStore.getState().audioVolume
+        history.current.push(Math.max(0, Math.min(1, volume)))
+        history.current.shift()
+        path.setAttribute('d', tracePath(history.current))
+      }
+      frame = requestAnimationFrame(animate)
     }
-
-    rafRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(rafRef.current)
+    frame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frame)
   }, [reduced])
 
   return (
-    <div className="flex items-center justify-center gap-[3px] h-4">
-      {Array.from({ length: BAR_COUNT }).map((_, i) => (
-        <div
-          key={i}
-          ref={(el) => {
-            barsRef.current[i] = el
-          }}
-          className="w-[2px] rounded-full bg-white/80"
-          style={{
-            height: `${MIN_HEIGHT}px`,
-            opacity: 0.5,
-            transition: 'height 75ms ease-out, opacity 75ms ease-out',
-          }}
-        />
-      ))}
-    </div>
+    <svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true">
+      <path
+        ref={pathRef}
+        d={`M0 ${MID} L${WIDTH} ${MID}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-white/85"
+      />
+    </svg>
   )
 }

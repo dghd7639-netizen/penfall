@@ -120,6 +120,23 @@ describe('Capsule flow states', () => {
     }
   })
 
+  it('shows the elapsed recording time and counts up', () => {
+    vi.useFakeTimers()
+    try {
+      useAppStore.setState({ pipelineState: 'recording' })
+      const { container } = render(<Capsule />)
+      expect(container.textContent).toContain('0:00')
+
+      act(() => {
+        vi.advanceTimersByTime(65_000)
+      })
+
+      expect(container.textContent).toContain('1:05')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('shows no progress fill while recording', () => {
     useAppStore.setState({ pipelineState: 'recording' })
     render(<Capsule />)

@@ -144,7 +144,7 @@ export function Capsule() {
       <motion.div
         layout
         transition={{ layout: { duration: 0.2, ease: [0.2, 0, 0, 1] } }}
-        className={`absolute left-3 rounded-full pointer-events-auto shrink-0 ${
+        className={`absolute left-3 rounded-[12px] pointer-events-auto shrink-0 ${
           capsuleState === 'error'
             ? 'jelly-capsule-error'
             : capsuleState === 'idle'

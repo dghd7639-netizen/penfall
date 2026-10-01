@@ -16,7 +16,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 describe('AppContextMeta', () => {
-  it('renders a fixed 16px app logo, safe label, time, and provider', () => {
+  it('renders a neutral category icon, safe label, time, and provider', () => {
     const { container } = render(
       <AppContextMeta
         iconKey="gmail"
@@ -27,10 +27,9 @@ describe('AppContextMeta', () => {
       />,
     )
 
-    const logo = container.querySelector('img')
-    expect(logo).not.toBeNull()
-    expect(logo).toHaveAttribute('width', '16')
-    expect(logo).toHaveAttribute('height', '16')
+    // No third-party logo is bundled, so even a well-known app gets the generic family icon.
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('svg')).not.toBeNull()
     expect(screen.getByText('Gmail')).toHaveClass('truncate')
     expect(screen.getByText('09:42')).toBeInTheDocument()
     expect(screen.getByText('Cloud')).toHaveClass('max-[419px]:hidden')

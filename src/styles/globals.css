@@ -354,10 +354,15 @@ body,
 }
 
 /* ─── Jelly Capsule — minimal white/grey gel orb ─── */
+:root {
+  /* The floating recorder is a rounded rectangle, not a full pill. */
+  --capsule-radius: 12px;
+}
+
 .jelly-capsule {
   position: relative;
   background: linear-gradient(160deg, #fafafa 0%, #f0f0f0 50%, #e8e8e8 100%);
-  border-radius: 9999px;
+  border-radius: var(--capsule-radius);
   border: none;
   box-shadow:
     inset 0 1px 4px rgba(255, 255, 255, 0.8),
@@ -402,7 +407,7 @@ body,
 .jelly-capsule-active {
   position: relative;
   background: rgba(22, 22, 24, 0.94);
-  border-radius: 9999px;
+  border-radius: var(--capsule-radius);
   border: none;
   box-shadow:
     inset 0 1px 4px rgba(255, 255, 255, 0.12),
@@ -437,7 +442,7 @@ body,
 .jelly-capsule-error {
   position: relative;
   background: linear-gradient(160deg, #666 0%, #555 50%, #444 100%);
-  border-radius: 9999px;
+  border-radius: var(--capsule-radius);
   border: none;
   box-shadow:
     inset 0 1px 4px rgba(255, 255, 255, 0.1),
