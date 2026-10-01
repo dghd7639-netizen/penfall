@@ -151,6 +151,19 @@ export interface CorrectionRule {
   enabled: boolean
 }
 
+/** How long one dictation took, as reported by the pipeline. */
+export interface DictationTiming {
+  sttMs: number
+  llmMs: number
+  /** Everything after transcription and polishing: inserting the text and saving history. */
+  outputMs: number
+  totalMs: number
+  recordingMs: number | null
+  at: number
+}
+
+export const MAX_RECENT_TIMINGS = 5
+
 export interface LearnedCorrection {
   id: number
   pattern: string
@@ -306,6 +319,10 @@ interface AppState {
   setCorrectionRules: (rules: CorrectionRule[]) => void
   learnedCorrections: LearnedCorrection[]
   setLearnedCorrections: (corrections: LearnedCorrection[]) => void
+
+  // Latency of the most recent dictations, newest first (this session only)
+  recentTimings: DictationTiming[]
+  addTiming: (timing: DictationTiming) => void
 
   // Onboarding
   onboardingCompleted: boolean
@@ -848,6 +865,12 @@ export const useAppStore = create<AppState>((set) => ({
   setCorrectionRules: (correctionRules) => set({ correctionRules }),
   learnedCorrections: [],
   setLearnedCorrections: (learnedCorrections) => set({ learnedCorrections }),
+
+  recentTimings: [],
+  addTiming: (timing) =>
+    set((state) => ({
+      recentTimings: [timing, ...state.recentTimings].slice(0, MAX_RECENT_TIMINGS),
+    })),
 
   onboardingCompleted: false,
   setOnboardingCompleted: (onboardingCompleted) => set({ onboardingCompleted }),

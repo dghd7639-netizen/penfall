@@ -108,6 +108,21 @@ export function useTauriEvents() {
       refreshCorrectionRules()
     })
     addListener<null>('dictionary:changed', refreshCorrectionRules)
+    addListener<{
+      stt_ms: number
+      llm_ms: number
+      total_ms: number
+      recording_ms: number | null
+    }>('pipeline:timing', (timing) => {
+      useAppStore.getState().addTiming({
+        sttMs: timing.stt_ms,
+        llmMs: timing.llm_ms,
+        outputMs: Math.max(0, timing.total_ms - timing.stt_ms - timing.llm_ms),
+        totalMs: timing.total_ms,
+        recordingMs: timing.recording_ms,
+        at: Date.now(),
+      })
+    })
     addListener<PipelineState>('pipeline:state', (state) => {
       setPipelineState(state)
       if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
