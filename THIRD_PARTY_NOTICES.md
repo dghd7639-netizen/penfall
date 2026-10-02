@@ -1,6 +1,43 @@
 # Third-Party Notices
 
-OpenTypeless includes the following components for managed-cloud Ogg/Opus audio. The Opus codec is built statically into the desktop application; end users do not need to install a system codec. Building the desktop application requires Rust 1.82 or newer and CMake 3.16 or newer.
+Voice Input MVP includes the following components for managed-cloud Ogg/Opus audio. The Opus codec is built statically into the desktop application; end users do not need to install a system codec. Building the desktop application requires Rust 1.82 or newer and CMake 3.16 or newer.
+
+## Upstream application: OpenTypeless (MIT)
+
+This application is a fork of OpenTypeless by OpenTypeless Contributors.
+Copyright (c) 2025 OpenTypeless Contributors. The full MIT license and upstream
+copyright notice are retained in `LICENSE`. Both files are included in the Tauri
+bundle under `licenses/`.
+
+## Visual and audio assets
+
+- The application logo, tray icon and recording cue WAVs are original project assets.
+  `scripts/generate-cues.py` synthesizes the two cues without external samples.
+- Third-party application logos are not bundled; neutral category icons use Lucide.
+- No font files are bundled or downloaded. CSS names locally installed system/fallback fonts.
+- `docs/images/`, `README*.md`, `CHANGELOG.md` and dated upstream planning documents
+  remain upstream reference/history; their images are not bundled as application resources.
+
+## lucide-react 0.460.0 (ISC)
+
+The neutral UI/category icons come from the installed `lucide-react` package.
+Its license text follows verbatim:
+
+ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ## opusic-c 1.6.1
 

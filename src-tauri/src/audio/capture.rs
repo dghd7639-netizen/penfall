@@ -4,13 +4,70 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
-/// Input RMS above this counts as voice. Measured on the user's USB mic: room
-/// noise and key clicks stay below it except for a single ~11 ms buffer, while
-/// even a lone "嗯" stays above it for about 400 ms.
-const VOICE_RMS: f32 = 0.01;
-/// Less voice than this means nobody spoke; Qwen3 ASR still transcribes such
-/// silence as "嗯", so the transcript is discarded.
+/// Reject brief impulses: Qwen3 ASR can transcribe silence/key clicks as "嗯".
+/// Only runs above the adaptive floor lasting at least this long count as voice.
 const MIN_VOICE_US: u64 = 50_000;
+/// A few 16-bit PCM steps, rather than a threshold tuned to one microphone.
+const MIN_VOICE_RMS: f32 = 0.0001;
+
+#[derive(Clone, Copy, Default)]
+struct VoiceActivity {
+    noise_rms: Option<f32>,
+    run_us: u64,
+    voiced_us: u64,
+}
+
+/// Pure, allocation-free energy gate shared by dictation and Ask capture.
+/// Prime the floor from real input, follow quiet samples quickly and rising
+/// background slowly; above-floor speech/impulses must not raise the floor.
+// ponytail: RMS contrast cannot distinguish sustained noise from speech or an
+// entirely steady utterance present at startup; use spectral VAD if that matters.
+fn measure_voice(
+    mut activity: VoiceActivity,
+    samples: &[f32],
+    sample_rate: u32,
+    channels: u16,
+    muted: bool,
+) -> VoiceActivity {
+    if muted || samples.is_empty() || sample_rate == 0 || channels == 0 {
+        activity.run_us = 0;
+        return activity;
+    }
+    // Keep an impulse short even when CPAL delivers a large callback buffer.
+    let window_samples = (sample_rate / 100).max(1) as usize * usize::from(channels);
+    for window in samples.chunks(window_samples) {
+        let rms = (window.iter().map(|s| s * s).sum::<f32>() / window.len() as f32).sqrt();
+        let frames = window.len() as u64 / u64::from(channels);
+        let duration_us = frames * 1_000_000 / u64::from(sample_rate);
+        if !rms.is_finite() || duration_us == 0 {
+            activity.run_us = 0;
+            continue;
+        }
+        let floor = *activity.noise_rms.get_or_insert(rms);
+        if rms > (floor * 3.0).max(MIN_VOICE_RMS) {
+            let previous_run = activity.run_us;
+            activity.run_us = activity.run_us.saturating_add(duration_us);
+            if activity.run_us >= MIN_VOICE_US {
+                // Credit the onset once confirmed, then the rest of this run.
+                let confirmed_us = if previous_run < MIN_VOICE_US {
+                    activity.run_us
+                } else {
+                    duration_us
+                };
+                activity.voiced_us = activity.voiced_us.saturating_add(confirmed_us);
+            }
+        } else {
+            activity.run_us = 0;
+            let rise = (duration_us as f32 / 250_000.0).min(1.0);
+            activity.noise_rms = Some(if rms < floor {
+                rms
+            } else {
+                floor + (rms - floor) * rise
+            });
+        }
+    }
+    activity
+}
 
 struct CaptureStartupNotifier {
     sender: Option<
@@ -258,12 +315,14 @@ fn run_capture(
     let samples_per_chunk = (target_rate * config.chunk_duration_ms / 1000) as usize;
     let buffer: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::with_capacity(samples_per_chunk)));
     let callback_voiced_us = voiced_us.clone();
+    let mut voice_activity = VoiceActivity::default();
 
     let stream = device.build_input_stream(
         &stream_config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            let muted = super::cue::input_muted();
             let silence;
-            let data = if super::cue::input_muted() {
+            let data = if muted {
                 silence = vec![0.0f32; data.len()];
                 silence.as_slice()
             } else {
@@ -271,17 +330,22 @@ fn run_capture(
             };
 
             // Calculate RMS volume from raw data
-            let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
+            let rms = if data.is_empty() {
+                0.0
+            } else {
+                (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt()
+            };
             if let Ok(mut v) = volume.lock() {
                 *v = rms.min(1.0);
             }
-            if rms > VOICE_RMS {
-                let frames = data.len() as u64 / u64::from(device_channels.max(1));
-                callback_voiced_us.fetch_add(
-                    frames * 1_000_000 / u64::from(device_sample_rate.max(1)),
-                    Ordering::Relaxed,
-                );
-            }
+            voice_activity = measure_voice(
+                voice_activity,
+                data,
+                device_sample_rate,
+                device_channels,
+                muted,
+            );
+            callback_voiced_us.store(voice_activity.voiced_us, Ordering::Relaxed);
 
             // Convert to mono if needed
             let mono = if device_channels > target_channels {
@@ -349,6 +413,97 @@ fn run_capture(
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    fn level(activity: VoiceActivity, rms: f32, ms: usize) -> VoiceActivity {
+        measure_voice(activity, &vec![rms; 16 * ms], 16_000, 1, false)
+    }
+
+    #[test]
+    fn adaptive_voice_accepts_quiet_speech_across_microphone_gains() {
+        for gain in [0.25, 1.0, 4.0, 20.0] {
+            let background = level(VoiceActivity::default(), 0.0002 * gain, 500);
+            assert!(!heard_voice(background.voiced_us));
+            let speech = level(background, 0.003 * gain, 200);
+            assert!(heard_voice(speech.voiced_us), "gain {gain}");
+        }
+    }
+
+    #[test]
+    fn adaptive_voice_rejects_silence_stationary_noise_and_repeated_clicks() {
+        for rms in [0.0, 0.0002, 0.005, 0.02] {
+            let noise = level(VoiceActivity::default(), rms, 1000);
+            assert!(!heard_voice(noise.voiced_us), "noise {rms}");
+        }
+        let mut activity = level(VoiceActivity::default(), 0.0002, 100);
+        for _ in 0..100 {
+            activity = level(activity, 0.2, 10);
+            activity = level(activity, 0.0002, 60);
+        }
+        assert_eq!(activity.voiced_us, 0);
+    }
+
+    #[test]
+    fn adaptive_voice_follows_changing_noise_without_learning_speech_as_noise() {
+        let mut activity = VoiceActivity::default();
+        for i in 0..200 {
+            activity = level(activity, 0.0002 * (1.0 + i as f32 * 0.005), 10);
+        }
+        assert!(!heard_voice(activity.voiced_us));
+        let higher_floor = activity.noise_rms.unwrap();
+        assert!(higher_floor > 0.0003);
+        activity = level(activity, 0.0001, 100);
+        assert!(activity.noise_rms.unwrap() < higher_floor);
+        let floor = activity.noise_rms;
+        activity = level(activity, 0.002, 1000);
+        assert!(heard_voice(activity.voiced_us));
+        assert_eq!(activity.noise_rms, floor);
+    }
+
+    #[test]
+    fn adaptive_voice_preserves_the_floor_across_muted_cues_and_invalid_input() {
+        let background = level(VoiceActivity::default(), 0.002, 100);
+        let muted = measure_voice(background, &vec![0.0; 4800], 16_000, 1, true);
+        assert_eq!(muted.noise_rms, background.noise_rms);
+        assert!(!heard_voice(level(muted, 0.002, 200).voiced_us));
+        for bad in [f32::NAN, f32::INFINITY] {
+            let invalid = level(background, bad, 10);
+            assert_eq!(invalid.noise_rms, background.noise_rms);
+            assert_eq!(invalid.voiced_us, 0);
+        }
+        assert_eq!(measure_voice(background, &[], 0, 0, false).voiced_us, 0);
+    }
+
+    #[test]
+    fn adaptive_voice_handles_onset_and_requires_a_sustained_signal() {
+        let onset = level(VoiceActivity::default(), 0.0002, 10);
+        assert!(!heard_voice(level(onset, 0.003, 49).voiced_us));
+        assert!(heard_voice(level(onset, 0.003, 50).voiced_us));
+        let spike = level(VoiceActivity::default(), 0.5, 10);
+        let recovered = level(spike, 0.0002, 100);
+        assert!(heard_voice(level(recovered, 0.003, 100).voiced_us));
+    }
+
+    #[test]
+    fn adaptive_voice_duration_uses_frames_not_samples_and_ignores_buffer_size() {
+        for (rate, channels) in [(16_000, 1), (44_100, 2), (48_000, 2)] {
+            let count = rate as usize / 10 * usize::from(channels);
+            let background = measure_voice(
+                VoiceActivity::default(),
+                &vec![0.0002; count],
+                rate,
+                channels,
+                false,
+            );
+            let speech = measure_voice(background, &vec![0.003; count], rate, channels, false);
+            assert!(heard_voice(speech.voiced_us));
+            assert!(speech.voiced_us.abs_diff(100_000) < 100);
+            let mut click = vec![0.0002; count];
+            click[..count / 10].fill(0.2);
+            assert!(!heard_voice(
+                measure_voice(background, &click, rate, channels, false).voiced_us
+            ));
+        }
+    }
 
     #[test]
     fn capture_does_not_report_recording_before_the_backend_is_ready() {

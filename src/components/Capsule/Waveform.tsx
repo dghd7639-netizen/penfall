@@ -43,7 +43,10 @@ export function Waveform() {
       if (now - last >= 42) {
         last = now
         const volume = useAppStore.getState().audioVolume
-        history.current.push(Math.max(0, Math.min(1, volume)))
+        // Raw RMS is usually well below 0.1; lift quiet input into a visible swing.
+        history.current.push(
+          Number.isFinite(volume) ? Math.min(1, Math.sqrt(Math.max(0, volume) * 8)) : 0,
+        )
         history.current.shift()
         path.setAttribute('d', tracePath(history.current))
       }
@@ -54,7 +57,14 @@ export function Waveform() {
   }, [reduced])
 
   return (
-    <svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true">
+    <svg
+      width={WIDTH}
+      height={HEIGHT}
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      preserveAspectRatio="none"
+      className="block w-full min-w-0"
+      aria-hidden="true"
+    >
       <path
         ref={pathRef}
         d={`M0 ${MID} L${WIDTH} ${MID}`}
@@ -63,6 +73,7 @@ export function Waveform() {
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
         className="text-white/85"
       />
     </svg>

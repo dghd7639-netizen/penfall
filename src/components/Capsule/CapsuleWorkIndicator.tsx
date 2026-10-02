@@ -13,8 +13,8 @@ export function CapsuleWorkIndicator({ tone = 'steady' }: CapsuleWorkIndicatorPr
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="block w-[4px] h-[4px] rounded-full bg-white/80"
-          animate={reduced ? undefined : { opacity: [0.35, 1, 0.35], scale: [0.86, 1.08, 0.86] }}
+          className="block w-[4px] h-[4px] rounded-[1px] bg-white/80"
+          animate={reduced ? undefined : { opacity: [0.35, 1, 0.35] }}
           transition={{
             repeat: Infinity,
             duration: tone === 'thinking' ? 1.05 : 0.95,

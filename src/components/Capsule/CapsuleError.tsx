@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
+import { AlertCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
 
 export function CapsuleError() {
   const { t } = useTranslation()
+  const reduced = useReducedMotion()
   const pipelineError = useAppStore((s) => s.pipelineError)
   const setPipelineError = useAppStore((s) => s.setPipelineError)
   const resetRecording = useAppStore((s) => s.resetRecording)
@@ -26,13 +28,12 @@ export function CapsuleError() {
   return (
     <motion.div
       className="relative z-10 flex items-center gap-2 h-9 px-3"
-      initial={{ opacity: 0, x: -4 }}
+      initial={reduced ? false : { opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
     >
-      {/* White dot */}
-      <motion.div className="w-2 h-2 rounded-full bg-white/80 flex-shrink-0" />
-      <p className="text-[11px] text-white truncate flex-1">
+      <AlertCircle size={14} className="shrink-0 text-error" aria-hidden="true" />
+      <p className="min-w-0 text-[11px] text-white truncate flex-1">
         {pipelineError || t('capsule.errors.unknown')}
       </p>
     </motion.div>

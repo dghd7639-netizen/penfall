@@ -188,41 +188,6 @@ body,
     inset -2px 0 8px rgba(0, 0, 0, 0.2);
 }
 
-.dark .jelly-capsule {
-  background: linear-gradient(160deg, #2e2e2e 0%, #262626 50%, #1e1e1e 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, 0.04),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
-    0 4px 16px rgba(0, 0, 0, 0.3);
-}
-.dark .jelly-capsule::before {
-  background: radial-gradient(
-    ellipse at 35% 25%,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.01) 40%,
-    transparent 70%
-  );
-}
-.dark .jelly-capsule::after {
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
-}
-
-.dark .jelly-capsule-error {
-  background: linear-gradient(160deg, #4a2020 0%, #3a1818 50%, #2e1212 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, 0.04),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
-    0 4px 16px rgba(0, 0, 0, 0.3);
-}
-.dark .jelly-capsule-error::before {
-  background: radial-gradient(
-    ellipse at 40% 30%,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.01) 40%,
-    transparent 70%
-  );
-}
-
 .dark .capsule-shimmer::after {
   background: linear-gradient(
     90deg,
@@ -353,132 +318,61 @@ body,
   color: var(--color-on-accent) !important;
 }
 
-/* ─── Jelly Capsule — minimal white/grey gel orb ─── */
+/* ─── Floating recorder: flat, rounded rectangles in both themes ─── */
 :root {
-  /* The floating recorder is a rounded rectangle, not a full pill. */
   --capsule-radius: 12px;
 }
 
-.jelly-capsule {
-  position: relative;
-  background: linear-gradient(160deg, #fafafa 0%, #f0f0f0 50%, #e8e8e8 100%);
-  border-radius: var(--capsule-radius);
-  border: none;
-  box-shadow:
-    inset 0 1px 4px rgba(255, 255, 255, 0.8),
-    inset 0 -1px 3px rgba(0, 0, 0, 0.05),
-    0 2px 8px rgba(0, 0, 0, 0.08),
-    0 4px 16px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-/* Capsule specular highlight — subtle top-left reflection */
-.jelly-capsule::before {
-  content: '';
-  position: absolute;
-  top: 8%;
-  left: 12%;
-  width: 55%;
-  height: 40%;
-  background: radial-gradient(
-    ellipse at 40% 30%,
-    rgba(255, 255, 255, 0.15) 0%,
-    rgba(255, 255, 255, 0.05) 40%,
-    transparent 70%
-  );
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-}
-/* Capsule bottom depth gradient */
-.jelly-capsule::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.08), transparent);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ─── Jelly Capsule — recording active (dark grey/black gel) ─── */
-.jelly-capsule-active {
-  position: relative;
-  background: rgba(22, 22, 24, 0.94);
-  border-radius: var(--capsule-radius);
-  border: none;
-  box-shadow:
-    inset 0 1px 4px rgba(255, 255, 255, 0.12),
-    inset 0 -1px 3px rgba(0, 0, 0, 0.2),
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    0 4px 16px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-}
-.jelly-capsule-active::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-}
-.jelly-capsule-active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.15), transparent);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ─── Jelly Capsule — error state (mid-grey gel) ─── */
+.jelly-capsule,
+.jelly-capsule-active,
 .jelly-capsule-error {
   position: relative;
-  background: linear-gradient(160deg, #666 0%, #555 50%, #444 100%);
   border-radius: var(--capsule-radius);
-  border: none;
-  box-shadow:
-    inset 0 1px 4px rgba(255, 255, 255, 0.1),
-    inset 0 -1px 3px rgba(0, 0, 0, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 }
-.jelly-capsule-error::before {
-  content: '';
-  position: absolute;
-  top: 8%;
-  left: 12%;
-  width: 55%;
-  height: 40%;
-  background: radial-gradient(
-    ellipse at 40% 30%,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.02) 40%,
-    transparent 70%
-  );
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
+
+.jelly-capsule {
+  background: var(--color-bg-secondary);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    0 2px 8px rgba(0, 0, 0, 0.16);
 }
-.jelly-capsule-error::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.12), transparent);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 1;
+
+.jelly-capsule-active,
+.jelly-capsule-error {
+  background: #171717;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.jelly-capsule-error {
+  box-shadow:
+    inset 0 0 0 1px var(--color-error),
+    0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.capsule-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+}
+.capsule-cancel:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.25);
+}
+.capsule-cancel:focus-visible {
+  outline: 2px solid white;
+  outline-offset: -2px;
 }
 
 /* ─── Jelly Surface Flat — no border-radius, for sidebars ─── */

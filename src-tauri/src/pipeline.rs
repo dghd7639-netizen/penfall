@@ -963,14 +963,14 @@ impl PipelineHandle {
         // Update tray tooltip + menu to reflect pipeline state
         if let Some(tray_handle) = self.app_handle.try_state::<crate::TrayHandle>() {
             let tooltip = match new_state {
-                PipelineState::Preparing => "OpenTypeless - Preparing...",
-                PipelineState::Recording => "OpenTypeless - Recording...",
-                PipelineState::Transcribing => "OpenTypeless - Transcribing...",
-                PipelineState::Polishing => "OpenTypeless - Polishing...",
-                PipelineState::Outputting => "OpenTypeless - Outputting...",
-                PipelineState::AskRecording => "OpenTypeless - Ask...",
-                PipelineState::AskThinking => "OpenTypeless - Answering...",
-                PipelineState::Idle => "OpenTypeless",
+                PipelineState::Preparing => "Voice Input MVP - Preparing...",
+                PipelineState::Recording => "Voice Input MVP - Recording...",
+                PipelineState::Transcribing => "Voice Input MVP - Transcribing...",
+                PipelineState::Polishing => "Voice Input MVP - Polishing...",
+                PipelineState::Outputting => "Voice Input MVP - Outputting...",
+                PipelineState::AskRecording => "Voice Input MVP - Ask...",
+                PipelineState::AskThinking => "Voice Input MVP - Answering...",
+                PipelineState::Idle => "Voice Input MVP",
             };
             if let Ok(t) = tray_handle.tray.lock() {
                 let _ = t.set_tooltip(Some(tooltip));
@@ -1802,7 +1802,7 @@ impl PipelineHandle {
         // Update tray for transcribing state
         if let Some(tray_handle) = self.app_handle.try_state::<crate::TrayHandle>() {
             if let Ok(t) = tray_handle.tray.lock() {
-                let _ = t.set_tooltip(Some("OpenTypeless - Transcribing..."));
+                let _ = t.set_tooltip(Some("Voice Input MVP - Transcribing..."));
             }
         }
         crate::refresh_tray(&self.app_handle);

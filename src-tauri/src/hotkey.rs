@@ -1244,7 +1244,7 @@ mod tests {
     }
 
     #[test]
-    fn native_typeless_mode_shortcuts_use_native_adapter_plan() {
+    fn native_mode_shortcuts_use_native_adapter_plan() {
         let dictation = storage::ShortcutBinding::from_hotkey("Fn").unwrap();
         let ask = storage::ShortcutBinding::from_hotkey("Fn+Space");
         let translate = storage::ShortcutBinding::from_hotkey("Fn+LeftShift");

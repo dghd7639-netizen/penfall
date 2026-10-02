@@ -241,7 +241,7 @@ fn build_ask_window(handle: &tauri::AppHandle) -> tauri::Result<tauri::WebviewWi
         "ask",
         tauri::WebviewUrl::App("index.html#ask".into()),
     )
-    .title("OpenTypeless Ask")
+    .title("Voice Input MVP Ask")
     .inner_size(400.0, 220.0)
     .min_inner_size(360.0, 180.0)
     .resizable(false)

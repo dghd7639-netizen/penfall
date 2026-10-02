@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, X } from 'lucide-react'
 import { abortRecording } from '../../lib/tauri'
@@ -7,27 +7,7 @@ import { useRecording } from '../../hooks/useRecording'
 import { useAppStore } from '../../stores/appStore'
 import { Waveform } from './Waveform'
 import { TranslateTargetChip } from './TranslateTargetChip'
-
-function formatElapsed(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-/** Elapsed recording time, so a long dictation never runs on unnoticed. */
-function ElapsedTimer() {
-  const [seconds, setSeconds] = useState(0)
-  useEffect(() => {
-    const startedAt = Date.now()
-    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - startedAt) / 1000)), 500)
-    return () => clearInterval(timer)
-  }, [])
-  return (
-    <span className="shrink-0 w-[26px] text-[11px] leading-none text-white/70 tabular-nums text-center select-none">
-      {formatElapsed(seconds)}
-    </span>
-  )
-}
+import { DurationTimer } from './DurationTimer'
 
 export function CapsuleRecording() {
   const { t } = useTranslation()
@@ -67,7 +47,7 @@ export function CapsuleRecording() {
       >
         <X size={16} />
       </button>
-      <ElapsedTimer />
+      <DurationTimer />
       <div
         className="flex-1 min-w-0 flex justify-center cursor-grab active:cursor-grabbing"
         aria-hidden="true"

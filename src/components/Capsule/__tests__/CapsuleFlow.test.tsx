@@ -125,13 +125,41 @@ describe('Capsule flow states', () => {
     try {
       useAppStore.setState({ pipelineState: 'recording' })
       const { container } = render(<Capsule />)
-      expect(container.textContent).toContain('0:00')
+      expect(container.textContent).toContain('00:00')
 
       act(() => {
         vi.advanceTimersByTime(65_000)
       })
 
-      expect(container.textContent).toContain('1:05')
+      expect(container.textContent).toContain('01:05')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses capture time when preparing becomes recording and keeps room for ten minutes', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      useAppStore.setState({ pipelineState: 'preparing' })
+      render(<Capsule />)
+      act(() => {
+        useAppStore.setState({
+          pipelineState: 'recording',
+          recordingDeadline: {
+            sessionId: 1,
+            recordingKind: 'dictation',
+            startedAtUnixMs: 990_000,
+            deadlineAtUnixMs: 1_590_000,
+            effectiveMaxSeconds: 600,
+          },
+        })
+      })
+      expect(screen.getByText('00:10')).toBeInTheDocument()
+      act(() => {
+        vi.advanceTimersByTime(590_000)
+      })
+      expect(screen.getByText('10:00')).toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }

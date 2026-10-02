@@ -23,7 +23,7 @@ export function DurationTimer({ recordingKind = 'dictation' }: { recordingKind?:
   const ss = String(seconds % 60).padStart(2, '0')
 
   return (
-    <span className="text-[11px] font-mono text-white/80 tabular-nums">
+    <span className="shrink-0 w-[34px] whitespace-nowrap text-center leading-none text-[11px] font-mono text-white/80 tabular-nums">
       {mm}:{ss}
     </span>
   )
