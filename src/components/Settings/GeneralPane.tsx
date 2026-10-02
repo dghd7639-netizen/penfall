@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Play } from 'lucide-react'
 import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode, ShortcutBinding } from '../../stores/appStore'
 import {
   captureMouseButton,
+  previewCueSound,
   getPlatformCapabilities,
   getHotkeyStatus,
   resumeHotkey,
 } from '../../lib/tauri'
 import type { HotkeyStatus } from '../../lib/tauri'
+import { CUE_SOUNDS } from '../../lib/constants'
 import { SegmentedControl } from './shared/SegmentedControl'
 import { Toggle } from './shared/Toggle'
 import { ShortcutBindingList } from './ShortcutBindingList'
@@ -171,6 +173,8 @@ export function GeneralPane() {
 
       <MouseButtonSection />
 
+      <CueSoundSection />
+
       <Section title={t('settings.outputMode')}>
         <SegmentedControl
           options={[
@@ -248,6 +252,60 @@ export function GeneralPane() {
         )}
       </div>
     </div>
+  )
+}
+
+export function CueSoundSection() {
+  const config = useAppStore((s) => s.config)
+  const updateConfig = useAppStore((s) => s.updateConfig)
+  const selected = CUE_SOUNDS.some((sound) => sound.id === config.cue_sound)
+    ? config.cue_sound
+    : 'water-drop'
+
+  return (
+    <Section title="提示音">
+      <div role="radiogroup" aria-label="提示音" className="space-y-1.5">
+        {CUE_SOUNDS.map((sound) => (
+          <div
+            key={sound.id}
+            className={`flex items-center gap-3 rounded-[10px] border px-3 py-2 text-[13px] ${
+              selected === sound.id ? 'border-border-focus bg-bg-secondary' : 'border-border'
+            }`}
+          >
+            <label className="flex flex-1 min-w-0 items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="cue-sound"
+                value={sound.id}
+                checked={selected === sound.id}
+                onChange={() => {
+                  updateConfig({ cue_sound: sound.id })
+                  if (sound.id !== 'off') void previewCueSound(sound.id).catch(() => {})
+                }}
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">{sound.label}</span>
+                <span className="block text-[12px] text-text-tertiary">{sound.description}</span>
+              </span>
+            </label>
+            {sound.id !== 'off' && (
+              <button
+                type="button"
+                aria-label={`试听${sound.label}`}
+                title={`试听${sound.label}`}
+                onClick={() => void previewCueSound(sound.id).catch(() => {})}
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full border border-border bg-transparent text-text-secondary cursor-pointer hover:border-border-focus"
+              >
+                <Play size={12} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[12px] text-text-tertiary mt-2">
+        开始和结束录音时各播一声。点选即试听，保存后生效；选「关闭」则不再播放。
+      </p>
+    </Section>
   )
 }
 

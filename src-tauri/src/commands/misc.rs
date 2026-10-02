@@ -889,6 +889,12 @@ pub async fn capture_mouse_button() -> Result<u8, String> {
     .map_err(|e| e.to_string())?
 }
 
+/// Plays a cue preset (start then end) so it can be auditioned in settings.
+#[tauri::command]
+pub fn preview_cue_sound(preset: String) {
+    crate::audio::cue::preview(&preset);
+}
+
 #[tauri::command]
 pub fn refresh_tray_labels(app: tauri::AppHandle) -> Result<(), String> {
     tray::refresh_tray(&app);

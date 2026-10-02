@@ -644,6 +644,10 @@ export async function saveOnboardingCompleted(): Promise<void> {
   }
 }
 
+export function previewCueSound(preset: string): Promise<void> {
+  return invoke('preview_cue_sound', { preset })
+}
+
 export function captureMouseButton(): Promise<number> {
   return invoke('capture_mouse_button')
 }

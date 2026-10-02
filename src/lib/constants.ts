@@ -85,6 +85,15 @@ export function isActiveCloudPlan(plan: string): plan is (typeof ACTIVE_CLOUD_PL
   return ACTIVE_CLOUD_PLANS.includes(plan as (typeof ACTIVE_CLOUD_PLANS)[number])
 }
 
+/** Recording start/end cue sounds; every one is synthesized in-house (scripts/generate-cues*.py). */
+export const CUE_SOUNDS: readonly { id: string; label: string; description: string }[] = [
+  { id: 'water-drop', label: '水滴', description: '清亮的水滴声，开始上扬、结束下落（默认）' },
+  { id: 'wood-soft', label: '木块·柔', description: '低而圆润的木块声，带一点余韵' },
+  { id: 'warm-low', label: '低沉暖音', description: '低音区的长音，起音很慢，最柔和' },
+  { id: 'gentle-drop', label: '轻水滴', description: '低位的圆润水滴，比默认的更轻' },
+  { id: 'off', label: '关闭', description: '不播放提示音' },
+]
+
 export const CUSTOM_WHISPER_PROVIDER = 'custom-whisper' as const
 export const APPLE_SPEECH_PROVIDER = 'apple-speech' as const
 

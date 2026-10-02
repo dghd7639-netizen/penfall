@@ -72,7 +72,7 @@ function LearnedNotice({ correction }: { correction: LearnedCorrection }) {
         onPointerUp={stopPointerPropagation}
         onClick={(e) => void handleUndo(e)}
         disabled={busy}
-        className="shrink-0 h-7 px-2.5 rounded-[8px] text-[12px] text-white bg-white/15 hover:bg-white/25 border-none cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
+        className="shrink-0 h-7 px-2.5 rounded-full text-[12px] text-white bg-white/15 hover:bg-white/25 border-none cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
       >
         {t('capsule.undoLearnedCorrection')}
       </button>

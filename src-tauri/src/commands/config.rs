@@ -287,6 +287,7 @@ pub async fn update_config(
     }
 
     update_runtime_caches(&cache, &ask_cache, &role_cache, &close_tray_cache, &config);
+    crate::audio::cue::set_preset(&config.cue_sound);
     emit_config_patch(&app, &patch);
     if patch.get("ui_language").is_some() || patch.get("capsule_auto_hide").is_some() {
         crate::refresh_tray(&app);

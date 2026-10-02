@@ -26,7 +26,7 @@ export function CapsuleProcessing() {
   }
 
   return (
-    <motion.div className="relative z-10 flex items-center gap-2 h-9 pl-3 pr-1">
+    <motion.div className="relative z-10 flex items-center gap-2 h-9 px-3">
       <CapsuleWorkIndicator tone="steady" />
       <p className="text-[11px] text-white leading-snug truncate flex-1 min-w-0">
         {displayText}
@@ -41,7 +41,7 @@ export function CapsuleProcessing() {
         onPointerUp={stopPointerPropagation}
         onClick={handleCancel}
         aria-label={t('capsule.cancelProcessing')}
-        className="capsule-cancel"
+        className="flex-shrink-0 p-1 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors bg-transparent border-none cursor-pointer"
       >
         <X size={12} />
       </button>

@@ -262,6 +262,8 @@ export interface AppConfig {
   capsule_auto_hide: boolean
   /** Extra mouse button (2 middle, 3 back, 4 forward, ...) that starts/stops dictation; 0 = off. */
   dictation_mouse_button: number
+  /** Recording cue sounds: 'water-drop' | 'wood-soft' | 'warm-low' | 'gentle-drop' | 'off'. */
+  cue_sound: string
 }
 
 export type TestStatus = 'idle' | 'testing' | 'success' | 'error'
@@ -819,6 +821,7 @@ const defaultConfig: AppConfig = {
   ui_language: 'zh',
   capsule_auto_hide: true,
   dictation_mouse_button: 0,
+  cue_sound: 'water-drop',
 }
 
 export const useAppStore = create<AppState>((set) => ({

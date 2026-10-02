@@ -1,6 +1,12 @@
 # Sound sources
 
-The recording cues are original: `src-tauri/sounds/record-start.wav` and `record-end.wav` are
+Four selectable cue pairs ship with the app (Settings → General → Cue sound, or off); all are
+original, synthesized by the scripts below: `water-drop` (the default, `record-start/end.wav`,
+from `scripts/generate-cues.py`) and `wood-soft`, `warm-low`, `gentle-drop`
+(`wood-soft-*`, `warm-low-*`, `gentle-drop-*`, from `scripts/generate-cue-candidates.py`, which
+also writes copies to `scripts/cue-candidates/`). The config value is `cue_sound`.
+
+The default cue is original: `src-tauri/sounds/record-start.wav` and `record-end.wav` are
 generated from scratch by `scripts/generate-cues.py` (plain Python, no third-party audio or
 samples). Re-run the script to regenerate them or to change the sound.
 

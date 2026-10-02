@@ -978,6 +978,7 @@ pub fn run() {
             let mut initial_config =
                 tauri::async_runtime::block_on(config_manager.load()).unwrap_or_default();
             sync_auto_start_preference(&app_handle, &config_manager, &mut initial_config);
+            audio::cue::set_preset(&initial_config.cue_sound);
             app.manage(config_manager);
             app.manage(history_store);
             app.manage(dictionary_store);
@@ -1308,6 +1309,7 @@ pub fn run() {
             commands::misc::resume_hotkey,
             commands::misc::refresh_tray_labels,
             commands::misc::capture_mouse_button,
+            commands::misc::preview_cue_sound,
             commands::misc::get_platform_capabilities,
             commands::misc::get_hotkey_registration_error,
             commands::misc::get_hotkey_status,

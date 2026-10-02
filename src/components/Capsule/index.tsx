@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAppStore } from '../../stores/appStore'
 import { useCapsuleResize } from '../../hooks/useCapsuleResize'
 import { stopAskFlow } from '../../lib/tauri'
@@ -51,7 +51,6 @@ function getCapsuleShellSize(capsuleState: string) {
 }
 
 export function Capsule() {
-  const reduced = useReducedMotion()
   const pipelineState = useAppStore((s) => s.pipelineState)
   const pipelineError = useAppStore((s) => s.pipelineError)
   const contextMenuOpen = useAppStore((s) => s.contextMenuOpen)
@@ -141,15 +140,15 @@ export function Capsule() {
       style={{ background: 'transparent' }}
       onContextMenu={handleContextMenu}
     >
-      {/* Persistent rounded-rectangle recorder shell */}
+      {/* Persistent outer shell — jelly capsule */}
       <motion.div
-        layout={!reduced}
-        transition={{ layout: { duration: reduced ? 0 : 0.2, ease: [0.2, 0, 0, 1] } }}
-        className={`absolute left-3 rounded-[12px] pointer-events-auto shrink-0 ${
+        layout
+        transition={{ layout: { duration: 0.2, ease: [0.2, 0, 0, 1] } }}
+        className={`absolute left-3 rounded-full pointer-events-auto shrink-0 ${
           capsuleState === 'error'
             ? 'jelly-capsule-error'
             : capsuleState === 'idle'
-              ? 'jelly-capsule text-text-primary'
+              ? 'jelly-capsule text-neutral-700'
               : 'jelly-capsule-active text-white'
         }`}
         style={capsuleShellSize}
@@ -164,10 +163,10 @@ export function Capsule() {
           <motion.div
             key={capsuleState}
             className="absolute inset-0"
-            initial={reduced ? false : { opacity: 0, filter: 'blur(2px)' }}
+            initial={{ opacity: 0, filter: 'blur(2px)' }}
             animate={{ opacity: 1, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, filter: reduced ? 'blur(0px)' : 'blur(2px)' }}
-            transition={{ duration: reduced ? 0 : 0.12, ease: [0.2, 0, 0, 1] }}
+            exit={{ opacity: 0, filter: 'blur(2px)' }}
+            transition={{ duration: 0.12, ease: [0.2, 0, 0, 1] }}
           >
             {capsuleState === 'idle' && <CapsuleIdle />}
             {capsuleState === 'recording' && <CapsuleRecording />}

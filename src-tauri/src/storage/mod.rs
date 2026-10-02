@@ -383,6 +383,8 @@ pub struct AppConfig {
     pub capsule_auto_hide: bool,
     /// Extra mouse button (2 middle, 3 back, 4 forward, ...) that starts and stops dictation; 0 = off.
     pub dictation_mouse_button: u8,
+    /// Recording cue sounds: `water-drop`, `wood-soft`, `warm-low`, `gentle-drop` or `off`.
+    pub cue_sound: String,
 }
 
 impl Default for AppConfig {
@@ -442,6 +444,7 @@ impl Default for AppConfig {
             ui_language: "en".to_string(),
             capsule_auto_hide: false,
             dictation_mouse_button: 0,
+            cue_sound: crate::audio::cue::CuePreset::DEFAULT_ID.to_string(),
         }
     }
 }
@@ -581,6 +584,9 @@ impl AppConfig {
 
     pub(crate) fn normalize_values(&mut self) {
         self.stt_aliyun_workspace_id = self.stt_aliyun_workspace_id.trim().to_string();
+        if crate::audio::cue::CuePreset::from_id(&self.cue_sound).is_none() {
+            self.cue_sound = crate::audio::cue::CuePreset::DEFAULT_ID.to_string();
+        }
         if self.dictation_mouse_button != 0
             && !crate::mouse_hotkey::is_valid_button(self.dictation_mouse_button)
         {
@@ -2172,6 +2178,29 @@ fn correction_identity_exists(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cue_sound_defaults_to_water_drop_and_rejects_unknown_ids() {
+        assert_eq!(AppConfig::default().cue_sound, "water-drop");
+
+        let mut config = AppConfig {
+            cue_sound: "warm-low".to_string(),
+            ..AppConfig::default()
+        };
+        config.normalize_values();
+        assert_eq!(config.cue_sound, "warm-low");
+
+        config.cue_sound = "off".to_string();
+        config.normalize_values();
+        assert_eq!(config.cue_sound, "off");
+
+        config.cue_sound = "no-such-sound".to_string();
+        config.normalize_values();
+        assert_eq!(config.cue_sound, "water-drop");
+
+        let from_old_file: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(from_old_file.cue_sound, "water-drop");
+    }
+
     use super::*;
 
     #[test]
