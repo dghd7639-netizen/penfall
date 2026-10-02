@@ -56,3 +56,6 @@ docs/superpowers/
 
 # Local isolated worktrees
 .worktrees/
+
+# Private audio kept on this machine only (never commit or push)
+src-tauri/sounds/private/
