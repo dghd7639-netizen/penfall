@@ -15,8 +15,7 @@ bundle under `licenses/`.
   `scripts/generate-cues.py` synthesizes the two cues without external samples.
 - Third-party application logos are not bundled; neutral category icons use Lucide.
 - No font files are bundled or downloaded. CSS names locally installed system/fallback fonts.
-- `docs/images/`, `README*.md`, `CHANGELOG.md` and dated upstream planning documents
-  remain upstream reference/history; their images are not bundled as application resources.
+- Upstream's marketing images, translated READMEs, changelog and planning documents were removed from this repository; they remain in its git history.
 
 ## lucide-react 0.460.0 (ISC)
 
