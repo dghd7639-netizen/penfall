@@ -41,7 +41,7 @@ export function Onboarding() {
       step={step}
       totalSteps={3}
       title={titles[step]}
-      subtitle="Voice Input MVP · 中文语音输入"
+      subtitle="Penfall · 中文语音输入"
       canNext={step > 0 && !busy}
       canBack={step > 0 && !busy}
       nextLabel={busy ? '保存中…' : step === 2 ? '开始使用' : '下一步'}

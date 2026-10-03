@@ -17,7 +17,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         <div className="px-5 pt-6 pb-5 flex items-center gap-2.5" data-tauri-drag-region>
           <BrandMark size={30} className="shrink-0 pointer-events-none" />
           <div className="min-w-0 pointer-events-none">
-            <h1 className="text-[15px] font-semibold leading-tight">Voice Input MVP</h1>
+            <h1 className="text-[15px] font-semibold leading-tight">Penfall</h1>
             <p className="text-[12px] text-text-tertiary mt-0.5">中文语音输入</p>
           </div>
         </div>

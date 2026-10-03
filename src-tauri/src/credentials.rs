@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::storage::AppConfig;
 
+// Keychain service name. It predates the rename to Penfall and must not change: the saved API
+// keys live under it, so a new value would make them unreadable and force re-entering every key.
 const SERVICE_NAME: &str = "Voice Input MVP";
 const API_KEY_ACCOUNT_SUFFIX: &str = "api_key";
 const STORED_CREDENTIAL_VERSION: u8 = 1;

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Voice Input MVP",
+    "name": "Penfall",
     "tagline": "Input vocale AI"
   },
   "nav": {
@@ -53,7 +53,7 @@
     "output_wayland_clipboard_copy_only": "Copied to clipboard. Paste manually on Wayland."
   },
   "cloudRecovery": {
-    "title": "Voice Input MVP Cloud è temporaneamente non disponibile",
+    "title": "Penfall Cloud è temporaneamente non disponibile",
     "sttBody": "Voce cloud non disponibile. L’audio non è stato reinviato.",
     "llmBody": "Revisione AI non disponibile. Il testo originale è stato conservato.",
     "tryAgain": "Riprova",
@@ -61,7 +61,7 @@
     "openLlmSettings": "Impostazioni"
   },
   "home": {
-    "welcome": "Benvenuto in Voice Input MVP",
+    "welcome": "Benvenuto in Penfall",
     "description": "Tieni premuto {{hotkey}} per avviare la registrazione vocale. Il tuo discorso verrà trascritto e, opzionalmente, rifinito dall'IA.",
     "totalRecordings": "Registrazioni totali",
     "today": "Oggi",
@@ -127,11 +127,11 @@
     },
     "steps": {
       "welcome": "Benvenuto",
-      "welcomeSub": "Configura Voice Input MVP in pochi passi",
+      "welcomeSub": "Configura Penfall in pochi passi",
       "signIn": "Accedi",
       "signInSub": "Connetti il tuo account per iniziare",
       "chooseMode": "Scegli modalità",
-      "chooseModeSub": "Seleziona come vuoi usare Voice Input MVP",
+      "chooseModeSub": "Seleziona come vuoi usare Penfall",
       "speechRecognition": "Riconoscimento vocale",
       "speechRecognitionSub": "Configura il tuo servizio STT",
       "aiPolish": "Rifinitura IA",
@@ -196,7 +196,7 @@
       "appWritingModesSub": "Modifica in Scenes i modi predefiniti per email, chat, documenti e altri formati."
     },
     "permissions": {
-      "subtitle": "Voice Input MVP chiede accesso solo quando una funzione lo richiede.",
+      "subtitle": "Penfall chiede accesso solo quando una funzione lo richiede.",
       "microphone": "Microfono",
       "microphoneDesc": "Acquisisci la tua voce.",
       "textOutput": "Output testo",
@@ -369,7 +369,7 @@
     "test": "Test",
     "connectionSuccess": "Connessione riuscita",
     "connectionFailed": "Connessione non riuscita",
-    "storedLocally": "Salvata localmente sul tuo dispositivo. Mai inviata ai server Voice Input MVP.",
+    "storedLocally": "Salvata localmente sul tuo dispositivo. Mai inviata ai server Penfall.",
     "credentialSaveFailed": "Impossibile salvare la chiave API nel vault di sistema. {{details}}",
     "sttLanguage": "Lingua",
     "model": "Modello",
@@ -864,7 +864,7 @@
       "unknownUpstream": "Il limite del server personalizzato è sconosciuto; viene usato un valore prudente.",
       "unknownProvider": "Questo provider non è ancora riconosciuto; viene usato un limite sicuro.",
       "productSafety": "Un limite prudente dell’app per questo provider di streaming.",
-      "managedCapability": "Impostata automaticamente per Voice Input MVP Cloud.",
+      "managedCapability": "Impostata automaticamente per Penfall Cloud.",
       "encoderFallback": "Il codificatore audio gestito non era disponibile; questa sessione ha usato il limite WAV locale più breve.",
       "managedFallback": "La capacità Cloud non è disponibile o è obsoleta; viene usato il limite sicuro di 30 secondi."
     }
@@ -883,7 +883,7 @@
       "siliconflow": "SiliconFlow",
       "appleSpeech": "Apple Speech (Local)",
       "customWhisper": "Local / Custom Whisper",
-      "cloud": "Voice Input MVP Cloud"
+      "cloud": "Penfall Cloud"
     },
     "llm": {
       "zhipu": "Zhipu",
@@ -898,7 +898,7 @@
       "claude": "Claude",
       "ollama": "Ollama (Locale)",
       "openrouter": "OpenRouter",
-      "cloud": "Voice Input MVP Cloud"
+      "cloud": "Penfall Cloud"
     }
   }
 }

@@ -35,7 +35,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "设置",
             history: "历史记录",
             account: "账户",
-            about: "关于 Voice Input MVP",
+            about: "关于 Penfall",
             quit: "退出",
         },
         "ja" => TrayLabels {
@@ -48,7 +48,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "設定",
             history: "履歴",
             account: "アカウント",
-            about: "Voice Input MVP について",
+            about: "Penfall について",
             quit: "終了",
         },
         "ko" => TrayLabels {
@@ -61,7 +61,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "설정",
             history: "기록",
             account: "계정",
-            about: "Voice Input MVP 정보",
+            about: "Penfall 정보",
             quit: "종료",
         },
         "fr" => TrayLabels {
@@ -74,7 +74,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Paramètres",
             history: "Historique",
             account: "Compte",
-            about: "À propos d'Voice Input MVP",
+            about: "À propos d'Penfall",
             quit: "Quitter",
         },
         "de" => TrayLabels {
@@ -87,7 +87,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Einstellungen",
             history: "Verlauf",
             account: "Konto",
-            about: "Über Voice Input MVP",
+            about: "Über Penfall",
             quit: "Beenden",
         },
         "es" => TrayLabels {
@@ -100,7 +100,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Configuración",
             history: "Historial",
             account: "Cuenta",
-            about: "Acerca de Voice Input MVP",
+            about: "Acerca de Penfall",
             quit: "Salir",
         },
         "pt" => TrayLabels {
@@ -113,7 +113,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Configurações",
             history: "Histórico",
             account: "Conta",
-            about: "Sobre o Voice Input MVP",
+            about: "Sobre o Penfall",
             quit: "Sair",
         },
         "ru" => TrayLabels {
@@ -126,7 +126,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Настройки",
             history: "История",
             account: "Аккаунт",
-            about: "О программе Voice Input MVP",
+            about: "О программе Penfall",
             quit: "Выход",
         },
         "it" => TrayLabels {
@@ -139,7 +139,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Impostazioni",
             history: "Cronologia",
             account: "Account",
-            about: "Informazioni su Voice Input MVP",
+            about: "Informazioni su Penfall",
             quit: "Esci",
         },
         _ => TrayLabels {
@@ -152,7 +152,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Settings",
             history: "History",
             account: "Account",
-            about: "About Voice Input MVP",
+            about: "About Penfall",
             quit: "Quit",
         },
     }

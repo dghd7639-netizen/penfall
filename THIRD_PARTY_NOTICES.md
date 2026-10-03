@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Voice Input MVP includes the following components for managed-cloud Ogg/Opus audio. The Opus codec is built statically into the desktop application; end users do not need to install a system codec. Building the desktop application requires Rust 1.82 or newer and CMake 3.16 or newer.
+Penfall includes the following components for managed-cloud Ogg/Opus audio. The Opus codec is built statically into the desktop application; end users do not need to install a system codec. Building the desktop application requires Rust 1.82 or newer and CMake 3.16 or newer.
 
 ## Upstream application: OpenTypeless (MIT)
 

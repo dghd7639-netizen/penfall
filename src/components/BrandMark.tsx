@@ -7,7 +7,7 @@ export function BrandMark({ size = 32, className = '' }: { size?: number; classN
       viewBox="100 100 824 824"
       className={className}
       role="img"
-      aria-label="Voice Input MVP"
+      aria-label="Penfall"
     >
       <defs>
         <linearGradient id="brand-mark-bg" x1="0" y1="0" x2="0" y2="1">

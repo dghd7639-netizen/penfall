@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Voice Input MVP",
+    "name": "Penfall",
     "tagline": "AI音声入力"
   },
   "nav": {
@@ -53,7 +53,7 @@
     "output_wayland_clipboard_copy_only": "Copied to clipboard. Paste manually on Wayland."
   },
   "cloudRecovery": {
-    "title": "Voice Input MVP Cloud は一時的に利用できません",
+    "title": "Penfall Cloud は一時的に利用できません",
     "sttBody": "クラウド音声認識を利用できません。音声は再送していません。",
     "llmBody": "AI 文章調整を利用できません。元の文章は保持されています。",
     "tryAgain": "再試行",
@@ -61,7 +61,7 @@
     "openLlmSettings": "設定"
   },
   "home": {
-    "welcome": "Voice Input MVPへようこそ",
+    "welcome": "Penfallへようこそ",
     "description": "{{hotkey}}を長押しして音声録音を開始します。音声が文字起こしされ、AIによる整形が行われます。",
     "totalRecordings": "総録音回数",
     "today": "今日",
@@ -127,11 +127,11 @@
     },
     "steps": {
       "welcome": "ようこそ",
-      "welcomeSub": "いくつかのステップでVoice Input MVPを設定しましょう",
+      "welcomeSub": "いくつかのステップでPenfallを設定しましょう",
       "signIn": "サインイン",
       "signInSub": "アカウントに接続して始めましょう",
       "chooseMode": "モードを選択",
-      "chooseModeSub": "Voice Input MVPの使用方法を選択してください",
+      "chooseModeSub": "Penfallの使用方法を選択してください",
       "speechRecognition": "音声認識",
       "speechRecognitionSub": "STTサービスを設定します",
       "aiPolish": "AI整形",
@@ -196,7 +196,7 @@
       "appWritingModesSub": "Scenesでメール、チャット、ドキュメントなどの既定の書き方を編集できます。"
     },
     "permissions": {
-      "subtitle": "Voice Input MVPは機能に必要なときだけアクセスを求めます。",
+      "subtitle": "Penfallは機能に必要なときだけアクセスを求めます。",
       "microphone": "マイク",
       "microphoneDesc": "音声を録音します。",
       "textOutput": "テキスト出力",
@@ -369,7 +369,7 @@
     "test": "テスト",
     "connectionSuccess": "接続に成功しました",
     "connectionFailed": "接続に失敗しました",
-    "storedLocally": "お使いのデバイスにローカル保存されます。Voice Input MVPサーバーには送信されません。",
+    "storedLocally": "お使いのデバイスにローカル保存されます。Penfallサーバーには送信されません。",
     "credentialSaveFailed": "APIキーをOSの資格情報ストアに保存できませんでした。{{details}}",
     "sttLanguage": "言語",
     "model": "モデル",
@@ -864,7 +864,7 @@
       "unknownUpstream": "カスタムサーバーの上限が不明なため、安全な既定値を使用します。",
       "unknownProvider": "未認識のプロバイダーのため、安全な上限を使用します。",
       "productSafety": "ストリーミングプロバイダー向けの安全なアプリ上限です。",
-      "managedCapability": "Voice Input MVP Cloud に合わせて自動設定されています。",
+      "managedCapability": "Penfall Cloud に合わせて自動設定されています。",
       "encoderFallback": "管理対象の音声エンコーダーを利用できなかったため、この録音には短いローカル WAV 安全上限を使用しました。",
       "managedFallback": "クラウド機能情報がないか古いため、安全な 30 秒上限を使用します。"
     }
@@ -883,7 +883,7 @@
       "siliconflow": "SiliconFlow",
       "appleSpeech": "Apple Speech (Local)",
       "customWhisper": "Local / Custom Whisper",
-      "cloud": "Voice Input MVP Cloud"
+      "cloud": "Penfall Cloud"
     },
     "llm": {
       "zhipu": "Zhipu",
@@ -898,7 +898,7 @@
       "claude": "Claude",
       "ollama": "Ollama (ローカル)",
       "openrouter": "OpenRouter",
-      "cloud": "Voice Input MVP Cloud"
+      "cloud": "Penfall Cloud"
     }
   }
 }
