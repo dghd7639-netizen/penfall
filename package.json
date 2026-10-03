@@ -1,9 +1,9 @@
 {
-  "name": "opentypeless",
+  "name": "penfall",
   "private": true,
   "version": "0.1.42",
   "type": "module",
-  "description": "AI-powered speech-to-text and text polishing desktop app",
+  "description": "Penfall: a Chinese-first voice input app for macOS",
   "keywords": [
     "speech-to-text",
     "stt",
@@ -14,11 +14,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tover0314-w/opentypeless"
+    "url": "https://github.com/dghd7639-netizen/penfall"
   },
-  "homepage": "https://www.opentypeless.com",
   "bugs": {
-    "url": "https://github.com/tover0314-w/opentypeless/issues"
+    "url": "https://github.com/dghd7639-netizen/penfall/issues"
   },
   "author": "OpenTypeless Contributors",
   "license": "MIT",

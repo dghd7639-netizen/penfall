@@ -1,7 +1,7 @@
 [package]
 name = "opentypeless"
 version = "0.1.42"
-description = "AI-powered speech-to-text and text polishing desktop app"
+description = "Penfall: a Chinese-first voice input app for macOS"
 authors = ["OpenTypeless Contributors"]
 license = "MIT"
 edition = "2021"
