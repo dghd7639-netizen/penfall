@@ -247,15 +247,23 @@ pub fn response_text(kind: LlmApiKind, body: &Value) -> String {
             .filter_map(|block| block["text"].as_str())
             .collect::<Vec<_>>()
             .join(""),
-        LlmApiKind::OpenAiCompatible => {
-            let message = &body["choices"][0]["message"];
-            message["content"]
-                .as_str()
-                .filter(|content| !content.is_empty())
-                .or_else(|| message["reasoning_content"].as_str())
-                .unwrap_or("")
-                .to_string()
-        }
+        // reasoning_content is the model's thinking, not its answer, so it is
+        // never used as the reply even when content is empty.
+        LlmApiKind::OpenAiCompatible => body["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
+    }
+}
+
+/// The thinking a reasoning model returned next to its answer, for diagnostics only.
+pub fn response_reasoning(kind: LlmApiKind, body: &Value) -> String {
+    match kind {
+        LlmApiKind::AnthropicMessages => String::new(),
+        LlmApiKind::OpenAiCompatible => body["choices"][0]["message"]["reasoning_content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
     }
 }
 
@@ -470,5 +478,25 @@ mod tests {
         );
         assert_eq!(event.text.as_deref(), Some("Hello"));
         assert!(!event.done);
+    }
+
+    #[test]
+    fn reasoning_content_is_never_returned_as_the_answer() {
+        let thinking = "We need answer only polished text. Need parse.";
+        let response = json!({
+            "choices": [{"message": {"content": "", "reasoning_content": thinking}}]
+        });
+        assert_eq!(response_text(LlmApiKind::OpenAiCompatible, &response), "");
+        assert_eq!(
+            response_reasoning(LlmApiKind::OpenAiCompatible, &response),
+            thinking
+        );
+
+        let event = parse_stream_event(
+            LlmApiKind::OpenAiCompatible,
+            &json!({"choices": [{"delta": {"reasoning_content": thinking}}]}),
+        );
+        assert_eq!(event.text, None);
+        assert_eq!(event.reasoning.as_deref(), Some(thinking));
     }
 }

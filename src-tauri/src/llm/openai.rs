@@ -197,7 +197,7 @@ impl LlmProvider for OpenAiProvider {
         if let Some(callback) = on_chunk {
             // Streaming mode
             let mut full_text = String::new();
-            let mut reasoning_text = String::new();
+            let mut reasoning_chars = 0usize;
             let mut stream = response.bytes_stream();
 
             let mut buffer = String::new();
@@ -231,12 +231,10 @@ impl LlmProvider for OpenAiProvider {
                                 }
                             }
 
-                            // Collect reasoning_content as fallback for thinking-mode models
-                            // where all output may land in this field instead of content
+                            // Only counted for diagnostics: reasoning_content is the
+                            // model's thinking, never the polished text.
                             if let Some(rc) = event.reasoning {
-                                if !rc.is_empty() {
-                                    reasoning_text.push_str(&rc);
-                                }
+                                reasoning_chars += rc.chars().count();
                             }
                             stream_done = event.done;
                         }
@@ -244,17 +242,14 @@ impl LlmProvider for OpenAiProvider {
                 }
             }
 
-            // If content was empty but reasoning_content had text, use it as output.
-            // This handles GLM thinking-mode where the API puts all output in reasoning_content.
-            if full_text.is_empty() && !reasoning_text.is_empty() {
+            if full_text.trim().is_empty() {
+                // Typically a reasoning model that spent the whole token budget
+                // thinking. Fail so the pipeline outputs the raw transcript instead.
                 tracing::warn!(
-                    "LLM content empty, using reasoning_content ({} chars) as output",
-                    reasoning_text.len()
+                    "LLM streaming returned no content ({} chars of reasoning_content)",
+                    reasoning_chars
                 );
-                callback(&reasoning_text);
-                full_text = reasoning_text;
-            } else if full_text.is_empty() {
-                tracing::error!("LLM streaming returned no content and no reasoning_content");
+                return Err(empty_answer_error(reasoning_chars));
             }
 
             Ok(PolishResponse {
@@ -265,11 +260,13 @@ impl LlmProvider for OpenAiProvider {
             let v: serde_json::Value = response.json().await?;
             let text = protocol::response_text(api_kind, &v);
 
-            if text.is_empty() {
+            if text.trim().is_empty() {
+                let reasoning_chars = protocol::response_reasoning(api_kind, &v).chars().count();
                 tracing::warn!(
-                    "LLM non-streaming returned empty content, full response: {}",
-                    v
+                    "LLM non-streaming returned no content ({} chars of reasoning_content)",
+                    reasoning_chars
                 );
+                return Err(empty_answer_error(reasoning_chars));
             }
 
             Ok(PolishResponse {
@@ -280,5 +277,146 @@ impl LlmProvider for OpenAiProvider {
 
     fn name(&self) -> &str {
         "OpenAI"
+    }
+}
+
+fn empty_answer_error(reasoning_chars: usize) -> AppError {
+    if reasoning_chars > 0 {
+        AppError::Config(format!(
+            "the model only returned its reasoning ({reasoning_chars} chars) and no polished text; \
+             use a non-reasoning model or lower its reasoning effort"
+        ))
+    } else {
+        AppError::Config("the model returned no polished text".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// Serves one OpenAI-compatible streaming reply made of the given SSE events.
+    async fn serve_stream(events: &[serde_json::Value]) -> String {
+        let mut body = String::new();
+        for event in events {
+            body.push_str(&format!("data: {event}\n\n"));
+        }
+        body.push_str("data: [DONE]\n\n");
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buf = [0u8; 4096];
+            // Read the headers and the JSON body (sent with Content-Length).
+            loop {
+                let n = socket.read(&mut buf).await.unwrap();
+                request.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&request);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length = text[..end]
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .map(|v| v.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap_or(0);
+                    if request.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+                if n == 0 {
+                    break;
+                }
+            }
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            socket.shutdown().await.ok();
+        });
+        format!("http://{addr}/v1/chat/completions")
+    }
+
+    fn config(base_url: String) -> LlmConfig {
+        LlmConfig {
+            provider: "openai-compatible".to_string(),
+            api_key: String::new(),
+            model: "gpt-5.5".to_string(),
+            base_url,
+            max_tokens: 4096,
+            temperature: 0.3,
+        }
+    }
+
+    fn request() -> PolishRequest {
+        PolishRequest {
+            raw_text: "把定时任务模型改成 Gemini".to_string(),
+            context: crate::app_detector::types::ContextProfile::general_native().summary(),
+            dictionary: Vec::new(),
+            correction_rules: Vec::new(),
+            polish_style: "clean".to_string(),
+            mapped_scene_prompt: String::new(),
+            active_scene_prompt: String::new(),
+            polish_custom_prompt: String::new(),
+            translate_enabled: false,
+            target_lang: String::new(),
+            selected_text: None,
+            operation_id: None,
+            voice_intent: crate::voice_intent::VoiceIntent {
+                kind: crate::voice_intent::VoiceIntentKind::DictateInsert,
+                placement: crate::voice_intent::VoiceOutputPlacement::InsertAtCursor,
+                confidence: 1.0,
+                search_provider: None,
+                payload: None,
+                grammar_locale: None,
+                fallback_reason: None,
+            },
+        }
+    }
+
+    async fn polish_streaming(events: &[serde_json::Value]) -> (Result<String, AppError>, String) {
+        let url = serve_stream(events).await;
+        let typed = Arc::new(Mutex::new(String::new()));
+        let sink = typed.clone();
+        let on_chunk: ChunkCallback = Box::new(move |chunk| sink.lock().unwrap().push_str(chunk));
+        let result = OpenAiProvider::new()
+            .polish(&config(url), &request(), Some(&on_chunk))
+            .await
+            .map(|response| response.polished_text);
+        let typed = typed.lock().unwrap().clone();
+        (result, typed)
+    }
+
+    #[tokio::test]
+    async fn streamed_reasoning_without_an_answer_fails_instead_of_being_typed() {
+        let thinking = serde_json::json!({
+            "choices": [{"delta": {"reasoning_content": "We need answer only polished text. Need parse."}}]
+        });
+        let (result, typed) = polish_streaming(&[thinking.clone(), thinking]).await;
+
+        let error = result.expect_err("reasoning alone must not count as polished text");
+        assert!(error.to_string().contains("only returned its reasoning"));
+        assert_eq!(typed, "", "nothing may reach the target app");
+    }
+
+    #[tokio::test]
+    async fn streamed_answer_after_reasoning_returns_only_the_answer() {
+        let (result, typed) = polish_streaming(&[
+            serde_json::json!({"choices": [{"delta": {"reasoning_content": "Need parse."}}]}),
+            serde_json::json!({"choices": [{"delta": {"content": "把定时任务模型"}}]}),
+            serde_json::json!({"choices": [{"delta": {"content": "改成 Gemini"}}]}),
+        ])
+        .await;
+
+        assert_eq!(result.unwrap(), "把定时任务模型改成 Gemini");
+        assert_eq!(typed, "把定时任务模型改成 Gemini");
     }
 }

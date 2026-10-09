@@ -1849,26 +1849,23 @@ mod tests {
     }
 
     #[test]
-    fn byok_ask_answer_falls_back_to_reasoning_content() {
+    fn byok_ask_answer_rejects_reasoning_content_without_an_answer() {
         let body = json!({
             "choices": [
                 {
                     "message": {
                         "content": "",
-                        "reasoning_content": "Use Command+Period to ask."
+                        "reasoning_content": "The user asks how to ask. Need answer briefly."
                     }
                 }
             ]
         });
 
-        assert_eq!(
-            validate_ask_answer(&crate::llm::protocol::response_text(
-                crate::llm::protocol::LlmApiKind::OpenAiCompatible,
-                &body,
-            ))
-            .unwrap(),
-            "Use Command+Period to ask."
-        );
+        assert!(validate_ask_answer(&crate::llm::protocol::response_text(
+            crate::llm::protocol::LlmApiKind::OpenAiCompatible,
+            &body,
+        ))
+        .is_err());
     }
 
     #[test]
