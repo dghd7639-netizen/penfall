@@ -125,6 +125,8 @@ fn is_reasoning_model_without_sampling_controls(model: &str) -> bool {
         || model.starts_with("o4-")
 }
 
+/// The whole budget for one polish, connection retries included. Running out
+/// of it is never retried: the pipeline falls back to the raw text instead.
 pub fn request_timeout(provider: &str, base_url: &str, model: &str) -> Duration {
     if detect_api_kind(provider, base_url) == LlmApiKind::AnthropicMessages
         || is_reasoning_model_without_sampling_controls(model)

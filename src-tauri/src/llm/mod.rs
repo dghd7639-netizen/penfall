@@ -11,6 +11,10 @@ use serde::{Deserialize, Serialize};
 use crate::app_detector::types::ContextProfileSummary;
 use crate::error::AppError;
 
+/// Connecting gets its own short timeout so an unreachable host fails (and is
+/// retried) quickly, while a slow model still gets the whole request timeout.
+pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Requests to Alibaba Cloud (DashScope) and to this machine bypass the system proxy: Alibaba
 /// Cloud is reachable directly from mainland China, and a global-mode proxy only adds latency
 /// (or answers with an empty 502 for a local gateway it cannot reach).
@@ -42,6 +46,7 @@ pub fn client_for(base_url: &str, shared: &reqwest::Client) -> reqwest::Client {
                 .no_proxy()
                 .pool_max_idle_per_host(2)
                 .tcp_keepalive(std::time::Duration::from_secs(30))
+                .connect_timeout(CONNECT_TIMEOUT)
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap_or_else(|_| shared.clone())

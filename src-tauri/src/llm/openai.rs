@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder, Response};
+use std::time::{Duration, Instant};
 
 use crate::error::AppError;
 
@@ -21,7 +22,10 @@ impl Default for OpenAiProvider {
 impl OpenAiProvider {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .connect_timeout(super::CONNECT_TIMEOUT)
+                .build()
+                .unwrap_or_default(),
         }
     }
 
@@ -98,101 +102,22 @@ impl LlmProvider for OpenAiProvider {
             }
         }
 
-        // Retry the initial connection (not once streaming starts)
-        #[allow(unused_assignments)]
-        let mut response = None;
-        let mut last_error: Option<AppError> = None;
-        let mut attempt = 0u32;
-
-        loop {
+        let budget = protocol::request_timeout(&config.provider, &config.base_url, &config.model)
+            + protocol::transcript_time_budget(&req.raw_text);
+        let response = send_with_retry(budget, || {
             let request = self
                 .client
                 .post(&endpoint)
                 .header("Content-Type", "application/json");
-            match protocol::apply_auth_headers(
+            protocol::apply_auth_headers(
                 request,
                 &config.provider,
                 &config.base_url,
                 &config.api_key,
             )
             .json(&body)
-            .timeout(
-                protocol::request_timeout(&config.provider, &config.base_url, &config.model)
-                    + protocol::transcript_time_budget(&req.raw_text),
-            )
-            .send()
-            .await
-            {
-                Ok(resp) => {
-                    let status = resp.status();
-                    if status.is_success() {
-                        response = Some(resp);
-                        break;
-                    } else if status.as_u16() >= 500 && attempt < 2 {
-                        let body_text = resp.text().await.unwrap_or_default();
-                        tracing::warn!(
-                            "LLM server error {} (attempt {}/3), retrying",
-                            status,
-                            attempt + 1
-                        );
-                        last_error = Some(AppError::Api {
-                            status: status.as_u16(),
-                            body: body_text,
-                        });
-                        attempt += 1;
-                        tokio::time::sleep(std::time::Duration::from_millis(
-                            1000 * 2u64.pow(attempt - 1),
-                        ))
-                        .await;
-                        continue;
-                    } else {
-                        let status = resp.status();
-                        let text = resp.text().await.unwrap_or_default();
-                        // Truncate at a valid UTF-8 char boundary to avoid panic on multi-byte chars
-                        let truncate_at = text
-                            .char_indices()
-                            .take_while(|&(i, _)| i < 200)
-                            .last()
-                            .map(|(i, c)| i + c.len_utf8())
-                            .unwrap_or(text.len());
-                        let sanitized = &text[..truncate_at];
-                        return Err(AppError::Api {
-                            status: status.as_u16(),
-                            body: sanitized.to_string(),
-                        });
-                    }
-                }
-                Err(e) if e.is_timeout() && attempt < 2 => {
-                    tracing::warn!(
-                        "LLM connection timeout (attempt {}/3), retrying",
-                        attempt + 1
-                    );
-                    last_error = Some(e.into());
-                    attempt += 1;
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        1000 * 2u64.pow(attempt - 1),
-                    ))
-                    .await;
-                    continue;
-                }
-                Err(e) if e.is_connect() && attempt < 2 => {
-                    tracing::warn!(
-                        "LLM connection failed (attempt {}/3), retrying",
-                        attempt + 1
-                    );
-                    last_error = Some(e.into());
-                    attempt += 1;
-                    tokio::time::sleep(std::time::Duration::from_millis(
-                        1000 * 2u64.pow(attempt - 1),
-                    ))
-                    .await;
-                    continue;
-                }
-                Err(e) => return Err(e.into()),
-            }
-        }
-
-        let response = response.ok_or_else(|| last_error.unwrap())?;
+        })
+        .await?;
 
         if let Some(callback) = on_chunk {
             // Streaming mode
@@ -280,6 +205,72 @@ impl LlmProvider for OpenAiProvider {
     }
 }
 
+/// Sends the polish request, retrying only when the model never saw it.
+///
+/// Connection failures (refused, DNS, the client's connect timeout) and 5xx
+/// replies are retried with 1s/2s backoff. A timeout while waiting for the reply
+/// is not: some gateways send no headers until the whole answer is ready, and
+/// asking again would only make the user wait several times as long before the
+/// pipeline falls back to the raw text. All attempts, including streaming the
+/// reply, share one `budget`.
+async fn send_with_retry(
+    budget: Duration,
+    build: impl Fn() -> RequestBuilder,
+) -> Result<Response, AppError> {
+    const MAX_ATTEMPTS: u32 = 3;
+    let deadline = Instant::now() + budget;
+    let mut attempt = 1u32;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let error = match build().timeout(remaining).send().await {
+            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) if resp.status().is_server_error() => {
+                tracing::warn!(
+                    "LLM server error {} (attempt {attempt}/{MAX_ATTEMPTS})",
+                    resp.status()
+                );
+                api_error(resp).await
+            }
+            Ok(resp) => return Err(api_error(resp).await),
+            // Checked before is_timeout: a connect timeout is both.
+            Err(e) if e.is_connect() => {
+                tracing::warn!("LLM connection failed (attempt {attempt}/{MAX_ATTEMPTS})");
+                e.into()
+            }
+            Err(e) if e.is_timeout() => {
+                tracing::warn!(
+                    "LLM reply timed out after {:.1}s, not retrying",
+                    budget.as_secs_f64()
+                );
+                return Err(AppError::Timeout(budget));
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let backoff = Duration::from_secs(1 << (attempt - 1));
+        if attempt >= MAX_ATTEMPTS || Instant::now() + backoff >= deadline {
+            return Err(error);
+        }
+        attempt += 1;
+        tokio::time::sleep(backoff).await;
+    }
+}
+
+async fn api_error(resp: Response) -> AppError {
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    // Truncate at a valid UTF-8 char boundary to avoid panic on multi-byte chars
+    let truncate_at = text
+        .char_indices()
+        .take_while(|&(i, _)| i < 200)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(text.len());
+    AppError::Api {
+        status: status.as_u16(),
+        body: text[..truncate_at].to_string(),
+    }
+}
+
 fn empty_answer_error(reasoning_chars: usize) -> AppError {
     if reasoning_chars > 0 {
         AppError::Config(format!(
@@ -294,9 +285,37 @@ fn empty_answer_error(reasoning_chars: usize) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
+    use tokio::net::{TcpListener, TcpStream};
+
+    /// Reads the headers and the JSON body (sent with Content-Length).
+    async fn read_request(socket: &mut TcpStream) {
+        let mut request = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            let n = socket.read(&mut buf).await.unwrap();
+            request.extend_from_slice(&buf[..n]);
+            let text = String::from_utf8_lossy(&request);
+            if let Some(end) = text.find("\r\n\r\n") {
+                let length = text[..end]
+                    .lines()
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|v| v.trim().parse::<usize>().unwrap())
+                    })
+                    .unwrap_or(0);
+                if request.len() >= end + 4 + length {
+                    break;
+                }
+            }
+            if n == 0 {
+                break;
+            }
+        }
+    }
 
     /// Serves one OpenAI-compatible streaming reply made of the given SSE events.
     async fn serve_stream(events: &[serde_json::Value]) -> String {
@@ -310,30 +329,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let mut request = Vec::new();
-            let mut buf = [0u8; 4096];
-            // Read the headers and the JSON body (sent with Content-Length).
-            loop {
-                let n = socket.read(&mut buf).await.unwrap();
-                request.extend_from_slice(&buf[..n]);
-                let text = String::from_utf8_lossy(&request);
-                if let Some(end) = text.find("\r\n\r\n") {
-                    let length = text[..end]
-                        .lines()
-                        .find_map(|line| {
-                            line.to_ascii_lowercase()
-                                .strip_prefix("content-length:")
-                                .map(|v| v.trim().parse::<usize>().unwrap())
-                        })
-                        .unwrap_or(0);
-                    if request.len() >= end + 4 + length {
-                        break;
-                    }
-                }
-                if n == 0 {
-                    break;
-                }
-            }
+            read_request(&mut socket).await;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
@@ -418,5 +414,91 @@ mod tests {
 
         assert_eq!(result.unwrap(), "把定时任务模型改成 Gemini");
         assert_eq!(typed, "把定时任务模型改成 Gemini");
+    }
+
+    fn chat_request(url: &str) -> RequestBuilder {
+        Client::new()
+            .post(url)
+            .json(&serde_json::json!({"model": "gpt-5.5", "messages": []}))
+    }
+
+    /// An address nothing listens on, so connecting is refused.
+    async fn closed_port() -> std::net::SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        listener.local_addr().unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_reply_that_never_comes_is_asked_for_only_once() {
+        // Like a gateway that sends no headers until the whole answer is ready.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().unwrap()
+        );
+        let requests = Arc::new(AtomicUsize::new(0));
+        let counter = requests.clone();
+        tokio::spawn(async move {
+            let mut open = Vec::new();
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                read_request(&mut socket).await;
+                counter.fetch_add(1, Ordering::SeqCst);
+                open.push(socket);
+            }
+        });
+
+        let budget = Duration::from_millis(500);
+        let started = Instant::now();
+        let error = send_with_retry(budget, || chat_request(&url))
+            .await
+            .expect_err("a reply that never comes must fail");
+
+        assert!(
+            matches!(error, AppError::Timeout(d) if d == budget),
+            "{error}"
+        );
+        assert!(started.elapsed() < budget + Duration::from_millis(500));
+        assert_eq!(
+            requests.load(Ordering::SeqCst),
+            1,
+            "the model must be asked once"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_connection_is_retried_until_the_gateway_is_up() {
+        let addr = closed_port().await;
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let listener = TcpListener::bind(addr).await.unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+            read_request(&mut socket).await;
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+                .await
+                .unwrap();
+            socket.shutdown().await.ok();
+        });
+
+        let url = format!("http://{addr}/v1/chat/completions");
+        let response = send_with_retry(Duration::from_secs(5), || chat_request(&url))
+            .await
+            .expect("the second attempt reaches the gateway");
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn connection_retries_stop_within_the_budget() {
+        let url = format!("http://{}/v1/chat/completions", closed_port().await);
+        let budget = Duration::from_millis(1500);
+        let started = Instant::now();
+        let error = send_with_retry(budget, || chat_request(&url))
+            .await
+            .expect_err("nothing listens");
+
+        assert!(matches!(error, AppError::Network(_)), "{error}");
+        // One 1s backoff fits in the budget, the 2s one does not.
+        assert!(started.elapsed() < budget);
     }
 }
