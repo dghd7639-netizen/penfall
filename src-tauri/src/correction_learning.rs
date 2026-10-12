@@ -61,8 +61,10 @@ fn detect_with_region(
 
     let hunks = diff_hunks(&old, &new);
     let changed: usize = hunks.iter().map(|h| h.old.len()).sum();
-    // Most of the sentence replaced: a rewrite, not a set of corrections.
-    if changed * 10 > old.len().max(4) * 7 {
+    // Most of the sentence replaced: a rewrite, not a set of corrections. Nothing of it left
+    // at all (a short dictation) means the field was refilled, e.g. a chat box that reads as
+    // its "询问 ChatGPT" placeholder once the message is sent.
+    if changed >= old.len() || changed * 10 > old.len().max(4) * 7 {
         return (Vec::new(), region_text);
     }
 
@@ -956,6 +958,18 @@ mod tests {
         assert!(learn(text, text, "明天上午十点再约时间聊聊").is_empty());
         assert!(learn(text, text, "今天下午三点开会").is_empty());
         assert!(learn(text, text, "今天下午三点开会讨论一下项目进度，记得带电脑").is_empty());
+    }
+
+    #[test]
+    fn ignores_a_short_dictation_replaced_as_a_whole() {
+        assert!(learn("继续", "继续", "询问 ChatGPT").is_empty());
+        assert!(learn("可以", "可以", "询问 ChatGPT").is_empty());
+        assert!(learn("询问 ChatGPT", "询问 ChatGPT", "继续").is_empty());
+        // A fix that keeps part of a short dictation is still learned.
+        assert_eq!(
+            learn("同意千问", "同意千问", "通义千问"),
+            vec![pair("同意", "通义")]
+        );
     }
 
     #[test]
