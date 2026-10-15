@@ -2814,17 +2814,23 @@ impl PipelineHandle {
     ) -> Result<output::InsertResult> {
         self.set_state(PipelineState::Outputting);
 
-        let target_warning =
-            (!self.context_detector.target_still_matches_now(target_guard)).then(|| {
-                crate::error::UserError {
-                    code: "output_target_changed".to_string(),
-                    details: Some(
-                        "The target app changed before output; the full text was copied instead."
-                            .to_string(),
-                    ),
-                    retry_count: 0,
-                }
-            });
+        // The user may have switched apps while speaking; go back to the one they
+        // started in. Only if that fails is the text left on the clipboard instead.
+        let target_restored = target_guard.is_empty() || {
+            let detector = self.context_detector.clone();
+            let guard = target_guard.clone();
+            tokio::task::spawn_blocking(move || detector.restore_target_application(&guard))
+                .await
+                .unwrap_or(false)
+        };
+        let target_warning = (!target_restored).then(|| crate::error::UserError {
+            code: "output_target_changed".to_string(),
+            details: Some(
+                "The target app changed before output; the full text was copied instead."
+                    .to_string(),
+            ),
+            retry_count: 0,
+        });
         let requested_strategy = if target_warning.is_some() {
             output::InsertionStrategy::ClipboardCopyOnly
         } else {

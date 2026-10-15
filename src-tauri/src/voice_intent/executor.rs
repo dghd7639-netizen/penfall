@@ -110,7 +110,18 @@ async fn execute_insert(
         }
     }
 
-    if !backend.target_matches(request.target_guard) {
+    // The user may have switched apps while speaking (to look something up in a
+    // browser, say). Bring the app they started in back before giving up and
+    // leaving the text on the clipboard.
+    let mut target_matches = backend.target_matches(request.target_guard);
+    if !target_matches && !request.restore_target_before_insert {
+        target_matches = backend
+            .restore_target(request.target_guard)
+            .await
+            .unwrap_or(false);
+    }
+
+    if !target_matches {
         let _ = backend.copy_to_clipboard(request.generated_output).await;
         if request.restore_target_before_insert {
             let _ = backend.popup_answer(request.generated_output).await;
@@ -527,6 +538,57 @@ mod tests {
         assert!(!failed.actions.contains(&"insert_at_cursor"));
         assert!(failed.actions.contains(&"copy_to_clipboard"));
         assert!(failed.actions.contains(&"popup_answer"));
+    }
+
+    #[tokio::test]
+    async fn voice_intent_executor_returns_to_the_original_app_before_a_dictation_insert() {
+        let dictation = intent(VoiceIntentKind::DictateInsert);
+
+        let mut restorable = FakeBackend {
+            target_matches: false,
+            restore_succeeds: true,
+            ..Default::default()
+        };
+        let result = execute_voice_intent(
+            request(
+                &dictation,
+                "text",
+                false,
+                false,
+                VoiceRoutingFlags::default(),
+            ),
+            &mut restorable,
+        )
+        .await;
+        assert_eq!(result.status, VoiceExecutionStatus::Completed);
+        assert_eq!(
+            restorable.actions,
+            ["target_matches", "restore_target", "insert_at_cursor"]
+        );
+
+        let mut unrestorable = FakeBackend {
+            target_matches: false,
+            restore_succeeds: false,
+            ..Default::default()
+        };
+        let result = execute_voice_intent(
+            request(
+                &dictation,
+                "text",
+                false,
+                false,
+                VoiceRoutingFlags::default(),
+            ),
+            &mut unrestorable,
+        )
+        .await;
+        assert_eq!(result.status, VoiceExecutionStatus::CopiedFallback);
+        assert_eq!(
+            result.fallback_reason,
+            Some(VoiceExecutionFallbackReason::TargetChanged)
+        );
+        assert!(!unrestorable.actions.contains(&"insert_at_cursor"));
+        assert!(!unrestorable.actions.contains(&"popup_answer"));
     }
 
     #[tokio::test]
