@@ -13,9 +13,19 @@ export function SkipPolishSetting() {
   const enabled = useAppStore((s) => s.config.skip_polish_when_clean)
   const maxChars = useAppStore((s) => s.config.skip_polish_max_chars)
   const updateConfig = useAppStore((s) => s.updateConfig)
-  // Edited as text and committed on blur, so typing "45" never stops at the minimum.
+  // Edited as text: a value in range is saved as it is typed, so leaving the
+  // page mid-edit keeps it, and "45" never stops at the minimum on its way.
   const [draft, setDraft] = useState<string | null>(null)
 
+  const handleChange = (value: string) => {
+    setDraft(value)
+    const parsed = Number.parseInt(value, 10)
+    if (parsed >= MIN_CHARS && parsed <= MAX_CHARS) {
+      updateConfig({ skip_polish_max_chars: parsed })
+    }
+  }
+
+  // Out-of-range input is clamped when the field loses focus.
   const commit = () => {
     if (draft === null) return
     const parsed = Number.parseInt(draft, 10)
@@ -50,7 +60,7 @@ export function SkipPolishSetting() {
             max={MAX_CHARS}
             disabled={disabled}
             value={draft ?? String(maxChars)}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => handleChange(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
               if (e.key === 'Enter') e.currentTarget.blur()

@@ -214,23 +214,49 @@ fn soften_pause_periods(text: &str) -> String {
     out
 }
 
-/// Translation, scenes, a custom prompt or a script conversion change even a
-/// clean dictation, so those always go to the model.
-fn polish_has_no_extra_instructions(config: &storage::AppConfig) -> bool {
+/// Whether a clean short dictation may be typed without the model. Anything
+/// that changes even clean text needs the model: translation, scenes, a custom
+/// prompt, script conversion, the Professional rewrite, email formatting, and
+/// custom vocabulary (a misheard term only the model can map back to it).
+fn clean_dictation_may_skip_polish(
+    config: &storage::AppConfig,
+    family: crate::app_detector::types::ContextFamily,
+    has_vocabulary: bool,
+) -> bool {
     !config.translate_enabled
         && config.active_scene.is_none()
         && config.polish_custom_prompt.trim().is_empty()
         && config.polish_chinese_script == "preserve"
+        && config.polish_style != "professional"
+        && !(config.context_adaptation_enabled
+            && family == crate::app_detector::types::ContextFamily::Email)
+        && !has_vocabulary
 }
 
 /// The text to offer for copying: the result when there is one, otherwise the
-/// raw transcript (polish failed and nothing was generated).
-fn rescue_text<'a>(final_text: &'a str, raw_text: &'a str) -> &'a str {
-    if final_text.trim().is_empty() {
-        raw_text
+/// raw transcript (polish failed and nothing was generated). A spoken command
+/// ("make this formal") is not text to paste, so it is not offered.
+fn rescue_text<'a>(
+    final_text: &'a str,
+    raw_text: &'a str,
+    spoken_command: bool,
+) -> Option<&'a str> {
+    if !final_text.trim().is_empty() {
+        Some(final_text)
+    } else if spoken_command {
+        None
     } else {
-        final_text
+        Some(raw_text)
     }
+}
+
+/// What came back from speech recognition.
+enum SttWait {
+    Transcript(String),
+    /// Recognition failed after some text came back. It is kept for copying and
+    /// in History, but not typed, since it may stop mid-sentence.
+    PartialAfterError(String),
+    Nothing,
 }
 
 fn no_speech_user_error() -> crate::error::UserError {
@@ -804,6 +830,8 @@ struct PipelineVoiceExecutionBackend<'a> {
     config: &'a storage::AppConfig,
     already_copied: bool,
     popup_fallback_enabled: bool,
+    /// Only Ask drafts restore focus from the Ask window; dictation must leave it open.
+    hide_ask_window_on_restore: bool,
 }
 
 #[async_trait::async_trait]
@@ -818,8 +846,10 @@ impl crate::voice_intent::executor::VoiceExecutionBackend for PipelineVoiceExecu
         &mut self,
         guard: &TargetAppGuard,
     ) -> std::result::Result<bool, String> {
-        if let Some(window) = self.pipeline.app_handle.get_webview_window("ask") {
-            let _ = window.hide();
+        if self.hide_ask_window_on_restore {
+            if let Some(window) = self.pipeline.app_handle.get_webview_window("ask") {
+                let _ = window.hide();
+            }
         }
         let detector = self.pipeline.context_detector.clone();
         let guard = guard.clone();
@@ -939,7 +969,7 @@ impl PolishTextOutcome {
         }
     }
 
-    fn polish_skipped(final_text: String) -> Self {
+    fn skipped(final_text: String) -> Self {
         Self {
             polish_skipped: true,
             ..Self::normal(final_text, std::time::Duration::ZERO)
@@ -978,6 +1008,14 @@ impl PipelineHandle {
             shared_client,
             pipeline_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    fn take_recording_duration_ms(&self) -> Option<i64> {
+        self.recording_start
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .map(|start| start.elapsed().as_millis() as i64)
     }
 
     /// Shows the text in a copyable capsule after a dictation that did not make
@@ -1966,13 +2004,37 @@ impl PipelineHandle {
 
         // ── Phase 1: Wait for STT ──────────────────────────────────────
         let raw_text = match self.wait_for_stt(stt_control.clone(), heard_voice).await? {
-            Some(text) => text,
-            None => {
+            SttWait::Transcript(text) => text,
+            SttWait::PartialAfterError(partial) => {
+                self.offer_rescue(&partial);
+                let duration_ms = self.take_recording_duration_ms();
+                self.save_history(
+                    &partial,
+                    &partial,
+                    &app_ctx,
+                    duration_ms,
+                    &config,
+                    HistoryOutputMetadata {
+                        status: Some("fallback".to_string()),
+                        error: Some(
+                            "Speech recognition failed; kept the partial transcript without typing it"
+                                .to_string(),
+                        ),
+                    },
+                )
+                .await;
+                if let Some(control) = &stt_control {
+                    self.clear_stt_session(control.id);
+                }
+                self.set_state(PipelineState::Idle);
+                return Ok(());
+            }
+            SttWait::Nothing => {
                 if let Some(control) = &stt_control {
                     self.clear_stt_session(control.id);
                 }
                 return Ok(());
-            } // aborted or no speech detected
+            } // aborted, failed with nothing heard, or no speech detected
         };
         let voice_intent =
             route_pipeline_voice_intent(voice_mode, &raw_text, selected_text.as_deref(), &config);
@@ -1992,6 +2054,8 @@ impl PipelineHandle {
         }
 
         // ── Phase 2: LLM polish + output ───────────────────────────────
+        let spoken_command = selected_text_has_content(selected_text.as_deref())
+            || voice_intent_requires_generated_output(voice_intent.kind);
         self.output_trouble.store(false, Ordering::SeqCst);
         let polish_outcome = self
             .polish_text(PolishTextInput {
@@ -2019,19 +2083,15 @@ impl PipelineHandle {
         // text where the user can copy it, falling back to the raw transcript.
         let output_trouble = self.output_trouble.swap(false, Ordering::SeqCst);
         if polish_outcome.history_output_status.is_some() || output_trouble {
-            self.offer_rescue(rescue_text(&final_text, &raw_text));
+            if let Some(text) = rescue_text(&final_text, &raw_text, spoken_command) {
+                self.offer_rescue(text);
+            }
         }
 
         // ── Phase 3: Timing, history, cleanup ──────────────────────────
         let total_elapsed = stop_start.elapsed();
 
-        // Compute recording duration
-        let duration_ms = self
-            .recording_start
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-            .map(|start| start.elapsed().as_millis() as i64);
+        let duration_ms = self.take_recording_duration_ms();
 
         tracing::info!(
             "[Pipeline Timing] Total stop(): {}ms (STT: {}ms, LLM: {}ms, Output+Save: {}ms)",
@@ -2076,14 +2136,12 @@ impl PipelineHandle {
         Ok(())
     }
 
-    /// Wait for the STT task to complete and return the transcribed text.
-    /// Returns `Ok(Some(text))` on success, `Ok(None)` if aborted or no speech,
-    /// or `Err` on failure.
+    /// Wait for the STT task to complete and return what it recognized.
     async fn wait_for_stt(
         &self,
         stt_control: Option<SttTaskControl>,
         heard_voice: bool,
-    ) -> Result<Option<String>> {
+    ) -> Result<SttWait> {
         if let Some(control) = &stt_control {
             tokio::select! {
                 _ = control.done.notified() => {
@@ -2100,20 +2158,20 @@ impl PipelineHandle {
                 control.id,
             ) {
                 tracing::info!("Ignoring stale or aborted STT task");
-                return Ok(None);
+                return Ok(SttWait::Nothing);
             }
             if take_matching_stt_error(&self.stt_error, control.id).is_some() {
-                if heard_voice {
-                    let partial = self
-                        .accumulated_text
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .trim()
-                        .to_string();
-                    self.offer_rescue(&partial);
+                let partial = self
+                    .accumulated_text
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .trim()
+                    .to_string();
+                if heard_voice && !partial.is_empty() {
+                    return Ok(SttWait::PartialAfterError(partial));
                 }
                 self.set_state(PipelineState::Idle);
-                return Ok(None);
+                return Ok(SttWait::Nothing);
             }
         } else {
             tracing::warn!("No STT session was available to wait for");
@@ -2121,7 +2179,7 @@ impl PipelineHandle {
 
         if self.abort_flag.load(Ordering::SeqCst) {
             tracing::info!("Pipeline aborted after STT wait");
-            return Ok(None);
+            return Ok(SttWait::Nothing);
         }
 
         let raw_text = self
@@ -2144,10 +2202,10 @@ impl PipelineHandle {
                 .app_handle
                 .emit("pipeline:error", no_speech_user_error());
             self.set_state(PipelineState::Idle);
-            return Ok(None);
+            return Ok(SttWait::Nothing);
         }
 
-        Ok(Some(raw_text))
+        Ok(SttWait::Transcript(raw_text))
     }
 
     /// Polish raw text with LLM and output the result.
@@ -2240,7 +2298,11 @@ impl PipelineHandle {
             && voice_mode == crate::voice_intent::VoiceMode::Dictate
             && voice_intent.kind == crate::voice_intent::VoiceIntentKind::DictateInsert
             && !selected_text_has_content(selected_text.as_deref())
-            && polish_has_no_extra_instructions(config)
+            && clean_dictation_may_skip_polish(
+                config,
+                app_ctx.profile.family,
+                !dictionary_words.is_empty(),
+            )
         {
             let correction_patterns: Vec<&str> = correction_rules
                 .iter()
@@ -2260,7 +2322,7 @@ impl PipelineHandle {
                         provider_text.chars().count()
                     );
                     self.output_unpolished(provider_text, app_ctx, config).await;
-                    return PolishTextOutcome::polish_skipped(provider_text.to_string());
+                    return PolishTextOutcome::skipped(provider_text.to_string());
                 }
                 Some(reason) => tracing::info!("Polishing because of {reason:?}"),
             }
@@ -2544,6 +2606,7 @@ impl PipelineHandle {
                     config,
                     already_copied: false,
                     popup_fallback_enabled,
+                    hide_ask_window_on_restore: provider_plan.restore_target_before_insert,
                 };
                 let execution = crate::voice_intent::executor::execute_voice_intent(
                     crate::voice_intent::executor::VoiceExecutionRequest {
@@ -2915,9 +2978,14 @@ impl PipelineHandle {
     ) -> Result<output::InsertResult> {
         self.set_state(PipelineState::Outputting);
 
+        let configured_strategy =
+            output::InsertionStrategy::from_config_value(&config.insertion_strategy);
+        let accessibility_trusted = is_accessibility_trusted();
         // The user may have switched apps while speaking; go back to the one they
         // started in. Only if that fails is the text left on the clipboard instead.
-        let target_restored = target_guard.is_empty() || {
+        // Text that will only be copied anyway is no reason to take focus back.
+        let will_type = strategy_uses_automated_input(configured_strategy) && accessibility_trusted;
+        let target_restored = target_guard.is_empty() || !will_type || {
             let detector = self.context_detector.clone();
             let guard = target_guard.clone();
             tokio::task::spawn_blocking(move || detector.restore_target_application(&guard))
@@ -2935,10 +3003,10 @@ impl PipelineHandle {
         let requested_strategy = if target_warning.is_some() {
             output::InsertionStrategy::ClipboardCopyOnly
         } else {
-            output::InsertionStrategy::from_config_value(&config.insertion_strategy)
+            configured_strategy
         };
         let (strategy, accessibility_warning) =
-            effective_strategy_for_accessibility(requested_strategy, is_accessibility_trusted());
+            effective_strategy_for_accessibility(requested_strategy, accessibility_trusted);
 
         // Linux: check keyboard availability before attempting
         let effective_strategy = if strategy.needs_keyboard_access() {
@@ -3007,9 +3075,7 @@ impl PipelineHandle {
         );
         let insert_result = output_outcome.insert_result.clone();
         // A copy is the expected result when the user chose copy-only output.
-        let chose_copy_only =
-            output::InsertionStrategy::from_config_value(&config.insertion_strategy)
-                == output::InsertionStrategy::ClipboardCopyOnly;
+        let chose_copy_only = configured_strategy == output::InsertionStrategy::ClipboardCopyOnly;
         if insert_result.status != output::InsertStatus::Inserted && !chose_copy_only {
             self.output_trouble.store(true, Ordering::SeqCst);
         }
@@ -3598,10 +3664,69 @@ mod tests {
     }
 
     #[test]
+    fn clean_dictations_skip_polish_only_without_extra_instructions() {
+        use crate::app_detector::types::ContextFamily;
+        let config = storage::AppConfig::default();
+        assert!(clean_dictation_may_skip_polish(
+            &config,
+            ContextFamily::WorkChat,
+            false
+        ));
+        assert!(!clean_dictation_may_skip_polish(
+            &config,
+            ContextFamily::WorkChat,
+            true
+        ));
+        assert!(!clean_dictation_may_skip_polish(
+            &config,
+            ContextFamily::Email,
+            false
+        ));
+        let no_adaptation = storage::AppConfig {
+            context_adaptation_enabled: false,
+            ..storage::AppConfig::default()
+        };
+        assert!(clean_dictation_may_skip_polish(
+            &no_adaptation,
+            ContextFamily::Email,
+            false
+        ));
+        for config in [
+            storage::AppConfig {
+                polish_style: "professional".to_string(),
+                ..storage::AppConfig::default()
+            },
+            storage::AppConfig {
+                translate_enabled: true,
+                ..storage::AppConfig::default()
+            },
+            storage::AppConfig {
+                polish_custom_prompt: "Always use English".to_string(),
+                ..storage::AppConfig::default()
+            },
+            storage::AppConfig {
+                polish_chinese_script: "simplified".to_string(),
+                ..storage::AppConfig::default()
+            },
+        ] {
+            assert!(!clean_dictation_may_skip_polish(
+                &config,
+                ContextFamily::General,
+                false
+            ));
+        }
+    }
+
+    #[test]
     fn rescue_text_falls_back_to_the_raw_transcript() {
-        assert_eq!(rescue_text("polished", "raw"), "polished");
-        assert_eq!(rescue_text("", "raw"), "raw");
-        assert_eq!(rescue_text("  \n", "raw"), "raw");
+        assert_eq!(rescue_text("polished", "raw", false), Some("polished"));
+        assert_eq!(rescue_text("", "raw", false), Some("raw"));
+        assert_eq!(rescue_text("  \n", "raw", false), Some("raw"));
+        assert_eq!(rescue_text("", "make this formal", true), None);
+        assert_eq!(
+            rescue_text("formal text", "make this formal", true),
+            Some("formal text")
+        );
     }
 
     #[test]

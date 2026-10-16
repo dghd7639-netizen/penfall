@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use enigo::{Enigo, Keyboard, Settings};
 
 use crate::error::AppError;
 
@@ -231,18 +231,71 @@ fn type_text_sync(text: &str) -> Result<(), AppError> {
             }
         }
         if i < lines.len() - 1 {
-            enigo
-                .key(Key::Shift, Direction::Press)
-                .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
-            enigo
-                .key(Key::Return, Direction::Click)
-                .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
-            enigo
-                .key(Key::Shift, Direction::Release)
-                .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
+            type_line_break(&mut enigo)?;
         }
     }
 
+    Ok(())
+}
+
+/// Shift+Return, which chat boxes treat as a new line rather than "send".
+#[cfg(not(target_os = "macos"))]
+fn type_line_break(enigo: &mut Enigo) -> Result<(), AppError> {
+    use enigo::{Direction, Key};
+
+    enigo
+        .key(Key::Shift, Direction::Press)
+        .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
+    enigo
+        .key(Key::Return, Direction::Click)
+        .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
+    enigo
+        .key(Key::Shift, Direction::Release)
+        .map_err(|e| AppError::Output(format!("Key error: {:?}", e)))?;
+    Ok(())
+}
+
+/// Shift+Return with Shift set on the Return event itself. enigo posts Shift
+/// as a separate key event, and apps that read the flags of the Return event
+/// saw a plain Return and sent the message.
+#[cfg(target_os = "macos")]
+fn type_line_break(_enigo: &mut Enigo) -> Result<(), AppError> {
+    use std::ffi::c_void;
+
+    const KEYCODE_RETURN: u16 = 36;
+    const FLAG_MASK_SHIFT: u64 = 0x0002_0000;
+    const HID_EVENT_TAP: u32 = 0;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventCreateKeyboardEvent(
+            source: *const c_void,
+            keycode: u16,
+            key_down: bool,
+        ) -> *mut c_void;
+        fn CGEventSetFlags(event: *mut c_void, flags: u64);
+        fn CGEventPost(tap: u32, event: *mut c_void);
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: *const c_void);
+    }
+
+    for key_down in [true, false] {
+        // SAFETY: the event is created, used and released here only.
+        unsafe {
+            let event = CGEventCreateKeyboardEvent(std::ptr::null(), KEYCODE_RETURN, key_down);
+            if event.is_null() {
+                return Err(AppError::Output(
+                    "Failed to create the line break key event".to_string(),
+                ));
+            }
+            CGEventSetFlags(event, FLAG_MASK_SHIFT);
+            CGEventPost(HID_EVENT_TAP, event);
+            CFRelease(event);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(TYPE_CHUNK_DELAY_MS));
+    }
     Ok(())
 }
 

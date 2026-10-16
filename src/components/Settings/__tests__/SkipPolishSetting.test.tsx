@@ -36,7 +36,9 @@ describe('SkipPolishSetting', () => {
 
     fireEvent.change(input, { target: { value: '1' } })
     expect(useAppStore.getState().config.skip_polish_max_chars).toBe(30)
+    // A value in range is saved without waiting for blur.
     fireEvent.change(input, { target: { value: '15' } })
+    expect(useAppStore.getState().config.skip_polish_max_chars).toBe(15)
     fireEvent.blur(input)
     expect(useAppStore.getState().config.skip_polish_max_chars).toBe(15)
 

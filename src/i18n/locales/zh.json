@@ -384,7 +384,7 @@
     "enableAiPolish": "AI 整理听写",
     "skipPolishWhenClean": "短句直接输出",
     "skipPolishMaxChars": "最多字数（不含标点）",
-    "skipPolishWhenCleanHint": "没有口水字、卡壳重复和改口的短句不送去 AI 整理，直接输入识别结果，省去约 2 秒等待。",
+    "skipPolishWhenCleanHint": "没有口水字、卡壳重复和改口的短句不送去 AI 整理，直接输入识别结果，省去约 2 秒等待。词典里有自定义词汇、用「专业」风格或在邮件应用里时照常整理。",
     "enableAiPolishDesc": "输出前清理口癖、标点和语序。关闭后会直接输出原始转写。",
     "contextAdaptation": "根据当前应用调整写作风格",
     "contextAdaptationHint": "只使用本地识别的应用类别来调整表达方式。",

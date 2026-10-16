@@ -384,7 +384,7 @@
     "enableAiPolish": "AI cleanup for dictation",
     "skipPolishWhenClean": "Type clean short dictations as is",
     "skipPolishMaxChars": "Up to (characters, without punctuation)",
-    "skipPolishWhenCleanHint": "Short dictations with no fillers, stutters or corrections skip AI cleanup and are typed as recognized, saving about 2 seconds.",
+    "skipPolishWhenCleanHint": "Short dictations with no fillers, stutters or corrections skip AI cleanup and are typed as recognized, saving about 2 seconds. They are still cleaned up when the dictionary has custom words, with the Professional style, or in email apps.",
     "enableAiPolishDesc": "Cleans up fillers, punctuation, and wording before output. Turn off to output raw transcription.",
     "contextAdaptation": "Adapt writing to the current app",
     "contextAdaptationHint": "Uses a private local app category to shape the writing style.",

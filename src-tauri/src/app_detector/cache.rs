@@ -17,6 +17,9 @@ use super::user_mappings::{
 
 const DEFAULT_STALE_AFTER: Duration = Duration::from_secs(2);
 const DEFAULT_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+/// An app reports itself frontmost before its window and text field take
+/// focus again; typing right away can drop the first characters.
+const FOCUS_SETTLE_AFTER_RESTORE: Duration = Duration::from_millis(150);
 
 #[derive(Clone, Copy, Debug)]
 enum RefreshSignal {
@@ -300,6 +303,7 @@ impl ContextDetectorHandle {
             std::thread::sleep(Duration::from_millis(40));
             if self.target_still_matches_now(expected) {
                 self.notify_focus_changed();
+                std::thread::sleep(FOCUS_SETTLE_AFTER_RESTORE);
                 return true;
             }
         }
