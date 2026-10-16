@@ -280,6 +280,16 @@ async fn output_with_strategy_using(
     clipboard_copy: &dyn TextOutput,
     clipboard_warning: Option<UserError>,
 ) -> Result<OutputOutcome, String> {
+    // A typed line break reaches the app as an Enter key (the Shift that should
+    // come with it does not reliably arrive on macOS), and chat boxes send the
+    // message on Enter, so each line went out as its own message. Pasting puts
+    // the whole text in at once with its line breaks intact.
+    let strategy = if strategy == InsertionStrategy::Auto && text.contains('\n') {
+        InsertionStrategy::ClipboardPaste
+    } else {
+        strategy
+    };
+
     if strategy == InsertionStrategy::ClipboardCopyOnly {
         return clipboard_copy
             .type_text(text)
@@ -505,6 +515,32 @@ mod tests {
             InsertionStrategy::Keyboard
         );
         assert_eq!(outcome.insert_result.chars_inserted, 5);
+        assert!(outcome.warning.is_none());
+    }
+
+    #[tokio::test]
+    async fn multi_line_text_is_pasted_instead_of_typed() {
+        let keyboard = FakeOutput::err(OutputMode::Keyboard, "keyboard should not be used");
+        let clipboard = FakeOutput::ok(
+            OutputMode::Clipboard,
+            InsertResult::inserted(InsertionStrategy::ClipboardPaste, 11),
+        );
+
+        let outcome = output_with_fallback_using(
+            "first\nsecond",
+            OutputMode::Keyboard,
+            &keyboard,
+            &clipboard,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(outcome.insert_result.status, InsertStatus::Inserted);
+        assert_eq!(
+            outcome.insert_result.strategy_used,
+            InsertionStrategy::ClipboardPaste
+        );
         assert!(outcome.warning.is_none());
     }
 
