@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Добавлено в словарь",
     "undoLearnedCorrection": "Отменить",
-    "undoneLearnedCorrection": "Отменено"
+    "undoneLearnedCorrection": "Отменено",
+    "rescueCopy": "Копировать",
+    "rescueCopied": "Скопировано, можно вставить",
+    "rescueCopyFailed": "Не удалось скопировать",
+    "rescueDismiss": "Закрыть",
+    "rescueHint": "Этот текст не удалось ввести на прежнее место; скопируйте и вставьте его сами"
   },
   "settings": {
     "title": "Настройки",

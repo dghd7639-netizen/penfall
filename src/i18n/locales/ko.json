@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "사전에 추가됨",
     "undoLearnedCorrection": "실행 취소",
-    "undoneLearnedCorrection": "취소됨"
+    "undoneLearnedCorrection": "취소됨",
+    "rescueCopy": "복사",
+    "rescueCopied": "복사됨, 붙여넣을 수 있습니다",
+    "rescueCopyFailed": "복사 실패",
+    "rescueDismiss": "닫기",
+    "rescueHint": "이 텍스트를 원래 위치에 입력하지 못했습니다. 복사해서 직접 붙여넣으세요"
   },
   "settings": {
     "title": "설정",

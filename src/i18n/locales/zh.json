@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "已加入词典",
     "undoLearnedCorrection": "撤销",
-    "undoneLearnedCorrection": "已撤销"
+    "undoneLearnedCorrection": "已撤销",
+    "rescueCopy": "复制",
+    "rescueCopied": "已复制，可以粘贴了",
+    "rescueCopyFailed": "复制失败",
+    "rescueDismiss": "关闭",
+    "rescueHint": "这段文字没能输入到原来的位置，点「复制」后自己粘贴"
   },
   "settings": {
     "title": "设置",

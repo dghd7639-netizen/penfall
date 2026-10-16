@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "辞書に追加しました",
     "undoLearnedCorrection": "取り消す",
-    "undoneLearnedCorrection": "取り消しました"
+    "undoneLearnedCorrection": "取り消しました",
+    "rescueCopy": "コピー",
+    "rescueCopied": "コピーしました。貼り付けできます",
+    "rescueCopyFailed": "コピーに失敗しました",
+    "rescueDismiss": "閉じる",
+    "rescueHint": "このテキストは元の場所に入力できませんでした。コピーして貼り付けてください"
   },
   "settings": {
     "title": "設定",

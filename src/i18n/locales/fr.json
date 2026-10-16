@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Ajouté au dictionnaire",
     "undoLearnedCorrection": "Annuler",
-    "undoneLearnedCorrection": "Annulé"
+    "undoneLearnedCorrection": "Annulé",
+    "rescueCopy": "Copier",
+    "rescueCopied": "Copié, prêt à coller",
+    "rescueCopyFailed": "Échec de la copie",
+    "rescueDismiss": "Fermer",
+    "rescueHint": "Ce texte n’a pas pu être saisi à l’endroit prévu ; copiez-le puis collez-le"
   },
   "settings": {
     "title": "Paramètres",

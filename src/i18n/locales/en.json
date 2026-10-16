@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Added to dictionary",
     "undoLearnedCorrection": "Undo",
-    "undoneLearnedCorrection": "Undone"
+    "undoneLearnedCorrection": "Undone",
+    "rescueCopy": "Copy",
+    "rescueCopied": "Copied — ready to paste",
+    "rescueCopyFailed": "Copy failed",
+    "rescueDismiss": "Dismiss",
+    "rescueHint": "This text could not be typed where you were; copy it and paste it yourself"
   },
   "settings": {
     "title": "Settings",

@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Aggiunto al dizionario",
     "undoLearnedCorrection": "Annulla",
-    "undoneLearnedCorrection": "Annullato"
+    "undoneLearnedCorrection": "Annullato",
+    "rescueCopy": "Copia",
+    "rescueCopied": "Copiato, pronto da incollare",
+    "rescueCopyFailed": "Copia non riuscita",
+    "rescueDismiss": "Chiudi",
+    "rescueHint": "Questo testo non è stato inserito dove eri; copialo e incollalo tu"
   },
   "settings": {
     "title": "Impostazioni",

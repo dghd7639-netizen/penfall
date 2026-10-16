@@ -8,6 +8,8 @@ interface CapsuleSize {
 
 /** Width shared by every dictation state so the capsule never changes length mid-run. */
 export const DICTATION_WIDTH = 160
+/** Wide enough to show the start of rescued text next to its copy and close buttons. */
+export const RESCUE_WIDTH = 320
 
 export interface CapsuleVisibilityInput {
   capsuleAutoHide: boolean
@@ -17,6 +19,7 @@ export interface CapsuleVisibilityInput {
   hasError: boolean
   pipelineState: PipelineState
   learnedNotice?: boolean
+  rescue?: boolean
 }
 
 export function getCapsuleVisibility({
@@ -27,9 +30,11 @@ export function getCapsuleVisibility({
   hasError,
   pipelineState,
   learnedNotice = false,
+  rescue = false,
 }: CapsuleVisibilityInput): boolean {
   return (
     !capsuleAutoHide ||
+    rescue ||
     contextMenuOpen ||
     translationTargetMenuOpen ||
     capsuleExpanded ||
@@ -50,9 +55,11 @@ function getSizeForState(
   contextMenuOpen: boolean,
   translationTargetMenuOpen = false,
   learnedNotice = false,
+  rescue = false,
 ): CapsuleSize {
   if (translationTargetMenuOpen) return { width: 360, height: 180 }
   if (contextMenuOpen) return { width: 220, height: 220 }
+  if (rescue) return { width: RESCUE_WIDTH, height: 36 }
   if (hasError) return { width: DICTATION_WIDTH, height: 36 }
   if (expanded) return { width: 220, height: 90 }
   if (learnedNotice && state === 'idle') return { width: 220, height: 36 }
@@ -82,6 +89,7 @@ export function useCapsuleResize() {
   const setContextMenuReady = useAppStore((s) => s.setContextMenuReady)
   const capsuleAutoHide = useAppStore((s) => s.config.capsule_auto_hide)
   const learnedNotice = useAppStore((s) => s.learnedCorrections.length > 0)
+  const rescue = useAppStore((s) => s.rescue !== null)
   const initialized = useRef(false)
   const prevWindowSize = useRef<{ width: number; height: number } | null>(null)
 
@@ -95,6 +103,7 @@ export function useCapsuleResize() {
       contextMenuOpen,
       translationTargetMenuOpen,
       learnedNotice,
+      rescue,
     )
     const windowWidth = size.width + 24
     const windowHeight = size.height + 24
@@ -106,6 +115,7 @@ export function useCapsuleResize() {
       hasError,
       pipelineState,
       learnedNotice,
+      rescue,
     })
 
     import('@tauri-apps/api/window')
@@ -182,6 +192,7 @@ export function useCapsuleResize() {
     translationTargetMenuOpen,
     capsuleAutoHide,
     learnedNotice,
+    rescue,
     setContextMenuReady,
   ])
 
@@ -192,5 +203,6 @@ export function useCapsuleResize() {
     contextMenuOpen,
     translationTargetMenuOpen,
     learnedNotice,
+    rescue,
   )
 }

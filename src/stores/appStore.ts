@@ -170,6 +170,12 @@ export interface LearnedCorrection {
   replacement: string
 }
 
+export interface DictationRescue {
+  text: string
+  /** Why the text was not typed, if an error was showing when it arrived. */
+  reason: string | null
+}
+
 export interface CustomScene {
   id: string
   name: string
@@ -321,6 +327,10 @@ interface AppState {
   setCorrectionRules: (rules: CorrectionRule[]) => void
   learnedCorrections: LearnedCorrection[]
   setLearnedCorrections: (corrections: LearnedCorrection[]) => void
+
+  // Text from a dictation that did not make it into the target app, kept for copying
+  rescue: DictationRescue | null
+  setRescue: (rescue: DictationRescue | null) => void
 
   // Latency of the most recent dictations, newest first (this session only)
   recentTimings: DictationTiming[]
@@ -868,6 +878,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCorrectionRules: (correctionRules) => set({ correctionRules }),
   learnedCorrections: [],
   setLearnedCorrections: (learnedCorrections) => set({ learnedCorrections }),
+  rescue: null,
+  setRescue: (rescue) => set({ rescue }),
 
   recentTimings: [],
   addTiming: (timing) =>

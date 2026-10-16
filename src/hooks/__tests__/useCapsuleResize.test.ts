@@ -39,6 +39,19 @@ describe('getCapsuleVisibility', () => {
     ).toBe(true)
   })
 
+  it('shows idle capsule while rescued text is waiting to be copied', () => {
+    expect(
+      getCapsuleVisibility({
+        capsuleAutoHide: true,
+        contextMenuOpen: false,
+        capsuleExpanded: false,
+        hasError: false,
+        pipelineState: 'idle',
+        rescue: true,
+      }),
+    ).toBe(true)
+  })
+
   it('shows active capsule while recording', () => {
     expect(
       getCapsuleVisibility({

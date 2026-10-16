@@ -214,6 +214,16 @@ fn soften_pause_periods(text: &str) -> String {
     out
 }
 
+/// The text to offer for copying: the result when there is one, otherwise the
+/// raw transcript (polish failed and nothing was generated).
+fn rescue_text<'a>(final_text: &'a str, raw_text: &'a str) -> &'a str {
+    if final_text.trim().is_empty() {
+        raw_text
+    } else {
+        final_text
+    }
+}
+
 fn no_speech_user_error() -> crate::error::UserError {
     crate::error::UserError {
         code: "stt_no_speech_detected".to_string(),
@@ -731,6 +741,8 @@ pub struct PipelineHandle {
     cloud_operation_id: Arc<Mutex<Option<String>>>,
     recording_start: Arc<Mutex<Option<std::time::Instant>>>,
     active_translation_operation: Arc<Mutex<Option<TranslationOperationState>>>,
+    /// Set when output during the current stop() did not land in the target app.
+    output_trouble: Arc<AtomicBool>,
     shared_client: reqwest::Client,
     /// Serializes start()/stop() so that stop() waits for start() to finish
     /// its setup before reading shared state (preloaded_config, audio_handle, etc.).
@@ -941,9 +953,21 @@ impl PipelineHandle {
             cloud_operation_id: Arc::new(Mutex::new(None)),
             recording_start: Arc::new(Mutex::new(None)),
             active_translation_operation: Arc::new(Mutex::new(None)),
+            output_trouble: Arc::new(AtomicBool::new(false)),
             shared_client,
             pipeline_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    /// Shows the text in a copyable capsule after a dictation that did not make
+    /// it into the target app as expected.
+    fn offer_rescue(&self, text: &str) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        tracing::info!("Offering {} chars to copy by hand", text.chars().count());
+        let _ = self.app_handle.emit("pipeline:rescue", text);
     }
 
     fn set_state(&self, new_state: PipelineState) {
@@ -1947,6 +1971,7 @@ impl PipelineHandle {
         }
 
         // ── Phase 2: LLM polish + output ───────────────────────────────
+        self.output_trouble.store(false, Ordering::SeqCst);
         let polish_outcome = self
             .polish_text(PolishTextInput {
                 raw_text: &raw_text,
@@ -1969,6 +1994,12 @@ impl PipelineHandle {
             raw_text.chars().count(),
             final_text.chars().count()
         );
+        // Any fallback (polish failed, text only copied, output failed) leaves the
+        // text where the user can copy it, falling back to the raw transcript.
+        let output_trouble = self.output_trouble.swap(false, Ordering::SeqCst);
+        if polish_outcome.history_output_status.is_some() || output_trouble {
+            self.offer_rescue(rescue_text(&final_text, &raw_text));
+        }
 
         // ── Phase 3: Timing, history, cleanup ──────────────────────────
         let total_elapsed = stop_start.elapsed();
@@ -2050,6 +2081,15 @@ impl PipelineHandle {
                 return Ok(None);
             }
             if take_matching_stt_error(&self.stt_error, control.id).is_some() {
+                if heard_voice {
+                    let partial = self
+                        .accumulated_text
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .trim()
+                        .to_string();
+                    self.offer_rescue(&partial);
+                }
                 self.set_state(PipelineState::Idle);
                 return Ok(None);
             }
@@ -2887,7 +2927,10 @@ impl PipelineHandle {
         .await
         {
             Ok(outcome) => outcome,
-            Err(e) => anyhow::bail!("{}", e),
+            Err(e) => {
+                self.output_trouble.store(true, Ordering::SeqCst);
+                anyhow::bail!("{}", e)
+            }
         };
 
         if let Some(user_error) = target_warning.or(accessibility_warning) {
@@ -2902,6 +2945,13 @@ impl PipelineHandle {
             output_outcome.insert_result.chars_inserted
         );
         let insert_result = output_outcome.insert_result.clone();
+        // A copy is the expected result when the user chose copy-only output.
+        let chose_copy_only =
+            output::InsertionStrategy::from_config_value(&config.insertion_strategy)
+                == output::InsertionStrategy::ClipboardCopyOnly;
+        if insert_result.status != output::InsertStatus::Inserted && !chose_copy_only {
+            self.output_trouble.store(true, Ordering::SeqCst);
+        }
         if insert_result.status == output::InsertStatus::Inserted {
             crate::correction_learning::watch_after_insert(
                 self.app_handle.clone(),
@@ -3484,6 +3534,13 @@ mod tests {
             "你能明白吗？ 明白的话告诉我。"
         );
         assert_eq!(soften_pause_periods("第一句。第二句。"), "第一句。第二句。");
+    }
+
+    #[test]
+    fn rescue_text_falls_back_to_the_raw_transcript() {
+        assert_eq!(rescue_text("polished", "raw"), "polished");
+        assert_eq!(rescue_text("", "raw"), "raw");
+        assert_eq!(rescue_text("  \n", "raw"), "raw");
     }
 
     #[test]

@@ -7,6 +7,7 @@ import { useAppStore } from '../../../stores/appStore'
 import { removeCorrectionRule, setActiveTranslationTarget, stopAskFlow } from '../../../lib/tauri'
 import { Capsule } from '../index'
 import { LEARNED_NOTICE_MS } from '../CapsuleLearned'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 
 vi.mock('framer-motion', () => {
   // Cache per tag so motion.div keeps one component identity across renders, like the real library.
@@ -38,6 +39,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../../hooks/useCapsuleResize', () => ({
   DICTATION_WIDTH: 160,
+  RESCUE_WIDTH: 320,
   useCapsuleResize: () => ({ width: 160, height: 36 }),
 }))
 
@@ -51,6 +53,10 @@ vi.mock('../../../lib/tauri', () => ({
   removeCorrectionRule: vi.fn().mockResolvedValue(undefined),
   setCapsuleAutoHide: vi.fn().mockResolvedValue(undefined),
   stopAskFlow: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
+  writeText: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -180,6 +186,34 @@ describe('Capsule flow states', () => {
 
     expect(container.textContent).not.toContain('通义')
     expect(screen.getByRole('button', { name: 'capsule.finishRecording' })).toBeInTheDocument()
+  })
+
+  it('keeps text that was not typed up until it is copied', async () => {
+    useAppStore.setState({
+      pipelineError: 'capsule.errors.llm_failed',
+      rescue: { text: '第一行\n第二行', reason: 'capsule.errors.llm_failed' },
+    })
+
+    const { container } = render(<Capsule />)
+
+    expect(container.textContent).toContain('第一行 第二行')
+    const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
+    expect(shell.style.width).toBe('320px')
+    fireEvent.click(screen.getByRole('button', { name: 'capsule.rescueCopy' }))
+    await waitFor(() => expect(container.textContent).toContain('capsule.rescueCopied'))
+    expect(writeText).toHaveBeenCalledWith('第一行\n第二行')
+    await waitFor(() => expect(useAppStore.getState().rescue).toBeNull(), { timeout: 3000 })
+    expect(useAppStore.getState().pipelineError).toBeNull()
+  })
+
+  it('dismisses rescued text without copying it', () => {
+    useAppStore.setState({ rescue: { text: '没输进去的话', reason: null } })
+    render(<Capsule />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'capsule.rescueDismiss' }))
+
+    expect(useAppStore.getState().rescue).toBeNull()
+    expect(writeText).not.toHaveBeenCalled()
   })
 
   it('finishes recording only from the check button, not the draggable shell', async () => {

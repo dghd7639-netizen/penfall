@@ -127,6 +127,8 @@ export function useTauriEvents() {
       setPipelineState(state)
       if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
         useAppStore.getState().setLearnedCorrections([])
+        // The rescued text is still in History; a new run takes the capsule back.
+        useAppStore.getState().setRescue(null)
       }
       if (state === 'preparing' || state === 'recording' || state === 'ask_recording') {
         const config = useAppStore.getState().config
@@ -189,6 +191,12 @@ export function useTauriEvents() {
       }
       const incident = managedCloudIncidentFromPipelineError(payload, useAppStore.getState().config)
       if (incident) useCloudServiceStore.getState().setIncident(incident)
+    })
+    addListener<string>('pipeline:rescue', (text) => {
+      // The rescue capsule replaces the error, keeping it as the reason.
+      const { pipelineError, setRescue } = useAppStore.getState()
+      setRescue({ text, reason: pipelineError })
+      setPipelineError(null)
     })
     addListener<{ code: string; details?: string }>('pipeline:warning', (payload) => {
       const message = t(`errors.${payload.code}`, { details: payload.details ?? '' })

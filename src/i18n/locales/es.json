@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Añadido al diccionario",
     "undoLearnedCorrection": "Deshacer",
-    "undoneLearnedCorrection": "Deshecho"
+    "undoneLearnedCorrection": "Deshecho",
+    "rescueCopy": "Copiar",
+    "rescueCopied": "Copiado, listo para pegar",
+    "rescueCopyFailed": "No se pudo copiar",
+    "rescueDismiss": "Cerrar",
+    "rescueHint": "Este texto no se pudo escribir donde estabas; cópialo y pégalo tú"
   },
   "settings": {
     "title": "Configuración",

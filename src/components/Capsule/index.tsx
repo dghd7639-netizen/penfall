@@ -10,8 +10,9 @@ import { CapsulePolishing } from './CapsulePolishing'
 import { CapsuleComplete } from './CapsuleComplete'
 import { CapsuleError } from './CapsuleError'
 import { CapsuleLearned } from './CapsuleLearned'
+import { CapsuleRescue } from './CapsuleRescue'
 import { CapsuleProgressFill } from './CapsuleProgressFill'
-import { DICTATION_WIDTH } from '../../hooks/useCapsuleResize'
+import { DICTATION_WIDTH, RESCUE_WIDTH } from '../../hooks/useCapsuleResize'
 import { CapsuleContextMenu } from './CapsuleContextMenu'
 import { CapsuleAskRecording } from './CapsuleAskRecording'
 import { CapsuleAskThinking } from './CapsuleAskThinking'
@@ -21,7 +22,14 @@ const DRAG_THRESHOLD = 5
 // Rendered outside the keyed content so the fill keeps going across these states.
 const PROGRESS_STATES = new Set(['transcribing', 'polishing', 'outputting'])
 
-function getCapsuleState(pipelineState: string, hasError: boolean, hasLearnedNotice: boolean) {
+function getCapsuleState(
+  pipelineState: string,
+  hasError: boolean,
+  hasLearnedNotice: boolean,
+  hasRescue: boolean,
+) {
+  // Text that did not make it into the app stays up until copied or dismissed.
+  if (hasRescue) return 'rescue'
   if (hasError) return 'error'
   // Audio captured while the STT provider connects is queued, so recording UI can show right away.
   if (pipelineState === 'preparing') return 'recording'
@@ -35,6 +43,8 @@ function getCapsuleShellSize(capsuleState: string) {
       return { width: 36, height: 36 }
     case 'learned':
       return { width: 220, height: 36 }
+    case 'rescue':
+      return { width: RESCUE_WIDTH, height: 36 }
     case 'ask_recording':
     case 'ask_thinking':
       return { width: 168, height: 36 }
@@ -67,7 +77,8 @@ export function Capsule() {
 
   const hasError = pipelineError !== null
   const hasLearnedNotice = useAppStore((s) => s.learnedCorrections.length > 0)
-  const capsuleState = getCapsuleState(pipelineState, hasError, hasLearnedNotice)
+  const hasRescue = useAppStore((s) => s.rescue !== null)
+  const capsuleState = getCapsuleState(pipelineState, hasError, hasLearnedNotice, hasRescue)
   const capsuleShellSize = getCapsuleShellSize(capsuleState)
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -177,6 +188,7 @@ export function Capsule() {
             {capsuleState === 'ask_thinking' && <CapsuleAskThinking />}
             {capsuleState === 'error' && <CapsuleError />}
             {capsuleState === 'learned' && <CapsuleLearned />}
+            {capsuleState === 'rescue' && <CapsuleRescue />}
           </motion.div>
         </AnimatePresence>
       </motion.div>

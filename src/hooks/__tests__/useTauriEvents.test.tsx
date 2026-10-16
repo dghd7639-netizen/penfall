@@ -211,6 +211,28 @@ describe('useTauriEvents', () => {
     expect(useCloudServiceStore.getState().incident).toBeNull()
   })
 
+  it('keeps rescued text with the error as its reason until the next run', async () => {
+    render(<HookHarness />)
+    await waitFor(() => {
+      expect(eventListeners.has('pipeline:error')).toBe(true)
+      expect(eventListeners.has('pipeline:rescue')).toBe(true)
+    })
+
+    act(() => {
+      eventListeners.get('pipeline:error')?.({ payload: { code: 'llm_failed' } })
+      eventListeners.get('pipeline:rescue')?.({ payload: '没润色的原文' })
+    })
+    const { rescue, pipelineError } = useAppStore.getState()
+    expect(rescue?.text).toBe('没润色的原文')
+    expect(rescue?.reason).not.toBeNull()
+    expect(pipelineError).toBeNull()
+
+    act(() => {
+      eventListeners.get('pipeline:state')?.({ payload: 'recording' })
+    })
+    expect(useAppStore.getState().rescue).toBeNull()
+  })
+
   it('clears an old incident when the user starts a manual retry', async () => {
     useCloudServiceStore.setState({
       incident: { kind: 'llm', code: 'llm_failed', occurredAt: '2026-08-26T10:00:00.000Z' },

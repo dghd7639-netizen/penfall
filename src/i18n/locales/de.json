@@ -274,7 +274,12 @@
     },
     "learnedCorrection": "Zum Wörterbuch hinzugefügt",
     "undoLearnedCorrection": "Rückgängig",
-    "undoneLearnedCorrection": "Rückgängig gemacht"
+    "undoneLearnedCorrection": "Rückgängig gemacht",
+    "rescueCopy": "Kopieren",
+    "rescueCopied": "Kopiert – bereit zum Einfügen",
+    "rescueCopyFailed": "Kopieren fehlgeschlagen",
+    "rescueDismiss": "Schließen",
+    "rescueHint": "Dieser Text konnte nicht eingegeben werden; kopiere ihn und füge ihn selbst ein"
   },
   "settings": {
     "title": "Einstellungen",
