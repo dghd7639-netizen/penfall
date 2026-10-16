@@ -214,6 +214,15 @@ fn soften_pause_periods(text: &str) -> String {
     out
 }
 
+/// Translation, scenes, a custom prompt or a script conversion change even a
+/// clean dictation, so those always go to the model.
+fn polish_has_no_extra_instructions(config: &storage::AppConfig) -> bool {
+    !config.translate_enabled
+        && config.active_scene.is_none()
+        && config.polish_custom_prompt.trim().is_empty()
+        && config.polish_chinese_script == "preserve"
+}
+
 /// The text to offer for copying: the result when there is one, otherwise the
 /// raw transcript (polish failed and nothing was generated).
 fn rescue_text<'a>(final_text: &'a str, raw_text: &'a str) -> &'a str {
@@ -769,6 +778,8 @@ struct PolishTextInput<'a> {
 struct PolishTextOutcome {
     final_text: String,
     llm_elapsed: std::time::Duration,
+    /// The dictation came out clean and was typed without a model call.
+    polish_skipped: bool,
     history_output_status: Option<String>,
     history_output_error: Option<String>,
     voice_execution: Option<crate::voice_intent::executor::VoiceExecutionResult>,
@@ -888,6 +899,7 @@ impl PolishTextOutcome {
         Self {
             final_text,
             llm_elapsed,
+            polish_skipped: false,
             history_output_status: None,
             history_output_error: None,
             voice_execution: None,
@@ -903,6 +915,7 @@ impl PolishTextOutcome {
         Self {
             final_text,
             llm_elapsed,
+            polish_skipped: false,
             history_output_status: Some(status.to_string()),
             history_output_error: Some(error.into()),
             voice_execution: None,
@@ -919,9 +932,17 @@ impl PolishTextOutcome {
         Self {
             final_text,
             llm_elapsed,
+            polish_skipped: false,
             history_output_status,
             history_output_error,
             voice_execution: Some(execution),
+        }
+    }
+
+    fn polish_skipped(final_text: String) -> Self {
+        Self {
+            polish_skipped: true,
+            ..Self::normal(final_text, std::time::Duration::ZERO)
         }
     }
 }
@@ -2028,6 +2049,7 @@ impl PipelineHandle {
                 "llm_ms": llm_elapsed.as_millis() as u64,
                 "total_ms": total_elapsed.as_millis() as u64,
                 "recording_ms": duration_ms,
+                "polish_skipped": polish_outcome.polish_skipped,
             }),
         );
 
@@ -2210,21 +2232,38 @@ impl PipelineHandle {
             }
 
             // No polishing — output raw text directly
-            if let Err(e) = self
-                .output_text(
-                    provider_text,
-                    &app_ctx.profile.app_label,
-                    &app_ctx.target_guard,
-                    config,
-                )
-                .await
-            {
-                tracing::error!("Output failed: {}", e);
-                let _ = self
-                    .app_handle
-                    .emit("pipeline:error", output_user_error(&e));
-            }
+            self.output_unpolished(provider_text, app_ctx, config).await;
             return PolishTextOutcome::normal(provider_text.to_string(), std::time::Duration::ZERO);
+        }
+
+        if config.skip_polish_when_clean
+            && voice_mode == crate::voice_intent::VoiceMode::Dictate
+            && voice_intent.kind == crate::voice_intent::VoiceIntentKind::DictateInsert
+            && !selected_text_has_content(selected_text.as_deref())
+            && polish_has_no_extra_instructions(config)
+        {
+            let correction_patterns: Vec<&str> = correction_rules
+                .iter()
+                .filter(|rule| rule.enabled)
+                .take(100)
+                .map(|rule| rule.pattern.as_str())
+                .collect();
+            match crate::polish_gate::polish_reason(&crate::polish_gate::PolishGateInput {
+                text: provider_text,
+                max_chars: config.skip_polish_max_chars as usize,
+                structured_style: config.polish_style == "structured",
+                correction_patterns: &correction_patterns,
+            }) {
+                None => {
+                    tracing::info!(
+                        "Skipping polish: {} chars came out clean",
+                        provider_text.chars().count()
+                    );
+                    self.output_unpolished(provider_text, app_ctx, config).await;
+                    return PolishTextOutcome::polish_skipped(provider_text.to_string());
+                }
+                Some(reason) => tracing::info!("Polishing because of {reason:?}"),
+            }
         }
 
         self.set_state(PipelineState::Polishing);
@@ -2842,6 +2881,28 @@ impl PipelineHandle {
                     .app_handle
                     .emit("pipeline:error", output_user_error(&error));
             }
+        }
+    }
+
+    async fn output_unpolished(
+        &self,
+        text: &str,
+        app_ctx: &RecordingContext,
+        config: &storage::AppConfig,
+    ) {
+        if let Err(e) = self
+            .output_text(
+                text,
+                &app_ctx.profile.app_label,
+                &app_ctx.target_guard,
+                config,
+            )
+            .await
+        {
+            tracing::error!("Output failed: {}", e);
+            let _ = self
+                .app_handle
+                .emit("pipeline:error", output_user_error(&e));
         }
     }
 

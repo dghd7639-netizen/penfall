@@ -113,6 +113,7 @@ export function useTauriEvents() {
       llm_ms: number
       total_ms: number
       recording_ms: number | null
+      polish_skipped?: boolean
     }>('pipeline:timing', (timing) => {
       useAppStore.getState().addTiming({
         sttMs: timing.stt_ms,
@@ -120,6 +121,7 @@ export function useTauriEvents() {
         outputMs: Math.max(0, timing.total_ms - timing.stt_ms - timing.llm_ms),
         totalMs: timing.total_ms,
         recordingMs: timing.recording_ms,
+        polishSkipped: timing.polish_skipped ?? false,
         at: Date.now(),
       })
     })

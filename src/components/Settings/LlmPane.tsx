@@ -29,6 +29,7 @@ import { ContextAdaptationApps } from './ContextAdaptationApps'
 import { TranslationTargets } from './TranslationTargets'
 import { AppStyleMappingDialog } from './AppStyleMappingDialog'
 import { ManageAppMappingsDialog } from './ManageAppMappingsDialog'
+import { SkipPolishSetting } from './SkipPolishSetting'
 
 export function LlmPane() {
   const config = useAppStore((s) => s.config)
@@ -469,6 +470,7 @@ export function LlmPane() {
             label={t('settings.enableAiPolish')}
           />
         </div>
+        <SkipPolishSetting />
         <div>
           <Toggle
             checked={config.context_adaptation_enabled}

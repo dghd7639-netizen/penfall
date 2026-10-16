@@ -14,6 +14,7 @@ pub mod native_hotkey;
 pub mod output;
 pub mod pipeline;
 pub mod platform;
+pub mod polish_gate;
 pub mod recording_deadline;
 pub mod selection;
 pub mod storage;

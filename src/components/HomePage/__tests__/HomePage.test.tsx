@@ -40,6 +40,12 @@ describe('HomePage dictation timing', () => {
     expect(screen.getByText(/润色最慢/)).toBeInTheDocument()
   })
 
+  it('says polish was skipped for a clean short dictation', () => {
+    useAppStore.getState().addTiming(timing({ llmMs: 0, totalMs: 1300, polishSkipped: true }))
+    render(<HomePage />)
+    expect(screen.getByText('已跳过')).toBeInTheDocument()
+  })
+
   it('points at recognition when that stage is the slowest', () => {
     useAppStore.getState().addTiming(timing({ sttMs: 8000, llmMs: 1800, totalMs: 10500 }))
     render(<HomePage />)

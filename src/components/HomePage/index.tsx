@@ -42,17 +42,18 @@ function TimingCard() {
       <h3 className="font-semibold">听写耗时</h3>
       <div className="grid grid-cols-4 gap-3 text-center">
         {[
-          { label: '识别', ms: latest.sttMs },
-          { label: '润色', ms: latest.llmMs },
-          { label: '输出', ms: latest.outputMs },
-          { label: '合计', ms: latest.totalMs },
-        ].map(({ label, ms }) => (
+          { label: '识别', value: seconds(latest.sttMs) },
+          // A clean short dictation is typed without waiting for the model.
+          { label: '润色', value: latest.polishSkipped ? '已跳过' : seconds(latest.llmMs) },
+          { label: '输出', value: seconds(latest.outputMs) },
+          { label: '合计', value: seconds(latest.totalMs) },
+        ].map(({ label, value }) => (
           <div key={label}>
             <p className="text-text-tertiary text-[12px]">{label}</p>
             <p
               className={`text-[18px] font-semibold ${label === slowest.label ? 'text-accent' : ''}`}
             >
-              {seconds(ms)}
+              {value}
             </p>
           </div>
         ))}

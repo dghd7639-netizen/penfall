@@ -326,6 +326,10 @@ fn normalize_translation_code(value: &str) -> Option<String> {
         .then_some(normalized)
 }
 
+pub const DEFAULT_SKIP_POLISH_MAX_CHARS: u32 = 30;
+const MIN_SKIP_POLISH_MAX_CHARS: u32 = 4;
+const MAX_SKIP_POLISH_MAX_CHARS: u32 = 100;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -345,6 +349,10 @@ pub struct AppConfig {
     pub llm_model: String,
     pub llm_base_url: String,
     pub polish_enabled: bool,
+    /// Type short dictations with no filler, stutter or correction as recognized.
+    pub skip_polish_when_clean: bool,
+    /// Longest dictation, in characters without punctuation, that may skip polish.
+    pub skip_polish_max_chars: u32,
     pub context_adaptation_enabled: bool,
     pub voice_routing_flags: crate::voice_intent::VoiceRoutingFlags,
     pub polish_style: String,
@@ -407,6 +415,8 @@ impl Default for AppConfig {
             llm_model: "google/gemini-2.5-flash".to_string(),
             llm_base_url: "https://openrouter.ai/api/v1".to_string(),
             polish_enabled: true,
+            skip_polish_when_clean: true,
+            skip_polish_max_chars: DEFAULT_SKIP_POLISH_MAX_CHARS,
             context_adaptation_enabled: true,
             voice_routing_flags: crate::voice_intent::VoiceRoutingFlags::default(),
             polish_style: "clean".to_string(),
@@ -584,6 +594,9 @@ impl AppConfig {
 
     pub(crate) fn normalize_values(&mut self) {
         self.stt_aliyun_workspace_id = self.stt_aliyun_workspace_id.trim().to_string();
+        self.skip_polish_max_chars = self
+            .skip_polish_max_chars
+            .clamp(MIN_SKIP_POLISH_MAX_CHARS, MAX_SKIP_POLISH_MAX_CHARS);
         if crate::audio::cue::CuePreset::from_id(&self.cue_sound).is_none() {
             self.cue_sound = crate::audio::cue::CuePreset::DEFAULT_ID.to_string();
         }
@@ -2178,6 +2191,27 @@ fn correction_identity_exists(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn clean_short_dictations_skip_polish_by_default_within_a_bounded_length() {
+        let config = AppConfig::default();
+        assert!(config.skip_polish_when_clean);
+        assert_eq!(config.skip_polish_max_chars, 30);
+
+        let mut config = AppConfig {
+            skip_polish_max_chars: 0,
+            ..AppConfig::default()
+        };
+        config.normalize_values();
+        assert_eq!(config.skip_polish_max_chars, 4);
+        config.skip_polish_max_chars = 5000;
+        config.normalize_values();
+        assert_eq!(config.skip_polish_max_chars, 100);
+
+        let from_old_file: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(from_old_file.skip_polish_when_clean);
+        assert_eq!(from_old_file.skip_polish_max_chars, 30);
+    }
+
     #[test]
     fn cue_sound_defaults_to_water_drop_and_rejects_unknown_ids() {
         assert_eq!(AppConfig::default().cue_sound, "water-drop");

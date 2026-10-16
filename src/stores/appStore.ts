@@ -159,6 +159,8 @@ export interface DictationTiming {
   outputMs: number
   totalMs: number
   recordingMs: number | null
+  /** The dictation came out clean and was typed without AI polish. */
+  polishSkipped?: boolean
   at: number
 }
 
@@ -230,6 +232,10 @@ export interface AppConfig {
   llm_model: string
   llm_base_url: string
   polish_enabled: boolean
+  /** Type short dictations with no filler, stutter or correction as recognized. */
+  skip_polish_when_clean: boolean
+  /** Longest dictation, in characters without punctuation, that may skip polish. */
+  skip_polish_max_chars: number
   context_adaptation_enabled: boolean
   voice_routing_flags: VoiceRoutingFlags
   polish_style: PolishStyle
@@ -779,6 +785,8 @@ const defaultConfig: AppConfig = {
   llm_model: 'qwen-turbo',
   llm_base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   polish_enabled: true,
+  skip_polish_when_clean: true,
+  skip_polish_max_chars: 30,
   context_adaptation_enabled: true,
   voice_routing_flags: {
     draft_insert: false,
