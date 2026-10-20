@@ -303,6 +303,13 @@ mod tests {
     use super::*;
     use anyhow::Result;
 
+    #[test]
+    fn debug_logging_keeps_the_typed_text_out() {
+        let directives = log_filter(EnvFilter::new("debug")).to_string();
+        assert!(directives.contains("enigo=info"), "{directives}");
+        assert!(directives.contains("opentypeless=debug"), "{directives}");
+    }
+
     fn text_mentions(text: &str, keywords: &[&str]) -> bool {
         let normalized = text.to_ascii_lowercase();
         keywords.iter().any(|keyword| normalized.contains(keyword))
@@ -869,6 +876,18 @@ fn dispatch_cli_action(app: &tauri::AppHandle, action: CliAction) {
     }
 }
 
+/// The log never holds dictated text. enigo logs every string it types at
+/// debug level, so it stays at info even when RUST_LOG=debug is set.
+fn log_filter(filter: EnvFilter) -> EnvFilter {
+    filter
+        .add_directive(
+            "opentypeless=debug"
+                .parse()
+                .expect("static directive is valid"),
+        )
+        .add_directive("enigo=info".parse().expect("static directive is valid"))
+}
+
 pub fn run() {
     #[cfg(target_os = "linux")]
     let xinitthreads_status = linux_x11::init_xlib_threads();
@@ -876,13 +895,7 @@ pub fn run() {
     apply_linux_workarounds();
 
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive(
-                "opentypeless=debug"
-                    .parse()
-                    .expect("static directive is valid"),
-            ),
-        )
+        .with_env_filter(log_filter(EnvFilter::from_default_env()))
         .init();
 
     #[cfg(target_os = "linux")]

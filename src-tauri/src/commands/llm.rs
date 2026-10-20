@@ -209,6 +209,33 @@ pub async fn fetch_llm_models(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_connection_test_logs_status_error_and_time_without_the_key() {
+        let passed = super::connection_test_log_line(
+            "openai",
+            "http://localhost:10100/v1",
+            "gemini-flash",
+            &Ok((200, 312)),
+            std::time::Duration::from_millis(315),
+        );
+        assert_eq!(
+            passed,
+            "LLM connection test passed: HTTP 200 in 312ms (provider=openai base_url=http://localhost:10100/v1 model=gemini-flash)"
+        );
+
+        let failed = super::connection_test_log_line(
+            "openai",
+            "http://localhost:10100/v1",
+            "gemini-flash",
+            &Err("HTTP 502 Bad Gateway: upstream closed".to_string()),
+            std::time::Duration::from_millis(30_004),
+        );
+        assert_eq!(
+            failed,
+            "LLM connection test failed after 30004ms (provider=openai base_url=http://localhost:10100/v1 model=gemini-flash): HTTP 502 Bad Gateway: upstream closed"
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -297,6 +324,55 @@ pub async fn bench_llm_connection(
     token_store: tauri::State<'_, SessionTokenStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<u32, String> {
+    let started = std::time::Instant::now();
+    let result = run_llm_connection_test(
+        api_key,
+        provider.clone(),
+        base_url.clone(),
+        model.clone(),
+        &token_store,
+        &client,
+    )
+    .await;
+    // The settings button shows this result; the log keeps it for later diagnosis.
+    tracing::info!(
+        "{}",
+        connection_test_log_line(&provider, &base_url, &model, &result, started.elapsed())
+    );
+    result.map(|(_, elapsed_ms)| elapsed_ms)
+}
+
+/// One line per connection test: what was tested, the outcome and how long it
+/// took. Holds no key and no dictated text.
+fn connection_test_log_line(
+    provider: &str,
+    base_url: &str,
+    model: &str,
+    result: &Result<(u16, u32), String>,
+    elapsed: std::time::Duration,
+) -> String {
+    let target = format!("provider={provider} base_url={base_url} model={model}");
+    match result {
+        Ok((status, elapsed_ms)) => {
+            format!("LLM connection test passed: HTTP {status} in {elapsed_ms}ms ({target})")
+        }
+        Err(error) => format!(
+            "LLM connection test failed after {}ms ({target}): {error}",
+            elapsed.as_millis()
+        ),
+    }
+}
+
+/// Sends a one-token request to the chosen model. Returns the HTTP status and
+/// the request time on success.
+async fn run_llm_connection_test(
+    api_key: String,
+    provider: String,
+    base_url: String,
+    model: String,
+    token_store: &SessionTokenStore,
+    client: &reqwest::Client,
+) -> Result<(u16, u32), String> {
     if provider.is_empty() {
         return Err("No provider specified".to_string());
     }
@@ -339,7 +415,7 @@ pub async fn bench_llm_connection(
         if !resp.status().is_success() {
             return Err(format!("HTTP {}", resp.status()));
         }
-        return Ok(elapsed);
+        return Ok((resp.status().as_u16(), elapsed));
     }
 
     let api_key = resolve_config_secret(&api_key, "llm", &provider, &SystemCredentialVault)
@@ -366,7 +442,7 @@ pub async fn bench_llm_connection(
     );
 
     let t0 = std::time::Instant::now();
-    let client = crate::llm::client_for(&base_url, &client);
+    let client = crate::llm::client_for(&base_url, client);
     let request = client.post(&url).header("Content-Type", "application/json");
     let resp = crate::llm::protocol::apply_auth_headers(request, &provider, &base_url, &api_key)
         .json(&body)
@@ -394,5 +470,5 @@ pub async fn bench_llm_connection(
         });
     }
 
-    Ok(elapsed)
+    Ok((resp.status().as_u16(), elapsed))
 }
