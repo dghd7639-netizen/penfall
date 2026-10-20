@@ -20,6 +20,9 @@ vi.mock('react-i18next', () => ({
         'settings.enterApiKey': 'Enter API Key',
         'settings.connectionSuccess': 'Connection successful',
         'settings.connectionFailed': 'Connection failed',
+        'settings.connectionTest': 'Test connection',
+        'settings.connectionTestSuccess': `Test passed in ${params?.ms} ms`,
+        'settings.connectionTestNeedsSetup': 'Fill in the API key, model and base URL',
         'settings.storedLocally': 'Stored locally',
         'settings.fetchModels': 'Fetch models',
         'settings.modelsAvailable': `${params?.count || 0} models available`,
@@ -405,13 +408,35 @@ describe('LlmPane', () => {
       })
     })
 
-    it('displays latency in milliseconds when test succeeds', () => {
+    it('says the test passed, with its latency, when it succeeds', () => {
       mockAppStore.config.llm_api_key = 'sk-test123'
       mockAppStore.llmTestStatus = 'success'
       mockAppStore.llmLatencyMs = 187
 
       render(<LlmPane />)
-      expect(screen.getByText('187ms')).toBeInTheDocument()
+      expect(screen.getByText('Test passed in 187 ms')).toBeInTheDocument()
+    })
+
+    it('waits for a model before the connection can be tested', () => {
+      mockAppStore.config.llm_api_key = 'sk-test123'
+      mockAppStore.config.llm_model = ''
+      render(<LlmPane />)
+
+      expect(screen.getByRole('button', { name: 'Test connection' })).toBeDisabled()
+      expect(screen.getByText('Fill in the API key, model and base URL')).toBeInTheDocument()
+    })
+
+    it('offers one connection test, below the key, model and base URL', () => {
+      mockAppStore.config.llm_api_key = 'sk-test123'
+      render(<LlmPane />)
+
+      const button = screen.getByRole('button', { name: 'Test connection' })
+      expect(button).not.toBeDisabled()
+      expect(screen.queryByText('Fill in the API key, model and base URL')).not.toBeInTheDocument()
+      const baseUrl = screen.getByDisplayValue('https://api.openai.com/v1')
+      expect(
+        baseUrl.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
     })
 
     it('displays generic success message when latency is null', () => {
@@ -556,6 +581,8 @@ describe('LlmPane', () => {
       fireEvent.change(input, { target: { value: 'gpt-4o' } })
 
       expect(mockAppStore.updateConfig).toHaveBeenCalledWith({ llm_model: 'gpt-4o' })
+      // A result for the old model no longer applies.
+      expect(mockAppStore.setLlmTestStatus).toHaveBeenCalledWith('idle')
       expect(mockAppStore.setLlmLatencyMs).toHaveBeenCalledWith(null)
     })
 

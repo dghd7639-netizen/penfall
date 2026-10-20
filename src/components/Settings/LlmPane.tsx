@@ -244,12 +244,20 @@ export function LlmPane() {
     }
   }
 
-  const renderConnectionFeedback = (includeCredentialStatus: boolean) => (
+  // The test sends a one-token request to the chosen model, so it needs all three.
+  const canTestConnection =
+    config.llm_base_url.trim() !== '' &&
+    config.llm_model.trim() !== '' &&
+    (!requiresApiKey || llmApiKey.trim() !== '')
+
+  const connectionFeedback = (
     <>
       {llmTestStatus === 'success' && (
         <p className="flex items-center gap-1 text-[12px] text-success mt-2">
           <CheckCircle2 size={13} />{' '}
-          {llmLatencyMs !== null ? `${llmLatencyMs}ms` : t('settings.connectionSuccess')}
+          {llmLatencyMs !== null
+            ? t('settings.connectionTestSuccess', { ms: llmLatencyMs })
+            : t('settings.connectionSuccess')}
         </p>
       )}
       {(llmTestStatus === 'error' || testErrorMessage) && (
@@ -258,14 +266,6 @@ export function LlmPane() {
           <span>{testErrorMessage || t('settings.connectionFailed')}</span>
         </div>
       )}
-      {includeCredentialStatus &&
-        (credentialErrorMessage ? (
-          <p className="text-[11px] text-error mt-1.5">
-            {t('settings.credentialSaveFailed', { details: credentialErrorMessage })}
-          </p>
-        ) : (
-          <p className="text-[11px] text-text-tertiary mt-1.5">{t('settings.storedLocally')}</p>
-        ))}
     </>
   )
 
@@ -342,16 +342,16 @@ export function LlmPane() {
                   placeholder={t('settings.enterApiKey')}
                   className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
                 />
-                <button
-                  onClick={handleTest}
-                  disabled={!llmApiKey || llmTestStatus === 'testing'}
-                  className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                >
-                  {llmTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
-                  {t('settings.test')}
-                </button>
               </div>
-              {renderConnectionFeedback(true)}
+              {credentialErrorMessage ? (
+                <p className="text-[11px] text-error mt-1.5">
+                  {t('settings.credentialSaveFailed', { details: credentialErrorMessage })}
+                </p>
+              ) : (
+                <p className="text-[11px] text-text-tertiary mt-1.5">
+                  {t('settings.storedLocally')}
+                </p>
+              )}
             </FormField>
           )}
 
@@ -362,6 +362,7 @@ export function LlmPane() {
                   value={config.llm_model}
                   onChange={(e) => {
                     updateConfig({ llm_model: e.target.value })
+                    setLlmTestStatus('idle')
                     setLlmLatencyMs(null)
                     setTestErrorMessage(null)
                   }}
@@ -445,20 +446,26 @@ export function LlmPane() {
                 }
                 className="min-w-0 flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
               />
-              {!requiresApiKey && (
-                <button
-                  type="button"
-                  onClick={handleTest}
-                  disabled={!config.llm_base_url || llmTestStatus === 'testing'}
-                  className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                >
-                  {llmTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
-                  {t('settings.test')}
-                </button>
-              )}
             </div>
-            {!requiresApiKey && renderConnectionFeedback(false)}
           </FormField>
+
+          <div>
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={!canTestConnection || llmTestStatus === 'testing'}
+              className="px-4 py-2.5 bg-accent text-on-accent rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+            >
+              {llmTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
+              {t('settings.connectionTest')}
+            </button>
+            {!canTestConnection && (
+              <p className="text-[11px] text-text-tertiary mt-1.5">
+                {t('settings.connectionTestNeedsSetup')}
+              </p>
+            )}
+            {connectionFeedback}
+          </div>
         </>
       )}
 
