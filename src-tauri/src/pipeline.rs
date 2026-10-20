@@ -2411,6 +2411,25 @@ impl PipelineHandle {
             Some(worker) => worker.finish().await,
             None => None,
         };
+        // Text already typed by streaming insert has to match the result, so
+        // only a result that is still to be typed is tidied.
+        let typed_while_streaming = streaming_report
+            .as_ref()
+            .is_some_and(|report| report.has_inserted_text());
+        let polish_result = polish_result.map(|mut response| {
+            if !typed_while_streaming {
+                let cleaned =
+                    llm::cleanup::clean_polished_text(&response.polished_text, provider_text);
+                // An answer that was nothing but leftover markup still leaves the
+                // transcript to type.
+                response.polished_text = if cleaned.is_empty() {
+                    provider_text.to_string()
+                } else {
+                    cleaned
+                };
+            }
+            response
+        });
 
         let polish_outcome = match polish_result {
             Ok(response) => {
