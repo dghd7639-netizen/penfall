@@ -2416,14 +2416,28 @@ impl PipelineHandle {
         let typed_while_streaming = streaming_report
             .as_ref()
             .is_some_and(|report| report.has_inserted_text());
+        let replaced_selection = (voice_intent.placement
+            == crate::voice_intent::VoiceOutputPlacement::ReplaceSelection)
+            .then_some(selected_text_for_execution.as_deref())
+            .flatten()
+            .filter(|selection| !selection.trim().is_empty());
+        // The transcript of a spoken command is an instruction, not text to type.
+        let transcript_is_text = !voice_intent_requires_generated_output(voice_intent.kind)
+            && !selected_text_has_content(selected_text_for_execution.as_deref());
         let polish_result = polish_result.map(|mut response| {
             if !typed_while_streaming {
                 let cleaned =
                     llm::cleanup::clean_polished_text(&response.polished_text, provider_text);
-                // An answer that was nothing but leftover markup still leaves the
-                // transcript to type.
                 response.polished_text = if cleaned.is_empty() {
-                    provider_text.to_string()
+                    // Nothing but leftover markup: a dictation still has its
+                    // transcript to type; a command is left with no answer.
+                    if transcript_is_text {
+                        provider_text.to_string()
+                    } else {
+                        cleaned
+                    }
+                } else if let Some(selection) = replaced_selection {
+                    llm::cleanup::with_whitespace_of(selection, &cleaned)
                 } else {
                     cleaned
                 };

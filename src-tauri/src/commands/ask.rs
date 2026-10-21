@@ -436,12 +436,14 @@ pub fn route_ask_intent(
     })
 }
 
-fn validate_ask_answer(answer: &str) -> Result<String, String> {
-    let trimmed = answer.trim().to_string();
-    if trimmed.is_empty() {
+/// The answer as shown: tidied like a polish result (stray 【】 from GPT
+/// models, surrounding whitespace), and never empty.
+fn validate_ask_answer(answer: &str, question: &str) -> Result<String, String> {
+    let cleaned = crate::llm::cleanup::clean_polished_text(answer, question);
+    if cleaned.is_empty() {
         return Err("Ask returned an empty answer. Please try again.".to_string());
     }
-    Ok(trimmed)
+    Ok(cleaned)
 }
 
 struct AskSearchExecutionBackend<'a> {
@@ -898,7 +900,10 @@ async fn ask_via_byok(
     }
 
     let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    validate_ask_answer(&crate::llm::protocol::response_text(api_kind, &body))
+    validate_ask_answer(
+        &crate::llm::protocol::response_text(api_kind, &body),
+        question,
+    )
 }
 
 async fn ask_via_cloud(
@@ -941,7 +946,7 @@ async fn ask_via_cloud(
     }
 
     let body: serde_json::Value = resp.json().await.map_err(AppError::from)?;
-    validate_ask_answer(body["answer"].as_str().unwrap_or("")).map_err(AppError::Config)
+    validate_ask_answer(body["answer"].as_str().unwrap_or(""), question).map_err(AppError::Config)
 }
 
 #[tauri::command]
@@ -1861,10 +1866,13 @@ mod tests {
             ]
         });
 
-        assert!(validate_ask_answer(&crate::llm::protocol::response_text(
-            crate::llm::protocol::LlmApiKind::OpenAiCompatible,
-            &body,
-        ))
+        assert!(validate_ask_answer(
+            &crate::llm::protocol::response_text(
+                crate::llm::protocol::LlmApiKind::OpenAiCompatible,
+                &body,
+            ),
+            "question",
+        )
         .is_err());
     }
 
@@ -1880,11 +1888,16 @@ mod tests {
 
     #[test]
     fn ask_answer_validation_rejects_empty_answers() {
-        assert!(validate_ask_answer("").is_err());
-        assert!(validate_ask_answer("   ").is_err());
+        assert!(validate_ask_answer("", "question").is_err());
+        assert!(validate_ask_answer("   ", "question").is_err());
+        assert!(validate_ask_answer("】【", "question").is_err());
         assert_eq!(
-            validate_ask_answer("  A concise answer.  ").unwrap(),
+            validate_ask_answer("  A concise answer.  ", "question").unwrap(),
             "A concise answer."
+        );
+        assert_eq!(
+            validate_ask_answer("周五之前交】【。", "什么时候交").unwrap(),
+            "周五之前交。"
         );
     }
 

@@ -257,7 +257,9 @@ fn type_line_break(enigo: &mut Enigo) -> Result<(), AppError> {
 
 /// Shift+Return with Shift set on the Return event itself. enigo posts Shift
 /// as a separate key event, and apps that read the flags of the Return event
-/// saw a plain Return and sent the message.
+/// saw a plain Return and sent the message. The events come from the same kind
+/// of source as enigo's and carry its marker, so whatever tells Penfall's typed
+/// input apart from the keyboard treats the line break the same way.
 #[cfg(target_os = "macos")]
 fn type_line_break(_enigo: &mut Enigo) -> Result<(), AppError> {
     use std::ffi::c_void;
@@ -265,15 +267,19 @@ fn type_line_break(_enigo: &mut Enigo) -> Result<(), AppError> {
     const KEYCODE_RETURN: u16 = 36;
     const FLAG_MASK_SHIFT: u64 = 0x0002_0000;
     const HID_EVENT_TAP: u32 = 0;
+    const COMBINED_SESSION_STATE: i32 = 0;
+    const EVENT_SOURCE_USER_DATA: u32 = 42;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
+        fn CGEventSourceCreate(state_id: i32) -> *mut c_void;
         fn CGEventCreateKeyboardEvent(
             source: *const c_void,
             keycode: u16,
             key_down: bool,
         ) -> *mut c_void;
         fn CGEventSetFlags(event: *mut c_void, flags: u64);
+        fn CGEventSetIntegerValueField(event: *mut c_void, field: u32, value: i64);
         fn CGEventPost(tap: u32, event: *mut c_void);
     }
     #[link(name = "CoreFoundation", kind = "framework")]
@@ -281,22 +287,36 @@ fn type_line_break(_enigo: &mut Enigo) -> Result<(), AppError> {
         fn CFRelease(cf: *const c_void);
     }
 
-    for key_down in [true, false] {
-        // SAFETY: the event is created, used and released here only.
-        unsafe {
-            let event = CGEventCreateKeyboardEvent(std::ptr::null(), KEYCODE_RETURN, key_down);
+    // SAFETY: the source and events are created, used and released here only.
+    unsafe {
+        let source = CGEventSourceCreate(COMBINED_SESSION_STATE);
+        if source.is_null() {
+            return Err(AppError::Output(
+                "Failed to create the line break event source".to_string(),
+            ));
+        }
+        let mut result = Ok(());
+        for key_down in [true, false] {
+            let event = CGEventCreateKeyboardEvent(source, KEYCODE_RETURN, key_down);
             if event.is_null() {
-                return Err(AppError::Output(
+                result = Err(AppError::Output(
                     "Failed to create the line break key event".to_string(),
                 ));
+                break;
             }
             CGEventSetFlags(event, FLAG_MASK_SHIFT);
+            CGEventSetIntegerValueField(
+                event,
+                EVENT_SOURCE_USER_DATA,
+                i64::from(enigo::EVENT_MARKER),
+            );
             CGEventPost(HID_EVENT_TAP, event);
             CFRelease(event);
+            std::thread::sleep(std::time::Duration::from_millis(TYPE_CHUNK_DELAY_MS));
         }
-        std::thread::sleep(std::time::Duration::from_millis(TYPE_CHUNK_DELAY_MS));
+        CFRelease(source);
+        result
     }
-    Ok(())
 }
 
 #[cfg(target_os = "linux")]

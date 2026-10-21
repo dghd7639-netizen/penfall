@@ -236,6 +236,23 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_connection_test_log_line_never_holds_credentials_from_the_url() {
+        let line = super::connection_test_log_line(
+            "openai",
+            "https://me:sk-secret@llm.example.com/v1?key=sk-other#frag",
+            "m",
+            &Ok((200, 5)),
+            std::time::Duration::from_millis(5),
+        );
+        assert!(
+            line.contains("base_url=https://llm.example.com/v1 "),
+            "{line}"
+        );
+        assert!(!line.contains("sk-"), "{line}");
+        assert_eq!(super::loggable_url("not a url"), "(invalid URL)");
+    }
+
     use super::*;
 
     #[test]
@@ -351,7 +368,10 @@ fn connection_test_log_line(
     result: &Result<(u16, u32), String>,
     elapsed: std::time::Duration,
 ) -> String {
-    let target = format!("provider={provider} base_url={base_url} model={model}");
+    let target = format!(
+        "provider={provider} base_url={} model={model}",
+        loggable_url(base_url)
+    );
     match result {
         Ok((status, elapsed_ms)) => {
             format!("LLM connection test passed: HTTP {status} in {elapsed_ms}ms ({target})")
@@ -360,6 +380,21 @@ fn connection_test_log_line(
             "LLM connection test failed after {}ms ({target}): {error}",
             elapsed.as_millis()
         ),
+    }
+}
+
+/// The base URL as logged: without a user name, password, query or fragment,
+/// any of which can carry a pasted key.
+fn loggable_url(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(mut parsed) => {
+            let _ = parsed.set_username("");
+            let _ = parsed.set_password(None);
+            parsed.set_query(None);
+            parsed.set_fragment(None);
+            parsed.to_string()
+        }
+        Err(_) => "(invalid URL)".to_string(),
     }
 }
 

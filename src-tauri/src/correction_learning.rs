@@ -238,7 +238,7 @@ fn normalize_text(text: &str) -> String {
         .to_string()
 }
 
-pub use platform::{prepare_frontmost_app, stop_watching, watch_after_insert};
+pub use platform::{keyboard_focus_pid, prepare_frontmost_app, stop_watching, watch_after_insert};
 
 #[cfg(target_os = "macos")]
 mod platform {
@@ -269,6 +269,12 @@ mod platform {
     /// Asking as recording starts gives the tree time to appear before the text lands.
     pub fn prepare_frontmost_app() {
         std::thread::spawn(ax::enable_frontmost_app_accessibility);
+    }
+
+    /// The process whose element holds keyboard focus, which is where typed
+    /// keystrokes go. `None` when the system cannot say.
+    pub fn keyboard_focus_pid() -> Option<i32> {
+        ax::keyboard_focus_pid()
     }
 
     /// Follows the focused text field after dictated text lands in it, and learns
@@ -439,6 +445,8 @@ mod platform {
         #[link(name = "ApplicationServices", kind = "framework")]
         extern "C" {
             fn AXUIElementCreateApplication(pid: i32) -> AXUIElementRef;
+            fn AXUIElementCreateSystemWide() -> AXUIElementRef;
+            fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> i32;
             fn AXUIElementCopyParameterizedAttributeValue(
                 element: AXUIElementRef,
                 attribute: CFTypeRef,
@@ -605,6 +613,24 @@ mod platform {
         pub fn enable_frontmost_app_accessibility() {
             if let Some(app) = FrontmostApp::get() {
                 app.enable_accessibility();
+            }
+        }
+
+        /// Unlike an app's own focused element, which it keeps while in the
+        /// background, the system-wide focused element moves only once the app
+        /// really has keyboard focus.
+        pub fn keyboard_focus_pid() -> Option<i32> {
+            unsafe {
+                let system = AXUIElementCreateSystemWide();
+                if system.is_null() {
+                    return None;
+                }
+                let focused = Element(system)
+                    .element_attribute("AXFocusedUIElement")
+                    .ok()?;
+                let mut pid = 0;
+                (AXUIElementGetPid(focused.0, &mut pid) == K_AX_ERROR_SUCCESS && pid > 0)
+                    .then_some(pid)
             }
         }
 
@@ -800,6 +826,10 @@ mod platform {
     pub fn watch_after_insert(_app: tauri::AppHandle, _inserted: String) {}
 
     pub fn prepare_frontmost_app() {}
+
+    pub fn keyboard_focus_pid() -> Option<i32> {
+        None
+    }
 }
 
 #[cfg(test)]

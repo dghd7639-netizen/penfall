@@ -17,9 +17,44 @@ use super::user_mappings::{
 
 const DEFAULT_STALE_AFTER: Duration = Duration::from_secs(2);
 const DEFAULT_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
-/// An app reports itself frontmost before its window and text field take
-/// focus again; typing right away can drop the first characters.
-const FOCUS_SETTLE_AFTER_RESTORE: Duration = Duration::from_millis(150);
+/// An app reports itself frontmost before its text field has keyboard focus
+/// again; typing right away can drop the first characters. Wait up to this long
+/// for keyboard focus to reach the restored app.
+const KEYBOARD_FOCUS_WAIT: Duration = Duration::from_millis(800);
+const KEYBOARD_FOCUS_POLL: Duration = Duration::from_millis(25);
+/// Where keyboard focus cannot be checked, a short pause is all there is.
+const FOCUS_SETTLE_WITHOUT_CHECK: Duration = Duration::from_millis(150);
+
+fn wait_for_keyboard_focus(process_id: Option<u32>) {
+    let Some(pid) = process_id.filter(|_| cfg!(target_os = "macos")) else {
+        std::thread::sleep(FOCUS_SETTLE_WITHOUT_CHECK);
+        return;
+    };
+    let focused = wait_until(KEYBOARD_FOCUS_WAIT, KEYBOARD_FOCUS_POLL, || {
+        crate::correction_learning::keyboard_focus_pid()
+            .is_some_and(|focus| u32::try_from(focus) == Ok(pid))
+    });
+    if !focused {
+        tracing::debug!(
+            "Keyboard focus did not reach the restored app within {}ms",
+            KEYBOARD_FOCUS_WAIT.as_millis()
+        );
+    }
+}
+
+/// Polls `ready` until it holds or `limit` has passed; reports whether it held.
+fn wait_until(limit: Duration, poll: Duration, mut ready: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        if ready() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(poll);
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 enum RefreshSignal {
@@ -303,7 +338,7 @@ impl ContextDetectorHandle {
             std::thread::sleep(Duration::from_millis(40));
             if self.target_still_matches_now(expected) {
                 self.notify_focus_changed();
-                std::thread::sleep(FOCUS_SETTLE_AFTER_RESTORE);
+                wait_for_keyboard_focus(expected.process_id);
                 return true;
             }
         }
@@ -447,6 +482,29 @@ mod tests {
 
     use super::*;
     use crate::app_detector::types::{ContextSignals, ContextSource};
+
+    #[test]
+    fn waiting_for_focus_stops_as_soon_as_it_arrives_or_at_the_limit() {
+        let mut checks = 0;
+        assert!(wait_until(
+            Duration::from_secs(5),
+            Duration::from_millis(1),
+            || {
+                checks += 1;
+                checks == 3
+            }
+        ));
+        assert_eq!(checks, 3);
+
+        let started = Instant::now();
+        assert!(!wait_until(
+            Duration::from_millis(30),
+            Duration::from_millis(5),
+            || false
+        ));
+        assert!(started.elapsed() >= Duration::from_millis(30));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
 
     struct FakeSource {
         signals: Mutex<Option<ContextSignals>>,

@@ -13,8 +13,9 @@ export function SkipPolishSetting() {
   const enabled = useAppStore((s) => s.config.skip_polish_when_clean)
   const maxChars = useAppStore((s) => s.config.skip_polish_max_chars)
   const updateConfig = useAppStore((s) => s.updateConfig)
-  // Edited as text: a value in range is saved as it is typed, so leaving the
-  // page mid-edit keeps it, and "45" never stops at the minimum on its way.
+  // Edited as text. A value in range goes into the unsaved settings as it is
+  // typed, so switching panes mid-edit keeps it ("45" passes through 4 on the
+  // way, harmlessly: nothing takes effect until the settings are saved).
   const [draft, setDraft] = useState<string | null>(null)
 
   const handleChange = (value: string) => {
